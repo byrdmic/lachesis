@@ -32,7 +32,7 @@ export function App({ command, debug = false }: AppProps) {
   useEffect(() => {
     const result = loadConfig()
     if (debug) {
-      debugLog.debug('Config loaded', { status: result.status })
+      debugLog.debug('Config loaded', { result: JSON.stringify(result) })
     }
 
     switch (result.status) {

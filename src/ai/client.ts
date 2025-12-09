@@ -1,9 +1,10 @@
 // AI Client for Lachesis - handles all AI interactions
-import { createOpenAI } from '@ai-sdk/openai'
+import { openai, createOpenAI } from '@ai-sdk/openai'
 import { generateText, generateObject } from 'ai'
 import { z } from 'zod'
 import type { LachesisConfig } from '../config/types.ts'
 import type { PlanningLevel, InterviewDepth } from '../core/project/types.ts'
+import { debugLog } from '../debug/logger.ts'
 
 // ============================================================================
 // Types
@@ -127,7 +128,9 @@ export function getOpenAIProvider(config: LachesisConfig) {
 export async function testAIConnection(
   config: LachesisConfig,
 ): Promise<AIConnectionResult> {
+  debugLog.debug('Testing AI connection', { config: JSON.stringify(config) })
   const provider = getOpenAIProvider(config)
+  debugLog.debug('Provider', { provider })
 
   if (!provider) {
     return {
