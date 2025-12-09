@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /a \"C:\\dev\\personal\\lachesis\")",
+      "Bash(bun install:*)",
+      "Bash(bun run:*)",
+      "Bash(echo:*)",
+      "Bash(timeout 3 bun run:*)",
+      "Bash(cat:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
