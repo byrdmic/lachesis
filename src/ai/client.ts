@@ -1,6 +1,6 @@
 // AI Client for Lachesis - handles all AI interactions
 import { openai, createOpenAI } from '@ai-sdk/openai'
-import { generateText, generateObject } from 'ai'
+import { generateText, generateObject, streamText } from 'ai'
 import { z } from 'zod'
 import type { LachesisConfig } from '../config/types.ts'
 import type { PlanningLevel, InterviewDepth } from '../core/project/types.ts'
@@ -40,6 +40,11 @@ export type GenerationResult = {
   success: boolean
   content?: string
   error?: string
+  /**
+   * Additional detail for debugging (stack traces, context, etc).
+   * Only surfaced in debug mode.
+   */
+  debugDetails?: string
 }
 
 // Schema for extracted project data
@@ -189,9 +194,13 @@ export async function generateNextQuestion(
   const provider = getOpenAIProvider(config)
 
   if (!provider) {
+    debugLog.error('AI not configured for question generation', {
+      apiKeyEnvVar: config.apiKeyEnvVar,
+    })
     return {
       success: false,
       error: 'AI not configured',
+      debugDetails: `Missing environment variable ${config.apiKeyEnvVar}. Set it to your API key and retry.`,
     }
   }
 
@@ -223,9 +232,88 @@ export async function generateNextQuestion(
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    const stack = err instanceof Error ? err.stack : undefined
+    debugLog.error('Failed to generate interview question', {
+      message,
+      stack,
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      messageCount: context.messages.length,
+      coveredTopics: context.coveredTopics,
+    })
     return {
       success: false,
       error: `Failed to generate question: ${message}`,
+      debugDetails: stack ? `${message}\n${stack}` : message,
+    }
+  }
+}
+
+/**
+ * Stream the next interview question, emitting incremental text updates.
+ */
+export async function streamNextQuestion(
+  context: ConversationContext,
+  systemPrompt: string,
+  config: LachesisConfig,
+  onUpdate?: (partial: string) => void,
+): Promise<GenerationResult> {
+  const provider = getOpenAIProvider(config)
+
+  if (!provider) {
+    debugLog.error('AI not configured for question generation', {
+      apiKeyEnvVar: config.apiKeyEnvVar,
+    })
+    return {
+      success: false,
+      error: 'AI not configured',
+      debugDetails: `Missing environment variable ${config.apiKeyEnvVar}. Set it to your API key and retry.`,
+    }
+  }
+
+  try {
+    const messages: Array<{
+      role: 'system' | 'user' | 'assistant'
+      content: string
+    }> = [{ role: 'system', content: systemPrompt }]
+
+    for (const msg of context.messages) {
+      messages.push({
+        role: msg.role,
+        content: msg.content,
+      })
+    }
+
+    const stream = await streamText({
+      model: provider(config.defaultModel),
+      messages,
+      maxTokens: 300,
+      temperature: 0.7,
+    })
+
+    let fullText = ''
+    for await (const delta of stream.textStream) {
+      fullText += delta
+      onUpdate?.(fullText)
+    }
+
+    const trimmed = fullText.trim()
+    return { success: true, content: trimmed }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    const stack = err instanceof Error ? err.stack : undefined
+    debugLog.error('Failed to stream interview question', {
+      message,
+      stack,
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      messageCount: context.messages.length,
+      coveredTopics: context.coveredTopics,
+    })
+    return {
+      success: false,
+      error: `Failed to generate question: ${message}`,
+      debugDetails: stack ? `${message}\n${stack}` : message,
     }
   }
 }
@@ -284,9 +372,18 @@ Summarize what we learned about this project in a clear, bulleted format coverin
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    const stack = err instanceof Error ? err.stack : undefined
+    debugLog.error('Failed to generate summary', {
+      message,
+      stack,
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      messageCount: context.messages.length,
+    })
     return {
       success: false,
       error: `Failed to generate summary: ${message}`,
+      debugDetails: stack ? `${message}\n${stack}` : message,
     }
   }
 }
@@ -297,7 +394,12 @@ Summarize what we learned about this project in a clear, bulleted format coverin
 export async function extractProjectData(
   context: ConversationContext,
   config: LachesisConfig,
-): Promise<{ success: boolean; data?: ExtractedProjectData; error?: string }> {
+): Promise<{
+  success: boolean
+  data?: ExtractedProjectData
+  error?: string
+  debugDetails?: string
+}> {
   const provider = getOpenAIProvider(config)
 
   if (!provider) {
@@ -333,9 +435,18 @@ Extract all relevant information. For fields not discussed, use reasonable defau
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    const stack = err instanceof Error ? err.stack : undefined
+    debugLog.error('Failed to extract project data', {
+      message,
+      stack,
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      messageCount: context.messages.length,
+    })
     return {
       success: false,
       error: `Failed to extract data: ${message}`,
+      debugDetails: stack ? `${message}\n${stack}` : message,
     }
   }
 }

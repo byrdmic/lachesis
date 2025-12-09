@@ -303,6 +303,7 @@ export function NewProjectFlow({
           depth={state.depth}
           projectName={state.projectName}
           oneLiner={state.oneLiner}
+          debug={debug}
           onInputModeChange={setInputLocked}
           onComplete={(extractedData, conversationLog) =>
             handleInterviewComplete(

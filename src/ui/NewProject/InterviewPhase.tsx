@@ -11,14 +11,13 @@ import type {
   ExtractedProjectData,
 } from '../../ai/client.ts'
 import {
-  generateNextQuestion,
   generateSummary,
   extractProjectData,
   shouldContinueConversation,
+  streamNextQuestion,
 } from '../../ai/client.ts'
 import {
   buildCoachingPrompt,
-  buildFirstQuestionPrompt,
 } from '../../ai/prompts.ts'
 import { TextInput } from '../components/TextInput.tsx'
 import { ConversationView } from '../components/ConversationView.tsx'
@@ -29,6 +28,7 @@ type InterviewPhaseProps = {
   depth: InterviewDepth
   projectName: string
   oneLiner: string
+  debug?: boolean
   onInputModeChange?: (typing: boolean) => void
   onComplete: (
     extractedData: ExtractedProjectData,
@@ -51,6 +51,7 @@ type InterviewState = {
   coveredTopics: string[]
   summary: string | null
   error: string | null
+  errorDetails: string | null
 }
 
 export function InterviewPhase({
@@ -59,6 +60,7 @@ export function InterviewPhase({
   depth,
   projectName,
   oneLiner,
+  debug = false,
   onInputModeChange,
   onComplete,
   onCancel,
@@ -69,6 +71,7 @@ export function InterviewPhase({
     coveredTopics: [],
     summary: null,
     error: null,
+    errorDetails: null,
   })
 
   const effectiveProjectName = projectName.trim() || 'Untitled Project'
@@ -85,48 +88,85 @@ export function InterviewPhase({
     generateFirstQuestion()
   }, [])
 
-  const generateFirstQuestion = async () => {
-    setState((s) => ({ ...s, step: 'generating_question' }))
-
-    const prompt = buildFirstQuestionPrompt(
-      effectiveProjectName,
-      effectiveOneLiner,
-      planningLevel,
-      depth,
-    )
-
-    const result = await generateNextQuestion(
-      {
+  const streamQuestion = useCallback(
+    async (context: {
+      planningLevel: PlanningLevel
+      depth: InterviewDepth
+      projectName: string
+      oneLiner: string
+      messages: ConversationMessage[]
+      coveredTopics: string[]
+    }) => {
+      const prompt = buildCoachingPrompt(
+        effectiveProjectName,
+        effectiveOneLiner,
         planningLevel,
         depth,
-        projectName: effectiveProjectName,
-        oneLiner: effectiveOneLiner,
-        messages: [],
-        coveredTopics: [],
-      },
-      prompt,
-      config,
-    )
+        context.coveredTopics,
+      )
 
-    if (result.success && result.content) {
-      const assistantMessage: ConversationMessage = {
-        role: 'assistant',
-        content: result.content,
-        timestamp: new Date().toISOString(),
+      const streamId = new Date().toISOString()
+      setState((s) => ({ ...s, step: 'generating_question' }))
+
+      const result = await streamNextQuestion(context, prompt, config, (partial) => {
+        setState((s) => {
+          const messages = [...s.messages]
+          const last = messages[messages.length - 1]
+
+          if (
+            last &&
+            last.role === 'assistant' &&
+            last.timestamp === streamId
+          ) {
+            messages[messages.length - 1] = { ...last, content: partial }
+          } else {
+            messages.push({
+              role: 'assistant',
+              content: partial,
+              timestamp: streamId,
+            })
+          }
+
+          return { ...s, messages }
+        })
+      })
+
+      if (result.success && result.content) {
+        setState((s) => ({
+          ...s,
+          step: 'waiting_for_answer',
+          messages: s.messages.map((m) =>
+            m.timestamp === streamId ? { ...m, content: result.content! } : m,
+          ),
+        }))
+      } else {
+        setState((s) => ({
+          ...s,
+          step: 'error',
+          error: result.error || 'Failed to generate question',
+          errorDetails: debug ? result.debugDetails || null : null,
+        }))
       }
+    },
+    [
+      config,
+      debug,
+      depth,
+      effectiveOneLiner,
+      effectiveProjectName,
+      planningLevel,
+    ],
+  )
 
-      setState((s) => ({
-        ...s,
-        step: 'waiting_for_answer',
-        messages: [...s.messages, assistantMessage],
-      }))
-    } else {
-      setState((s) => ({
-        ...s,
-        step: 'error',
-        error: result.error || 'Failed to generate question',
-      }))
-    }
+  const generateFirstQuestion = async () => {
+    await streamQuestion({
+      planningLevel,
+      depth,
+      projectName: effectiveProjectName,
+      oneLiner: effectiveOneLiner,
+      messages: [],
+      coveredTopics: [],
+    })
   }
 
   const handleUserAnswer = useCallback(
@@ -188,40 +228,19 @@ export function InterviewPhase({
         return
       }
 
-      // Generate next question
-      const prompt = buildCoachingPrompt(
-        effectiveProjectName,
-        effectiveOneLiner,
-        planningLevel,
-        depth,
-        state.coveredTopics,
-      )
+      // Generate next question (streaming)
+      await streamQuestion(context)
 
-      const result = await generateNextQuestion(context, prompt, config)
-
-      if (result.success && result.content) {
-        const assistantMessage: ConversationMessage = {
-          role: 'assistant',
-          content: result.content,
-          timestamp: new Date().toISOString(),
-        }
-
-        // Try to detect topic from question (simple heuristic)
-        const newTopics = detectTopics(result.content, state.coveredTopics)
-
-        setState((s) => ({
+      // Try to detect topic from question (simple heuristic) using latest assistant message
+      setState((s) => {
+        const lastAssistant = [...s.messages].reverse().find((m) => m.role === 'assistant')
+        const finalContent = lastAssistant?.content ?? ''
+        const newTopics = detectTopics(finalContent, s.coveredTopics)
+        return {
           ...s,
-          step: 'waiting_for_answer',
-          messages: [...newMessages, assistantMessage],
           coveredTopics: newTopics,
-        }))
-      } else {
-        setState((s) => ({
-          ...s,
-          step: 'error',
-          error: result.error || 'Failed to generate question',
-        }))
-      }
+        }
+      })
     },
     [
       state.messages,
@@ -293,7 +312,12 @@ export function InterviewPhase({
   }
 
   const handleRetry = useCallback(() => {
-    setState((s) => ({ ...s, step: 'generating_question', error: null }))
+    setState((s) => ({
+      ...s,
+      step: 'generating_question',
+      error: null,
+      errorDetails: null,
+    }))
     generateFirstQuestion()
   }, [])
 
@@ -312,6 +336,12 @@ export function InterviewPhase({
     return (
       <Box flexDirection="column" padding={1}>
         <Text color="red">Error: {state.error}</Text>
+        {debug && state.errorDetails && (
+          <>
+            <Text>{'\n'}</Text>
+            <Text dimColor>{state.errorDetails}</Text>
+          </>
+        )}
         <Text>{'\n'}</Text>
         <Text dimColor>Press any key to retry, or Esc to cancel</Text>
         <RetryHandler onRetry={handleRetry} />
