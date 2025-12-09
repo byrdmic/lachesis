@@ -21,22 +21,16 @@ export type DiscoveryTopic = (typeof DISCOVERY_TOPICS)[number]
  * Get depth guidance text for the system prompt
  */
 function getDepthGuidance(depth: InterviewDepth): string {
-  switch (depth) {
-    case 'short':
-      return `This is a SHORT interview. Focus only on essentials:
+  const lower = depth.toLowerCase()
+  if (lower.includes('short') || lower.includes('light') || lower === 'quick') {
+    return `This is a SHORT/LIGHT session. Focus on essentials:
 - What it does (core purpose)
 - Who it's for (target users)
 - What problem it solves
 Keep questions brief. Aim for 3-4 exchanges total.`
-
-    case 'medium':
-      return `This is a MEDIUM depth interview. Cover the core topics plus:
-- Key constraints (time, budget, tech)
-- What success looks like
-Be thorough but efficient. Aim for 5-7 exchanges.`
-
-    case 'deep':
-      return `This is a DEEP interview. Explore comprehensively:
+  }
+  if (lower.includes('deep') || lower.includes('heavy')) {
+    return `This is a DEEP/HEAVY session. Explore comprehensively:
 - Core purpose and mechanics
 - Target users and their specific pain points
 - Problem being solved in detail
@@ -47,25 +41,24 @@ Be thorough but efficient. Aim for 5-7 exchanges.`
 - Technology considerations
 Take your time. Probe for depth on important topics.`
   }
+  return `Balanced depth session. Cover core topics plus key constraints and success signals. Be thorough but efficient.`
 }
 
 /**
  * Get planning level context for the system prompt
  */
 function getPlanningContext(level: PlanningLevel): string {
-  switch (level) {
-    case 'vague_idea':
-      return `They have a VAGUE IDEA - just a spark. Help them articulate what they're imagining.
-Ask clarifying questions. Don't assume they have details figured out.`
-
-    case 'some_notes':
-      return `They have SOME NOTES - partial thoughts written down.
-Build on what they already know. Ask what they've figured out, then fill gaps.`
-
-    case 'well_defined':
-      return `They have a WELL DEFINED idea - clear picture already.
-Validate their thinking. Ask about edge cases and assumptions they might have missed.`
+  const lower = level.toLowerCase()
+  if (lower.includes('vague') || lower.includes('spark') || lower === 'light') {
+    return `They have a light/vague idea. Help them articulate what they're imagining. Ask clarifying questions and avoid assuming details.`
   }
+  if (lower.includes('well') || lower.includes('defined') || lower === 'heavy') {
+    return `They say this is well defined. Validate their thinking and probe edge cases or assumptions they might have missed.`
+  }
+  if (lower.includes('note') || lower.includes('partial') || lower === 'medium') {
+    return `They have some notes/partial thoughts. Build on what they know, ask what they've figured out, then fill gaps.`
+  }
+  return `Planning state is freeform: "${level}". Mirror their phrasing, ask a quick clarifier if needed, then proceed.`
 }
 
 /**
@@ -107,6 +100,7 @@ YOUR APPROACH:
 4. If an answer is vague, probe for specifics before moving on
 5. Never answer your own questions or assume their response
 6. Never generate content for them unless they say "take the wheel" or similar
+7. If you ask anything optional, explicitly tell them it's fine to skip or say "I don't know" and offer to move on.
 
 LANGUAGE RULES (STRICT):
 - Do NOT use these words: transform, journey, vision, crystallize, empower, leverage, synergy

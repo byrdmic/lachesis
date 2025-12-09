@@ -60,13 +60,18 @@ export function FinalizePhase({
       setStep('scaffolding')
 
       try {
+        const effectiveName =
+          projectName.trim() ||
+          oneLiner.trim() ||
+          `Untitled Project ${new Date().toISOString().slice(0, 10)}`
+
         // Build the project definition based on available data
         let projectDef
 
         if (extractedData) {
           // New AI-based input
           projectDef = buildProjectDefinition({
-            name: projectName,
+            name: effectiveName,
             planningLevel,
             depth,
             extractedData,
@@ -75,7 +80,7 @@ export function FinalizePhase({
         } else if (answers && sessionLog) {
           // Legacy answer-based input
           projectDef = buildProjectDefinition({
-            name: projectName,
+            name: effectiveName,
             planningLevel,
             depth,
             answers,
@@ -132,7 +137,7 @@ export function FinalizePhase({
         {/* Show summary if available */}
         {extractedData && (
           <Box flexDirection="column" marginBottom={1}>
-            <Text bold>Project: {projectName}</Text>
+            <Text bold>Project: {projectName || 'Untitled Project'}</Text>
             <Text dimColor>{extractedData.vision.oneLinePitch}</Text>
             {extractedData.vision.primaryAudience && (
               <Text dimColor>For: {extractedData.vision.primaryAudience}</Text>
@@ -151,7 +156,8 @@ export function FinalizePhase({
 
         <Box marginTop={1}>
           <Text dimColor>
-            Files will be created in: {config.vaultPath}/{projectName}
+            Files will be created in: {config.vaultPath}/
+            {projectName || 'untitled-project'}
           </Text>
         </Box>
       </Box>

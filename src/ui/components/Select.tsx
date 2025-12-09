@@ -11,9 +11,15 @@ type SelectProps = {
   label: string
   options: SelectOption[]
   onSelect: (value: string) => void
+  initialIndex?: number
 }
 
-export function Select({ label, options, onSelect }: SelectProps) {
+export function Select({
+  label,
+  options,
+  onSelect,
+  initialIndex,
+}: SelectProps) {
   const handleSelect = (item: { label: string; value: string }) => {
     onSelect(item.value)
   }
@@ -25,7 +31,11 @@ export function Select({ label, options, onSelect }: SelectProps) {
           {label}
         </Text>
       </Box>
-      <SelectInput items={options} onSelect={handleSelect} />
+      <SelectInput
+        items={options}
+        onSelect={handleSelect}
+        initialIndex={initialIndex}
+      />
     </Box>
   )
 }

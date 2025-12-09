@@ -1,7 +1,8 @@
 // Core project types for Lachesis
 
-export type InterviewDepth = 'short' | 'medium' | 'deep'
-export type PlanningLevel = 'vague_idea' | 'some_notes' | 'well_defined'
+// Freeform strings so the AI/user can provide any description
+export type InterviewDepth = string
+export type PlanningLevel = string
 
 export type ProjectStatus = 'idea' | 'active' | 'paused' | 'done'
 export type ReleasePhase =

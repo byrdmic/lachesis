@@ -46,13 +46,13 @@ export type InterviewState = {
 }
 
 // Depth number mapping
-export function depthToNumber(depth: 'short' | 'medium' | 'deep'): 1 | 2 | 3 {
-  switch (depth) {
-    case 'short':
-      return 1
-    case 'medium':
-      return 2
-    case 'deep':
-      return 3
+export function depthToNumber(depth: string): 1 | 2 | 3 {
+  const lower = depth.toLowerCase()
+  if (lower.includes('short') || lower.includes('light') || lower === 'quick') {
+    return 1
   }
+  if (lower.includes('deep') || lower.includes('heavy')) {
+    return 3
+  }
+  return 2
 }

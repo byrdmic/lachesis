@@ -359,8 +359,15 @@ export async function shouldContinueConversation(
   }
 
   // Also check message count as a safety limit
+  const lower = context.depth.toLowerCase()
   const maxMessages =
-    context.depth === 'deep' ? 20 : context.depth === 'medium' ? 14 : 8
+    lower.includes('deep') || lower.includes('heavy')
+      ? 20
+      : lower.includes('medium')
+        ? 14
+        : lower.includes('short') || lower.includes('light') || lower === 'quick'
+          ? 8
+          : 12
   if (context.messages.length >= maxMessages) {
     return { continue: false, reason: 'Reached conversation limit' }
   }
@@ -376,14 +383,14 @@ function getTopicsForDepth(depth: InterviewDepth): string[] {
   const extended = [...core, 'constraints', 'success_criteria']
   const full = [...extended, 'anti_goals', 'first_move', 'tech_considerations']
 
-  switch (depth) {
-    case 'short':
-      return core
-    case 'medium':
-      return extended
-    case 'deep':
-      return full
+  const lower = depth.toLowerCase()
+  if (lower.includes('short') || lower.includes('light') || lower === 'quick') {
+    return core
   }
+  if (lower.includes('deep') || lower.includes('heavy')) {
+    return full
+  }
+  return extended
 }
 
 // Export schema for use elsewhere

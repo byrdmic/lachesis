@@ -13,16 +13,16 @@ export function generateLog(project: ProjectDefinition): string {
   const date = todayDate()
 
   // Build session summary from session log
-  const whatHappened =
-    project.sessionLog.length > 0
-      ? project.sessionLog
-          .slice(0, 5)
-          .map(
-            (entry) =>
-              `- **${entry.phase}:** ${entry.question.slice(0, 50)}...`,
-          )
-          .join('\n')
-      : '- Initial project creation via Lachesis'
+const whatHappened =
+  project.sessionLog.length > 0
+    ? project.sessionLog
+        .slice(0, 5)
+        .map(
+          (entry) =>
+            `- **${entry.phase}:** ${entry.question.slice(0, 50)}...`,
+        )
+        .join('\n')
+    : '- Initial project creation via Lachesis'
 
   const decisions =
     [

@@ -73,6 +73,7 @@ export function NewProjectFlow({
   const [state, setState] = useState<FlowState>({ step: 'welcome' })
   const [showSettings, setShowSettings] = useState(false)
   const [config, setConfig] = useState<LachesisConfig>(initialConfig)
+  const [inputLocked, setInputLocked] = useState(false)
 
   // Log state changes in debug mode
   useEffect(() => {
@@ -82,33 +83,36 @@ export function NewProjectFlow({
   }, [state.step, debug])
 
   // Handle 's' key to open settings (except during AI check)
-  useInput((input, key) => {
-    if (
-      input.toLowerCase() === 's' &&
-      !showSettings &&
-      state.step !== 'complete' &&
-      state.step !== 'cancelled'
-    ) {
-      setShowSettings(true)
-    }
-    // Handle 'r' for retry during AI check error
-    if (
-      input.toLowerCase() === 'r' &&
-      state.step === 'ai_check' &&
-      state.error
-    ) {
-      setState({ step: 'ai_check', checking: true })
-    }
-    // Handle 'q' for quit during AI check error
-    if (
-      input.toLowerCase() === 'q' &&
-      state.step === 'ai_check' &&
-      state.error
-    ) {
-      setState({ step: 'cancelled' })
-      setTimeout(() => exit(), 500)
-    }
-  })
+  useInput(
+    (input, key) => {
+      if (
+        input.toLowerCase() === 's' &&
+        !showSettings &&
+        state.step !== 'complete' &&
+        state.step !== 'cancelled'
+      ) {
+        setShowSettings(true)
+      }
+      // Handle 'r' for retry during AI check error
+      if (
+        input.toLowerCase() === 'r' &&
+        state.step === 'ai_check' &&
+        state.error
+      ) {
+        setState({ step: 'ai_check', checking: true })
+      }
+      // Handle 'q' for quit during AI check error
+      if (
+        input.toLowerCase() === 'q' &&
+        state.step === 'ai_check' &&
+        state.error
+      ) {
+        setState({ step: 'cancelled' })
+        setTimeout(() => exit(), 500)
+      }
+    },
+    { isActive: !inputLocked },
+  )
 
   // Handle settings save
   const handleSettingsSave = useCallback(
@@ -138,8 +142,10 @@ export function NewProjectFlow({
       projectName: string,
       oneLiner: string,
     ) => {
-      // If well-defined, offer choice; otherwise go straight to interview
-      if (planningLevel === 'well_defined') {
+      const lower = planningLevel.toLowerCase()
+      const isWellDefined =
+        lower.includes('well') || lower.includes('heavy') || lower.includes('defined')
+      if (isWellDefined) {
         setState({
           step: 'interview_choice',
           planningLevel,
@@ -266,7 +272,11 @@ export function NewProjectFlow({
     return (
       <Box flexDirection="column">
         <StatusBar config={config} />
-        <SetupPhase onComplete={handleSetupComplete} onCancel={handleCancel} />
+        <SetupPhase
+          onComplete={handleSetupComplete}
+          onCancel={handleCancel}
+          onInputModeChange={setInputLocked}
+        />
       </Box>
     )
   }
@@ -293,6 +303,7 @@ export function NewProjectFlow({
           depth={state.depth}
           projectName={state.projectName}
           oneLiner={state.oneLiner}
+          onInputModeChange={setInputLocked}
           onComplete={(extractedData, conversationLog) =>
             handleInterviewComplete(
               extractedData,

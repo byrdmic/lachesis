@@ -29,6 +29,7 @@ type InterviewPhaseProps = {
   depth: InterviewDepth
   projectName: string
   oneLiner: string
+  onInputModeChange?: (typing: boolean) => void
   onComplete: (
     extractedData: ExtractedProjectData,
     conversationLog: ConversationMessage[],
@@ -58,6 +59,7 @@ export function InterviewPhase({
   depth,
   projectName,
   oneLiner,
+  onInputModeChange,
   onComplete,
   onCancel,
 }: InterviewPhaseProps) {
@@ -69,6 +71,15 @@ export function InterviewPhase({
     error: null,
   })
 
+  const effectiveProjectName = projectName.trim() || 'Untitled Project'
+  const effectiveOneLiner = oneLiner.trim() || 'Not provided yet'
+
+  const typing = state.step === 'waiting_for_answer'
+  useEffect(() => {
+    onInputModeChange?.(typing)
+    return () => onInputModeChange?.(false)
+  }, [typing, onInputModeChange])
+
   // Generate first question on mount
   useEffect(() => {
     generateFirstQuestion()
@@ -78,8 +89,8 @@ export function InterviewPhase({
     setState((s) => ({ ...s, step: 'generating_question' }))
 
     const prompt = buildFirstQuestionPrompt(
-      projectName,
-      oneLiner,
+      effectiveProjectName,
+      effectiveOneLiner,
       planningLevel,
       depth,
     )
@@ -88,8 +99,8 @@ export function InterviewPhase({
       {
         planningLevel,
         depth,
-        projectName,
-        oneLiner,
+        projectName: effectiveProjectName,
+        oneLiner: effectiveOneLiner,
         messages: [],
         coveredTopics: [],
       },
@@ -179,8 +190,8 @@ export function InterviewPhase({
 
       // Generate next question
       const prompt = buildCoachingPrompt(
-        projectName,
-        oneLiner,
+        effectiveProjectName,
+        effectiveOneLiner,
         planningLevel,
         depth,
         state.coveredTopics,
@@ -249,8 +260,8 @@ export function InterviewPhase({
     const context = {
       planningLevel,
       depth,
-      projectName,
-      oneLiner,
+      projectName: effectiveProjectName,
+      oneLiner: effectiveOneLiner,
       messages,
       coveredTopics: state.coveredTopics,
     }
@@ -263,8 +274,8 @@ export function InterviewPhase({
       // Create minimal data if extraction fails
       const fallbackData: ExtractedProjectData = {
         vision: {
-          oneLinePitch: oneLiner,
-          description: oneLiner,
+          oneLinePitch: effectiveOneLiner,
+          description: effectiveOneLiner,
           primaryAudience: 'To be defined',
           problemSolved: 'To be defined',
           successCriteria: 'To be defined',
@@ -287,11 +298,14 @@ export function InterviewPhase({
   }, [])
 
   // Handle escape to cancel
-  useInput((input, key) => {
-    if (key.escape) {
-      onCancel()
-    }
-  })
+  useInput(
+    (input, key) => {
+      if (key.escape) {
+        onCancel()
+      }
+    },
+    { isActive: state.step !== 'waiting_for_answer' },
+  )
 
   // Render based on step
   if (state.step === 'error') {
