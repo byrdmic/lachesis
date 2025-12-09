@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from 'react'
-import { Box, Text } from 'ink'
-import { loadConfig, type ConfigLoadResult } from '../config/config.ts'
-import { NewProjectFlow } from './NewProject/index.tsx'
-import { DebugLog } from './components/index.ts'
+import React, { useCallback, useEffect, useState } from 'react'
+import { Box, Text, useApp, useInput } from 'ink'
+import { loadConfig, updateConfig } from '../config/config.ts'
+import { NewProjectFlow, AIConnectionCheck } from './NewProject/index.tsx'
+import { ExistingProjectFlow } from './ExistingProject/index.tsx'
+import { DebugLog, Select, SettingsPanel, StatusBar } from './components/index.ts'
 import { debugLog } from '../debug/logger.ts'
+import { testAIConnection } from '../ai/client.ts'
 import type { LachesisConfig } from '../config/types.ts'
 
 type AppProps = {
-  command: 'new'
+  command: 'new' | 'start'
   debug?: boolean
 }
 
@@ -100,6 +102,12 @@ export function App({ command, debug = false }: AppProps) {
   }
 
   // Ready state
+  if (command === 'start') {
+    return withDebugPanel(
+      <ProjectLauncher config={state.config} debug={debug} />,
+    )
+  }
+
   if (command === 'new') {
     return withDebugPanel(
       <NewProjectFlow config={state.config} debug={debug} />,
@@ -111,4 +119,163 @@ export function App({ command, debug = false }: AppProps) {
       <Text color="red">Unknown command: {command}</Text>
     </Box>,
   )
+}
+
+// ============================================================================
+// Project Launcher (start command)
+// ============================================================================
+
+type LauncherState =
+  | { step: 'ai_check'; checking: boolean; error?: string }
+  | { step: 'menu' }
+  | { step: 'new' }
+  | { step: 'existing' }
+
+function ProjectLauncher({
+  config: initialConfig,
+  debug = false,
+}: {
+  config: LachesisConfig
+  debug?: boolean
+}) {
+  const { exit } = useApp()
+  const [config, setConfig] = useState<LachesisConfig>(initialConfig)
+  const [state, setState] = useState<LauncherState>({
+    step: 'ai_check',
+    checking: true,
+  })
+  const [showSettings, setShowSettings] = useState(false)
+
+  // Log state changes when debug is enabled
+  useEffect(() => {
+    if (debug) {
+      debugLog.debug('Launcher state changed', { step: state.step })
+    }
+  }, [state.step, debug])
+
+  // Test AI connectivity before showing the menu
+  useEffect(() => {
+    if (state.step !== 'ai_check' || !state.checking) return
+
+    let cancelled = false
+
+    testAIConnection(config).then((result) => {
+      if (cancelled) return
+
+      if (result.connected) {
+        setState({ step: 'menu' })
+      } else {
+        setState({
+          step: 'ai_check',
+          checking: false,
+          error: result.error || 'Connection failed',
+        })
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    config,
+    state.step,
+    state.step === 'ai_check' ? state.checking : false,
+  ])
+
+  const handleSettingsSave = useCallback(
+    (updates: Partial<LachesisConfig>) => {
+      const newConfig = { ...config, ...updates }
+      setConfig(newConfig)
+      updateConfig(updates)
+    },
+    [config],
+  )
+
+  // Handle launcher-level inputs (settings + AI retry)
+  useInput(
+    (input, key) => {
+      const lower = input.toLowerCase()
+
+      if (
+        lower === 's' &&
+        (state.step === 'ai_check' || state.step === 'menu') &&
+        !showSettings
+      ) {
+        setShowSettings(true)
+        return
+      }
+
+      if (state.step === 'ai_check' && state.error) {
+        if (lower === 'r') {
+          setState({ step: 'ai_check', checking: true })
+        }
+        if (lower === 'q') {
+          exit()
+        }
+      }
+    },
+    { isActive: state.step !== 'new' && state.step !== 'existing' && !showSettings },
+  )
+
+  if (showSettings) {
+    return (
+      <SettingsPanel
+        config={config}
+        onSave={handleSettingsSave}
+        onClose={() => setShowSettings(false)}
+      />
+    )
+  }
+
+  if (state.step === 'ai_check') {
+    return (
+      <AIConnectionCheck
+        config={config}
+        checking={state.checking}
+        error={state.error}
+        onConnected={() => setState({ step: 'menu' })}
+        onError={(error) =>
+          setState({ step: 'ai_check', checking: false, error })
+        }
+      />
+    )
+  }
+
+  if (state.step === 'menu') {
+    return (
+      <Box flexDirection="column">
+        <StatusBar config={config} />
+        <Box padding={1} flexDirection="column">
+          <Box marginBottom={1}>
+            <Text bold>Lachesis Project Foundations Studio</Text>
+          </Box>
+          <Select
+            label="What would you like to do?"
+            options={[
+              { label: 'Start a new project interview', value: 'new' },
+              { label: 'Load an existing project', value: 'existing' },
+            ]}
+            onSelect={(value) => setState({ step: value as 'new' | 'existing' })}
+          />
+          <Box marginTop={1}>
+            <Text dimColor>
+              Use ↑/↓ to choose, Enter to confirm. [S] to edit settings.
+            </Text>
+          </Box>
+        </Box>
+      </Box>
+    )
+  }
+
+  if (state.step === 'existing') {
+    return (
+      <ExistingProjectFlow
+        config={config}
+        onBack={() => setState({ step: 'menu' })}
+      />
+    )
+  }
+
+  // state.step === 'new'
+  return <NewProjectFlow config={config} debug={debug} />
 }

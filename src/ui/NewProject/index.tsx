@@ -428,7 +428,7 @@ function WelcomeScreen({
   )
 }
 
-function AIConnectionCheck({
+export function AIConnectionCheck({
   config,
   checking,
   error,

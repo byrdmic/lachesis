@@ -19,6 +19,7 @@ function showHelp() {
 Lachesis - Project Foundations Studio
 
 Usage:
+  lachesis start     Launch Lachesis and choose a workflow
   lachesis new       Start a new project interview
   lachesis help      Show this help message
   lachesis version   Show version
@@ -36,6 +37,10 @@ function showVersion() {
 
 // Handle commands
 switch (command) {
+  case 'start':
+    render(<App command="start" debug={debug} />)
+    break
+
   case 'new':
     render(<App command="new" debug={debug} />)
     break
