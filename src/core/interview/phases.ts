@@ -1,7 +1,7 @@
 // Phase definitions for project intake
 import type { PhaseDefinition } from './types.ts'
 
-// Setup phase questions (collected in SetupPhase component now)
+// Setup phase questions are now gathered inside the AI prompt (no separate UI)
 // These are kept for reference but no longer used directly
 export const setupQuestions = []
 

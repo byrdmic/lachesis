@@ -103,6 +103,7 @@ export function InterviewPhase({
         planningLevel,
         depth,
         context.coveredTopics,
+        { collectSetupQuestions: true },
       )
 
       const streamId = new Date().toISOString()

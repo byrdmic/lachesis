@@ -1,6 +1,10 @@
 // System prompts for Lachesis AI interview
 import type { PlanningLevel, InterviewDepth } from '../core/project/types.ts'
 
+type CoachingPromptOptions = {
+  collectSetupQuestions?: boolean
+}
+
 /**
  * Topics the AI should cover during the interview
  */
@@ -70,9 +74,32 @@ export function buildCoachingPrompt(
   planningLevel: PlanningLevel,
   depth: InterviewDepth,
   coveredTopics: string[],
+  options: CoachingPromptOptions = {},
 ): string {
-  const depthGuidance = getDepthGuidance(depth)
-  const planningContext = getPlanningContext(planningLevel)
+  const collectSetupQuestions = options.collectSetupQuestions ?? false
+
+  const nameLine =
+    projectName.trim() || 'Not provided yet — ask for a working name first.'
+  const oneLinerLine =
+    oneLiner.trim() ||
+    'Not provided yet — ask for a one-line description and help them tighten it.'
+
+  const depthGuidance = collectSetupQuestions
+    ? `You do NOT know the desired depth yet. Begin by asking how deep they want to go (light skim, balanced, or deep dive). Until they answer, act as a balanced session. After they answer, adapt pace and probing to match their choice.`
+    : getDepthGuidance(depth)
+
+  const planningContext = collectSetupQuestions
+    ? `You do NOT know how planned out this idea is. Start by asking how far along they are (light spark, some notes, well defined, or their own phrasing). Mirror their words and adapt the style of questioning based on their answer.`
+    : getPlanningContext(planningLevel)
+
+  const setupQuestions = collectSetupQuestions
+    ? `SETUP QUESTIONS (ask these before diving into other topics):
+- How planned is this right now? (light spark, some notes, well defined, or their words)
+- How deep do they want to go today? (light skim, balanced, deep dive)
+- Do they have a working name? If not, say a placeholder is fine.
+- Can they share a one-line description? If not, help them craft one quickly.
+Keep this calibration brief (1-2 turns). Confirm their answers, then continue.`
+    : ''
   const topicsStatus =
     coveredTopics.length > 0
       ? `Topics already discussed: ${coveredTopics.join(', ')}`
@@ -81,14 +108,16 @@ export function buildCoachingPrompt(
   return `You are a project ideation coach helping someone clarify their project idea.
 
 PROJECT CONTEXT:
-- Name: ${projectName}
-- Description: ${oneLiner}
-- Planning level: ${planningLevel}
+- Name: ${nameLine}
+- Description: ${oneLinerLine}
+- Planning level: ${collectSetupQuestions ? 'To be collected during the chat' : planningLevel}
 
 ${planningContext}
 
 INTERVIEW DEPTH:
 ${depthGuidance}
+
+${setupQuestions}
 
 CURRENT STATE:
 ${topicsStatus}
@@ -123,7 +152,7 @@ SPECIAL TRIGGERS:
 - If they seem stuck: Offer 2-3 concrete examples to choose from
 - If they want to wrap up early: Acknowledge and move to summarization
 
-Start by acknowledging where they are and asking your first question about an uncovered topic.`
+Start by acknowledging them, quickly run the setup questions above, then move into uncovered topics one at a time.`
 }
 
 /**
@@ -141,6 +170,7 @@ export function buildFirstQuestionPrompt(
     planningLevel,
     depth,
     [],
+    { collectSetupQuestions: true },
   )
 
   return `${basePrompt}

@@ -13,7 +13,6 @@ import type {
   ExtractedProjectData,
 } from '../../ai/client.ts'
 import { testAIConnection } from '../../ai/client.ts'
-import { SetupPhase } from './SetupPhase.tsx'
 import { InterviewPhase } from './InterviewPhase.tsx'
 import { FinalizePhase } from './FinalizePhase.tsx'
 import { StatusBar, SettingsPanel } from '../components/index.ts'
@@ -28,7 +27,6 @@ type NewProjectFlowProps = {
 type FlowState =
   | { step: 'welcome' }
   | { step: 'ai_check'; checking: boolean; error?: string }
-  | { step: 'setup' }
   | {
       step: 'interview_choice'
       planningLevel: PlanningLevel
@@ -131,40 +129,14 @@ export function NewProjectFlow({
 
   // Handle AI check completion
   const handleAICheckComplete = useCallback(() => {
-    setState({ step: 'setup' })
+    setState({
+      step: 'interview',
+      planningLevel: 'Not provided yet - ask during interview',
+      depth: 'Not provided yet - ask during interview',
+      projectName: '',
+      oneLiner: '',
+    })
   }, [])
-
-  // Handle setup completion - now includes project name and one-liner
-  const handleSetupComplete = useCallback(
-    (
-      planningLevel: PlanningLevel,
-      depth: InterviewDepth,
-      projectName: string,
-      oneLiner: string,
-    ) => {
-      const lower = planningLevel.toLowerCase()
-      const isWellDefined =
-        lower.includes('well') || lower.includes('heavy') || lower.includes('defined')
-      if (isWellDefined) {
-        setState({
-          step: 'interview_choice',
-          planningLevel,
-          depth,
-          projectName,
-          oneLiner,
-        })
-      } else {
-        setState({
-          step: 'interview',
-          planningLevel,
-          depth,
-          projectName,
-          oneLiner,
-        })
-      }
-    },
-    [],
-  )
 
   // Handle interview choice
   const handleInterviewChoice = useCallback(
@@ -192,12 +164,21 @@ export function NewProjectFlow({
       planningLevel: PlanningLevel,
       depth: InterviewDepth,
     ) => {
+      const extractedOneLiner = extractedData?.vision?.oneLinePitch?.trim() ?? ''
+      const nextProjectName =
+        projectName.trim() || extractedOneLiner || 'Untitled Project'
+      const nextOneLiner =
+        oneLiner.trim() || extractedOneLiner || 'Not provided yet'
+      const nextPlanningLevel =
+        planningLevel?.trim() || 'Captured during interview'
+      const nextDepth = depth?.trim() || 'Balanced (auto)'
+
       setState({
         step: 'finalize',
-        planningLevel,
-        depth,
-        projectName,
-        oneLiner,
+        planningLevel: nextPlanningLevel,
+        depth: nextDepth,
+        projectName: nextProjectName,
+        oneLiner: nextOneLiner,
         extractedData,
         conversationLog,
       })
@@ -265,19 +246,6 @@ export function NewProjectFlow({
           setState({ step: 'ai_check', checking: false, error })
         }
       />
-    )
-  }
-
-  if (state.step === 'setup') {
-    return (
-      <Box flexDirection="column">
-        <StatusBar config={config} />
-        <SetupPhase
-          onComplete={handleSetupComplete}
-          onCancel={handleCancel}
-          onInputModeChange={setInputLocked}
-        />
-      </Box>
     )
   }
 
