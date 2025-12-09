@@ -1,21 +1,21 @@
 // Idea.md template
-import type { ProjectDefinition } from "../../core/project/types.ts";
-import { generateBaseFrontmatter } from "./frontmatter.ts";
+import type { ProjectDefinition } from '../../core/project/types.ts'
+import { generateBaseFrontmatter } from './frontmatter.ts'
 
 export function generateIdea(project: ProjectDefinition): string {
   const frontmatter = generateBaseFrontmatter(project, {
     extraFields: {
       idea_version: 1,
     },
-  });
+  })
 
   const excitement = project.solution.excitement
     ? `- ${project.solution.excitement}`
-    : "- (captured during interview)";
+    : '- (captured during interview)'
 
   const coreLoop = project.solution.coreLoop
     ? `- Core loop/interaction: ${project.solution.coreLoop}`
-    : "";
+    : ''
 
   return `${frontmatter}
 # Idea Space – ${project.name}
@@ -51,5 +51,5 @@ ${coreLoop}
 > Ideas that don't fit anywhere else yet.
 
 - …
-`;
+`
 }

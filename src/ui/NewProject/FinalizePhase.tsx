@@ -1,37 +1,40 @@
-import React, { useState, useCallback } from "react";
-import { Box, Text } from "ink";
-import Spinner from "ink-spinner";
-import type { LachesisConfig } from "../../config/types.ts";
-import type { Answer } from "../../core/interview/types.ts";
+import React, { useState, useCallback } from 'react'
+import { Box, Text } from 'ink'
+import Spinner from 'ink-spinner'
+import type { LachesisConfig } from '../../config/types.ts'
+import type { Answer } from '../../core/interview/types.ts'
 import type {
   InterviewDepth,
   QuestionMode,
   PlanningLevel,
   SessionLogEntry,
-} from "../../core/project/types.ts";
-import type { ConversationMessage, ExtractedProjectData } from "../../ai/client.ts";
-import { Select } from "../components/index.ts";
-import { buildProjectDefinition } from "../../core/project/builder.ts";
-import { scaffoldProject } from "../../fs/scaffolder.ts";
+} from '../../core/project/types.ts'
+import type {
+  ConversationMessage,
+  ExtractedProjectData,
+} from '../../ai/client.ts'
+import { Select } from '../components/index.ts'
+import { buildProjectDefinition } from '../../core/project/builder.ts'
+import { scaffoldProject } from '../../fs/scaffolder.ts'
 
 type FinalizePhaseProps = {
-  config: LachesisConfig;
-  planningLevel: PlanningLevel;
-  depth: InterviewDepth;
-  mode: QuestionMode;
-  projectName: string;
-  oneLiner: string;
+  config: LachesisConfig
+  planningLevel: PlanningLevel
+  depth: InterviewDepth
+  mode: QuestionMode
+  projectName: string
+  oneLiner: string
   // New AI-based data
-  extractedData?: ExtractedProjectData;
-  conversationLog: ConversationMessage[];
+  extractedData?: ExtractedProjectData
+  conversationLog: ConversationMessage[]
   // Legacy support
-  answers?: Map<string, Answer>;
-  sessionLog?: SessionLogEntry[];
-  onComplete: (projectPath: string) => void;
-  onCancel: () => void;
-};
+  answers?: Map<string, Answer>
+  sessionLog?: SessionLogEntry[]
+  onComplete: (projectPath: string) => void
+  onCancel: () => void
+}
 
-type FinalizeStep = "confirm" | "scaffolding" | "done" | "error";
+type FinalizeStep = 'confirm' | 'scaffolding' | 'done' | 'error'
 
 export function FinalizePhase({
   config,
@@ -47,21 +50,21 @@ export function FinalizePhase({
   onComplete,
   onCancel,
 }: FinalizePhaseProps) {
-  const [step, setStep] = useState<FinalizeStep>("confirm");
-  const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<FinalizeStep>('confirm')
+  const [error, setError] = useState<string | null>(null)
 
   const handleConfirm = useCallback(
     async (value: string) => {
-      if (value !== "yes") {
-        onCancel();
-        return;
+      if (value !== 'yes') {
+        onCancel()
+        return
       }
 
-      setStep("scaffolding");
+      setStep('scaffolding')
 
       try {
         // Build the project definition based on available data
-        let projectDef;
+        let projectDef
 
         if (extractedData) {
           // New AI-based input
@@ -72,7 +75,7 @@ export function FinalizePhase({
             mode,
             extractedData,
             conversationLog,
-          });
+          })
         } else if (answers && sessionLog) {
           // Legacy answer-based input
           projectDef = buildProjectDefinition({
@@ -82,24 +85,24 @@ export function FinalizePhase({
             mode,
             answers,
             sessionLog,
-          });
+          })
         } else {
-          throw new Error("No project data available");
+          throw new Error('No project data available')
         }
 
         // Scaffold the project
-        const result = await scaffoldProject(config.vaultPath, projectDef);
+        const result = await scaffoldProject(config.vaultPath, projectDef)
 
         if (result.success) {
-          setStep("done");
-          onComplete(result.projectPath!);
+          setStep('done')
+          onComplete(result.projectPath!)
         } else {
-          setError(result.error ?? "Unknown error");
-          setStep("error");
+          setError(result.error ?? 'Unknown error')
+          setStep('error')
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-        setStep("error");
+        setError(err instanceof Error ? err.message : String(err))
+        setStep('error')
       }
     },
     [
@@ -114,10 +117,10 @@ export function FinalizePhase({
       sessionLog,
       onComplete,
       onCancel,
-    ]
-  );
+    ],
+  )
 
-  if (step === "confirm") {
+  if (step === 'confirm') {
     return (
       <Box flexDirection="column" padding={1}>
         <Box
@@ -146,8 +149,8 @@ export function FinalizePhase({
         <Select
           label="Ready to create your project files?"
           options={[
-            { label: "Yes, create my project", value: "yes" },
-            { label: "No, exit without saving", value: "no" },
+            { label: 'Yes, create my project', value: 'yes' },
+            { label: 'No, exit without saving', value: 'no' },
           ]}
           onSelect={handleConfirm}
         />
@@ -158,10 +161,10 @@ export function FinalizePhase({
           </Text>
         </Box>
       </Box>
-    );
+    )
   }
 
-  if (step === "scaffolding") {
+  if (step === 'scaffolding') {
     return (
       <Box flexDirection="column" padding={1}>
         <Box>
@@ -171,10 +174,10 @@ export function FinalizePhase({
           <Text> Creating project structure...</Text>
         </Box>
       </Box>
-    );
+    )
   }
 
-  if (step === "error") {
+  if (step === 'error') {
     return (
       <Box flexDirection="column" padding={1}>
         <Text color="red" bold>
@@ -182,9 +185,9 @@ export function FinalizePhase({
         </Text>
         <Text color="red">{error}</Text>
       </Box>
-    );
+    )
   }
 
   // Done step is handled by parent
-  return null;
+  return null
 }

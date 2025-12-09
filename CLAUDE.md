@@ -19,6 +19,7 @@ bun run <file>.ts    # Run any TypeScript file directly
 ## TypeScript Configuration
 
 Strict TypeScript settings are enabled:
+
 - `noUncheckedIndexedAccess`: Array/object index access returns `T | undefined`
 - `noImplicitOverride`: Requires explicit `override` keyword
 - `noFallthroughCasesInSwitch`: Prevents switch fallthrough bugs

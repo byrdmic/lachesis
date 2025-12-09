@@ -1,68 +1,68 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Box, Text } from "ink";
-import { debugLog, type LogEntry, type LogLevel } from "../../debug/logger.ts";
+import React, { useState, useEffect, useRef } from 'react'
+import { Box, Text } from 'ink'
+import { debugLog, type LogEntry, type LogLevel } from '../../debug/logger.ts'
 
 type DebugLogProps = {
-  maxLines?: number;
-};
+  maxLines?: number
+}
 
 const levelColors: Record<LogLevel, string> = {
-  debug: "gray",
-  info: "cyan",
-  warn: "yellow",
-  error: "red",
-};
+  debug: 'gray',
+  info: 'cyan',
+  warn: 'yellow',
+  error: 'red',
+}
 
 const levelLabels: Record<LogLevel, string> = {
-  debug: "DBG",
-  info: "INF",
-  warn: "WRN",
-  error: "ERR",
-};
+  debug: 'DBG',
+  info: 'INF',
+  warn: 'WRN',
+  error: 'ERR',
+}
 
 function formatTimestamp(date: Date): string {
-  const h = date.getHours().toString().padStart(2, "0");
-  const m = date.getMinutes().toString().padStart(2, "0");
-  const s = date.getSeconds().toString().padStart(2, "0");
-  const ms = date.getMilliseconds().toString().padStart(3, "0");
-  return `${h}:${m}:${s}.${ms}`;
+  const h = date.getHours().toString().padStart(2, '0')
+  const m = date.getMinutes().toString().padStart(2, '0')
+  const s = date.getSeconds().toString().padStart(2, '0')
+  const ms = date.getMilliseconds().toString().padStart(3, '0')
+  return `${h}:${m}:${s}.${ms}`
 }
 
 function formatData(data: unknown): string {
-  if (data === undefined) return "";
-  if (typeof data === "string") return ` ${data}`;
+  if (data === undefined) return ''
+  if (typeof data === 'string') return ` ${data}`
   try {
-    const str = JSON.stringify(data);
+    const str = JSON.stringify(data)
     if (str.length > 50) {
-      return ` ${str.slice(0, 50)}...`;
+      return ` ${str.slice(0, 50)}...`
     }
-    return ` ${str}`;
+    return ` ${str}`
   } catch {
-    return ` [Object]`;
+    return ` [Object]`
   }
 }
 
 export function DebugLog({ maxLines = 8 }: DebugLogProps) {
-  const [logs, setLogs] = useState<LogEntry[]>(() => debugLog.getLogs());
-  const scrollRef = useRef(0);
+  const [logs, setLogs] = useState<LogEntry[]>(() => debugLog.getLogs())
+  const scrollRef = useRef(0)
 
   useEffect(() => {
     const unsubscribe = debugLog.subscribe((entry) => {
       setLogs((prev) => {
-        const newLogs = [...prev, entry];
+        const newLogs = [...prev, entry]
         // Keep more logs in state for scrolling, but only show maxLines
         if (newLogs.length > 200) {
-          return newLogs.slice(-200);
+          return newLogs.slice(-200)
         }
-        return newLogs;
-      });
-    });
+        return newLogs
+      })
+    })
 
-    return unsubscribe;
-  }, []);
+    return unsubscribe
+  }, [])
 
   // Show the last maxLines logs
-  const visibleLogs = logs.slice(-maxLines);
+  const visibleLogs = logs.slice(-maxLines)
 
   return (
     <Box
@@ -84,7 +84,9 @@ export function DebugLog({ maxLines = 8 }: DebugLogProps) {
         visibleLogs.map((entry, i) => (
           <Box key={`${entry.timestamp.getTime()}-${i}`}>
             <Text dimColor>{formatTimestamp(entry.timestamp)} </Text>
-            <Text color={levelColors[entry.level]}>[{levelLabels[entry.level]}]</Text>
+            <Text color={levelColors[entry.level]}>
+              [{levelLabels[entry.level]}]
+            </Text>
             <Text> {entry.message}</Text>
             {entry.data !== undefined && (
               <Text dimColor>{formatData(entry.data)}</Text>
@@ -93,5 +95,5 @@ export function DebugLog({ maxLines = 8 }: DebugLogProps) {
         ))
       )}
     </Box>
-  );
+  )
 }

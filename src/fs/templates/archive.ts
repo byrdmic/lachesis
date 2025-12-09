@@ -1,13 +1,13 @@
 // Archive.md template
-import type { ProjectDefinition } from "../../core/project/types.ts";
-import { generateBaseFrontmatter } from "./frontmatter.ts";
+import type { ProjectDefinition } from '../../core/project/types.ts'
+import { generateBaseFrontmatter } from './frontmatter.ts'
 
 export function generateArchive(project: ProjectDefinition): string {
   const frontmatter = generateBaseFrontmatter(project, {
     extraFields: {
       archive_version: 1,
     },
-  });
+  })
 
   return `${frontmatter}
 # Archive – ${project.name}
@@ -44,5 +44,5 @@ export function generateArchive(project: ProjectDefinition): string {
 <!-- Historical notes that are no longer relevant to active work -->
 
 - …
-`;
+`
 }

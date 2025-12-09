@@ -1,12 +1,12 @@
-import React from "react";
-import { Box, Text } from "ink";
+import React from 'react'
+import { Box, Text } from 'ink'
 
 type PhaseHeaderProps = {
-  phaseNumber: number;
-  phaseName: string;
-  description: string;
-  totalPhases?: number;
-};
+  phaseNumber: number
+  phaseName: string
+  description: string
+  totalPhases?: number
+}
 
 export function PhaseHeader({
   phaseNumber,
@@ -16,8 +16,8 @@ export function PhaseHeader({
 }: PhaseHeaderProps) {
   // Create progress indicator
   const progress = Array.from({ length: totalPhases }, (_, i) =>
-    i < phaseNumber ? "●" : "○"
-  ).join(" ");
+    i < phaseNumber ? '●' : '○',
+  ).join(' ')
 
   return (
     <Box
@@ -36,5 +36,5 @@ export function PhaseHeader({
       </Box>
       <Text dimColor>{description}</Text>
     </Box>
-  );
+  )
 }

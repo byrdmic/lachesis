@@ -28,7 +28,13 @@
   "peerDependencies": {
     "typescript": "^5"
   },
-  "keywords": ["cli", "obsidian", "project-management", "ink", "react"],
+  "keywords": [
+    "cli",
+    "obsidian",
+    "project-management",
+    "ink",
+    "react"
+  ],
   "author": "",
   "license": "MIT"
 }

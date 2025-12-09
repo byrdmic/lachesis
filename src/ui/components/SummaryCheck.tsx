@@ -1,19 +1,23 @@
-import React from "react";
-import { Box, Text } from "ink";
-import { Select } from "./Select.tsx";
+import React from 'react'
+import { Box, Text } from 'ink'
+import { Select } from './Select.tsx'
 
 type AnswerSummary = {
-  question: string;
-  answer: string;
-};
+  question: string
+  answer: string
+}
 
 type SummaryCheckProps = {
-  question: string;
-  answers?: AnswerSummary[];
-  onConfirm: (confirmed: boolean) => void;
-};
+  question: string
+  answers?: AnswerSummary[]
+  onConfirm: (confirmed: boolean) => void
+}
 
-export function SummaryCheck({ question, answers, onConfirm }: SummaryCheckProps) {
+export function SummaryCheck({
+  question,
+  answers,
+  onConfirm,
+}: SummaryCheckProps) {
   return (
     <Box flexDirection="column" marginTop={1}>
       <Box
@@ -43,11 +47,11 @@ export function SummaryCheck({ question, answers, onConfirm }: SummaryCheckProps
       <Select
         label={question}
         options={[
-          { label: "Yes, looks good", value: "yes" },
-          { label: "Let's refine it", value: "no" },
+          { label: 'Yes, looks good', value: 'yes' },
+          { label: "Let's refine it", value: 'no' },
         ]}
-        onSelect={(value) => onConfirm(value === "yes")}
+        onSelect={(value) => onConfirm(value === 'yes')}
       />
     </Box>
-  );
+  )
 }
