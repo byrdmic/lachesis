@@ -2,11 +2,10 @@
 import type { Question, PhaseId, Answer } from './types.ts'
 import { depthToNumber } from './types.ts'
 import { allPhases, setupQuestions } from './phases.ts'
-import type { InterviewDepth, QuestionMode } from '../project/types.ts'
+import type { InterviewDepth } from '../project/types.ts'
 
 export type EngineConfig = {
   depth: InterviewDepth
-  mode: QuestionMode
 }
 
 /**

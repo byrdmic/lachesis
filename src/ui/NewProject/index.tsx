@@ -5,7 +5,6 @@ import type { LachesisConfig } from '../../config/types.ts'
 import type { Answer } from '../../core/interview/types.ts'
 import type {
   InterviewDepth,
-  QuestionMode,
   PlanningLevel,
   SessionLogEntry,
 } from '../../core/project/types.ts'
@@ -34,7 +33,6 @@ type FlowState =
       step: 'interview_choice'
       planningLevel: PlanningLevel
       depth: InterviewDepth
-      mode: QuestionMode
       projectName: string
       oneLiner: string
     }
@@ -42,7 +40,6 @@ type FlowState =
       step: 'interview'
       planningLevel: PlanningLevel
       depth: InterviewDepth
-      mode: QuestionMode
       projectName: string
       oneLiner: string
     }
@@ -50,7 +47,6 @@ type FlowState =
       step: 'quick_capture'
       planningLevel: PlanningLevel
       depth: InterviewDepth
-      mode: QuestionMode
       projectName: string
       oneLiner: string
     }
@@ -58,7 +54,6 @@ type FlowState =
       step: 'finalize'
       planningLevel: PlanningLevel
       depth: InterviewDepth
-      mode: QuestionMode
       projectName: string
       oneLiner: string
       extractedData?: ExtractedProjectData
@@ -140,7 +135,6 @@ export function NewProjectFlow({
     (
       planningLevel: PlanningLevel,
       depth: InterviewDepth,
-      mode: QuestionMode,
       projectName: string,
       oneLiner: string,
     ) => {
@@ -150,7 +144,6 @@ export function NewProjectFlow({
           step: 'interview_choice',
           planningLevel,
           depth,
-          mode,
           projectName,
           oneLiner,
         })
@@ -159,7 +152,6 @@ export function NewProjectFlow({
           step: 'interview',
           planningLevel,
           depth,
-          mode,
           projectName,
           oneLiner,
         })
@@ -177,7 +169,6 @@ export function NewProjectFlow({
         step: choice,
         planningLevel: currentState.planningLevel,
         depth: currentState.depth,
-        mode: currentState.mode,
         projectName: currentState.projectName,
         oneLiner: currentState.oneLiner,
       })
@@ -194,13 +185,11 @@ export function NewProjectFlow({
       oneLiner: string,
       planningLevel: PlanningLevel,
       depth: InterviewDepth,
-      mode: QuestionMode,
     ) => {
       setState({
         step: 'finalize',
         planningLevel,
         depth,
-        mode,
         projectName,
         oneLiner,
         extractedData,
@@ -218,13 +207,11 @@ export function NewProjectFlow({
       oneLiner: string,
       planningLevel: PlanningLevel,
       depth: InterviewDepth,
-      mode: QuestionMode,
     ) => {
       setState({
         step: 'finalize',
         planningLevel,
         depth,
-        mode,
         projectName,
         oneLiner,
         extractedData,
@@ -304,7 +291,6 @@ export function NewProjectFlow({
           config={config}
           planningLevel={state.planningLevel}
           depth={state.depth}
-          mode={state.mode}
           projectName={state.projectName}
           oneLiner={state.oneLiner}
           onComplete={(extractedData, conversationLog) =>
@@ -315,7 +301,6 @@ export function NewProjectFlow({
               state.oneLiner,
               state.planningLevel,
               state.depth,
-              state.mode,
             )
           }
           onCancel={handleCancel}
@@ -339,7 +324,6 @@ export function NewProjectFlow({
               state.oneLiner,
               state.planningLevel,
               state.depth,
-              state.mode,
             )
           }
           onCancel={handleCancel}
@@ -356,7 +340,6 @@ export function NewProjectFlow({
           config={config}
           planningLevel={state.planningLevel}
           depth={state.depth}
-          mode={state.mode}
           projectName={state.projectName}
           oneLiner={state.oneLiner}
           extractedData={state.extractedData}

@@ -4,7 +4,6 @@ import { Select } from '../components/Select.tsx'
 import { TextInput } from '../components/TextInput.tsx'
 import type {
   InterviewDepth,
-  QuestionMode,
   PlanningLevel,
 } from '../../core/project/types.ts'
 
@@ -12,20 +11,18 @@ type SetupPhaseProps = {
   onComplete: (
     planningLevel: PlanningLevel,
     depth: InterviewDepth,
-    mode: QuestionMode,
     projectName: string,
     oneLiner: string,
   ) => void
   onCancel: () => void
 }
 
-type SetupStep = 'planning' | 'depth' | 'mode' | 'name' | 'oneliner'
+type SetupStep = 'planning' | 'depth' | 'name' | 'oneliner'
 
 export function SetupPhase({ onComplete, onCancel }: SetupPhaseProps) {
   const [step, setStep] = useState<SetupStep>('planning')
   const [planningLevel, setPlanningLevel] = useState<PlanningLevel | null>(null)
   const [depth, setDepth] = useState<InterviewDepth | null>(null)
-  const [mode, setMode] = useState<QuestionMode | null>(null)
   const [projectName, setProjectName] = useState('')
   const [oneLiner, setOneLiner] = useState('')
 
@@ -36,11 +33,6 @@ export function SetupPhase({ onComplete, onCancel }: SetupPhaseProps) {
 
   const handleDepthSelect = (value: string) => {
     setDepth(value as InterviewDepth)
-    setStep('mode')
-  }
-
-  const handleModeSelect = (value: string) => {
-    setMode(value as QuestionMode)
     setStep('name')
   }
 
@@ -50,8 +42,8 @@ export function SetupPhase({ onComplete, onCancel }: SetupPhaseProps) {
   }
 
   const handleOneLinerSubmit = (value: string) => {
-    if (planningLevel && depth && mode && projectName) {
-      onComplete(planningLevel, depth, mode, projectName, value)
+    if (planningLevel && depth && projectName) {
+      onComplete(planningLevel, depth, projectName, value)
     }
   }
 
@@ -59,7 +51,6 @@ export function SetupPhase({ onComplete, onCancel }: SetupPhaseProps) {
   const contextParts: string[] = []
   if (planningLevel) contextParts.push(formatPlanningLevel(planningLevel))
   if (depth) contextParts.push(depth)
-  if (mode) contextParts.push(mode)
   if (projectName) contextParts.push(`"${projectName}"`)
   const contextString = contextParts.join(' | ')
 
@@ -111,25 +102,6 @@ export function SetupPhase({ onComplete, onCancel }: SetupPhaseProps) {
               { label: 'Deep - Thorough examination', value: 'deep' },
             ]}
             onSelect={handleDepthSelect}
-          />
-        </Box>
-      )}
-
-      {step === 'mode' && (
-        <Box flexDirection="column">
-          <Box marginBottom={1}>
-            <Text dimColor>{contextString}</Text>
-          </Box>
-          <Select
-            label="Do you prefer one question at a time, or a small batch at once?"
-            options={[
-              {
-                label: 'Single - One at a time (recommended)',
-                value: 'single',
-              },
-              { label: 'Batch - Small groups of 2-3', value: 'batch' },
-            ]}
-            onSelect={handleModeSelect}
           />
         </Box>
       )}

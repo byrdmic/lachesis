@@ -5,7 +5,6 @@ import type { LachesisConfig } from '../../config/types.ts'
 import type {
   PlanningLevel,
   InterviewDepth,
-  QuestionMode,
 } from '../../core/project/types.ts'
 import type {
   ConversationMessage,
@@ -28,7 +27,6 @@ type InterviewPhaseProps = {
   config: LachesisConfig
   planningLevel: PlanningLevel
   depth: InterviewDepth
-  mode: QuestionMode
   projectName: string
   oneLiner: string
   onComplete: (
@@ -58,7 +56,6 @@ export function InterviewPhase({
   config,
   planningLevel,
   depth,
-  mode,
   projectName,
   oneLiner,
   onComplete,

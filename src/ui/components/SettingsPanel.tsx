@@ -11,7 +11,7 @@ type SettingsPanelProps = {
   onClose: () => void
 }
 
-type SettingsView = 'main' | 'provider' | 'model' | 'apikey' | 'depth' | 'mode'
+type SettingsView = 'main' | 'provider' | 'model' | 'apikey' | 'depth'
 
 export function SettingsPanel({ config, onSave, onClose }: SettingsPanelProps) {
   const [view, setView] = useState<SettingsView>('main')
@@ -124,27 +124,6 @@ export function SettingsPanel({ config, onSave, onClose }: SettingsPanelProps) {
     )
   }
 
-  if (view === 'mode') {
-    return (
-      <SettingsContainer
-        title="Default Question Mode"
-        onBack={() => setView('main')}
-      >
-        <Select
-          label="Select default question mode:"
-          options={[
-            { label: 'Single (one at a time)', value: 'single' },
-            { label: 'Batch (grouped questions)', value: 'batch' },
-          ]}
-          onSelect={(value) => {
-            onSave({ defaultQuestionMode: value as 'single' | 'batch' })
-            setView('main')
-          }}
-        />
-      </SettingsContainer>
-    )
-  }
-
   // Main settings view
   return (
     <SettingsContainer title="Settings" onBack={onClose}>
@@ -169,10 +148,6 @@ export function SettingsPanel({ config, onSave, onClose }: SettingsPanelProps) {
           {
             label: `Interview Depth: ${config.defaultInterviewDepth}`,
             value: 'depth',
-          },
-          {
-            label: `Question Mode: ${config.defaultQuestionMode}`,
-            value: 'mode',
           },
           { label: 'Close settings', value: 'close' },
         ]}

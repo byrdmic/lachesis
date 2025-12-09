@@ -5,7 +5,6 @@ import type { LachesisConfig } from '../../config/types.ts'
 import type { Answer } from '../../core/interview/types.ts'
 import type {
   InterviewDepth,
-  QuestionMode,
   PlanningLevel,
   SessionLogEntry,
 } from '../../core/project/types.ts'
@@ -21,7 +20,6 @@ type FinalizePhaseProps = {
   config: LachesisConfig
   planningLevel: PlanningLevel
   depth: InterviewDepth
-  mode: QuestionMode
   projectName: string
   oneLiner: string
   // New AI-based data
@@ -40,7 +38,6 @@ export function FinalizePhase({
   config,
   planningLevel,
   depth,
-  mode,
   projectName,
   oneLiner,
   extractedData,
@@ -72,7 +69,6 @@ export function FinalizePhase({
             name: projectName,
             planningLevel,
             depth,
-            mode,
             extractedData,
             conversationLog,
           })
@@ -82,7 +78,6 @@ export function FinalizePhase({
             name: projectName,
             planningLevel,
             depth,
-            mode,
             answers,
             sessionLog,
           })
@@ -110,7 +105,6 @@ export function FinalizePhase({
       projectName,
       planningLevel,
       depth,
-      mode,
       extractedData,
       conversationLog,
       answers,

@@ -1,7 +1,6 @@
 // Core project types for Lachesis
 
 export type InterviewDepth = 'short' | 'medium' | 'deep'
-export type QuestionMode = 'single' | 'batch'
 export type PlanningLevel = 'vague_idea' | 'some_notes' | 'well_defined'
 
 export type ProjectStatus = 'idea' | 'active' | 'paused' | 'done'
@@ -49,7 +48,6 @@ export type ExecutionPlan = {
 export type SessionSetup = {
   planningLevel: PlanningLevel
   depth: InterviewDepth
-  questionMode: QuestionMode
 }
 
 export type ProjectDefinition = {
