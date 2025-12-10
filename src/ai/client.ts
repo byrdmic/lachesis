@@ -1,17 +1,18 @@
 // AI Client for Lachesis - handles all AI interactions
-import { createOpenAI } from '@ai-sdk/openai'
+import { openai } from '@ai-sdk/openai'
 import {
   generateText,
   generateObject,
   streamText,
   type CoreMessage,
+  type LanguageModel,
 } from 'ai'
 import { z } from 'zod'
 import type { LachesisConfig } from '../config/types.ts'
 import type { PlanningLevel, InterviewDepth } from '../core/project/types.ts'
 import { debugLog } from '../debug/logger.ts'
 
-const DEFAULT_MODEL = 'gpt-5'
+const DEFAULT_MODEL_ID = 'openai/gpt-5'
 
 // ============================================================================
 // Types
@@ -100,24 +101,24 @@ export type ExtractedProjectData = z.infer<typeof ExtractedProjectDataSchema>
 // ============================================================================
 
 function resolveModelId(config: LachesisConfig): string {
-  return config.defaultModel?.trim() || DEFAULT_MODEL
+  const configured = config.defaultModel?.trim() || DEFAULT_MODEL_ID
+  return configured.replace(/^openai\//i, '')
 }
-
-type CompatibleLanguageModel = ReturnType<ReturnType<typeof createOpenAI>>
 
 /**
  * Create a configured OpenAI model instance for the current settings.
  * Returns null when no API key is present.
  */
-export function getOpenAIModel(config: LachesisConfig): CompatibleLanguageModel | null {
+export function getOpenAIModel(
+  config: LachesisConfig,
+): LanguageModel | null {
   const apiKey = process.env[config.apiKeyEnvVar]
-
   if (!apiKey) {
     return null
   }
 
-  const client = createOpenAI({ apiKey })
-  return client(resolveModelId(config))
+  const modelId = resolveModelId(config)
+  return openai(modelId) as unknown as LanguageModel
 }
 
 function buildChatMessages(
@@ -161,14 +162,12 @@ export function isAIAvailable(config: LachesisConfig): boolean {
 export async function testAIConnection(
   config: LachesisConfig,
 ): Promise<AIConnectionResult> {
-  debugLog.debug('Testing AI connection', { config: JSON.stringify(config) })
   const model = getOpenAIModel(config)
-  debugLog.debug('Model configured', { modelPresent: Boolean(model) })
 
   if (!model) {
     return {
       connected: false,
-      error: `No API key found. Set ${config.apiKeyEnvVar} environment variable.`,
+      error: `Missing API key in ${config.apiKeyEnvVar}. Set it and try again.`,
     }
   }
 
@@ -179,7 +178,6 @@ export async function testAIConnection(
       prompt: "Say 'ok'",
       maxOutputTokens: 5,
     })
-
     return { connected: true }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -239,7 +237,6 @@ export async function generateNextQuestion(
       model,
       messages,
       maxOutputTokens: 300,
-      temperature: 0.7,
     })
 
     return {
@@ -482,7 +479,9 @@ export async function shouldContinueConversation(
       ? 20
       : lower.includes('medium')
         ? 14
-        : lower.includes('short') || lower.includes('light') || lower === 'quick'
+        : lower.includes('short') ||
+            lower.includes('light') ||
+            lower === 'quick'
           ? 8
           : 12
   if (context.messages.length >= maxMessages) {

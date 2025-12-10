@@ -21,6 +21,7 @@ import {
 } from '../../ai/prompts.ts'
 import { TextInput } from '../components/TextInput.tsx'
 import { ConversationView } from '../components/ConversationView.tsx'
+import { debugLog } from '../../debug/logger.ts'
 
 type InterviewPhaseProps = {
   config: LachesisConfig
@@ -141,6 +142,7 @@ export function InterviewPhase({
           ),
         }))
       } else {
+        debugLog.error('Failed to generate question', { result: JSON.stringify(result) })
         setState((s) => ({
           ...s,
           step: 'error',
