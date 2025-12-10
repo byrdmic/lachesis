@@ -2,12 +2,11 @@ import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { Select } from '../components/Select.tsx'
 import { TextInput } from '../components/TextInput.tsx'
-import type { InterviewDepth, PlanningLevel } from '../../core/project/types.ts'
+import type { PlanningLevel } from '../../core/project/types.ts'
 
 type SetupPhaseProps = {
   onComplete: (
     planningLevel: PlanningLevel,
-    depth: InterviewDepth,
     projectName: string,
     oneLiner: string,
   ) => void
@@ -15,13 +14,7 @@ type SetupPhaseProps = {
   onInputModeChange?: (typing: boolean) => void
 }
 
-type SetupStep =
-  | 'planning'
-  | 'planning_custom'
-  | 'depth'
-  | 'depth_custom'
-  | 'name'
-  | 'oneliner'
+type SetupStep = 'planning' | 'planning_custom' | 'name' | 'oneliner'
 
 export function SetupPhase({
   onComplete,
@@ -32,17 +25,10 @@ export function SetupPhase({
   const [planningLevel, setPlanningLevel] = useState<PlanningLevel | null>(null)
   const [planningCustom, setPlanningCustom] = useState('')
   const [planningInitialIndex, setPlanningInitialIndex] = useState(0)
-  const [depth, setDepth] = useState<InterviewDepth | null>(null)
-  const [depthCustom, setDepthCustom] = useState('')
-  const [depthInitialIndex, setDepthInitialIndex] = useState(0)
   const [projectName, setProjectName] = useState('')
   const [oneLiner, setOneLiner] = useState('')
 
-  const typing =
-    step === 'planning_custom' ||
-    step === 'depth_custom' ||
-    step === 'name' ||
-    step === 'oneliner'
+  const typing = step === 'planning_custom' || step === 'name' || step === 'oneliner'
 
   React.useEffect(() => {
     onInputModeChange?.(typing)
@@ -57,13 +43,9 @@ export function SetupPhase({
         setPlanningCustom('')
         setPlanningInitialIndex(2) // last preset before "Enter your own"
         setStep('planning')
-      } else if (step === 'depth_custom') {
-        setDepthCustom('')
-        setDepthInitialIndex(2)
-        setStep('depth')
       }
     },
-    { isActive: step === 'planning_custom' || step === 'depth_custom' },
+    { isActive: step === 'planning_custom' },
   )
 
   const handlePlanningSelect = (value: string) => {
@@ -74,17 +56,6 @@ export function SetupPhase({
     }
     setPlanningLevel(value as PlanningLevel)
     setPlanningInitialIndex(0)
-    setStep('depth')
-  }
-
-  const handleDepthSelect = (value: string) => {
-    if (value === 'Enter your own') {
-      setDepthInitialIndex(2)
-      setStep('depth_custom')
-      return
-    }
-    setDepth(value as InterviewDepth)
-    setDepthInitialIndex(0)
     setStep('name')
   }
 
@@ -94,20 +65,14 @@ export function SetupPhase({
   }
 
   const handleOneLinerSubmit = (value: string) => {
-    if (planningLevel && depth) {
-      onComplete(
-        planningLevel,
-        depth,
-        projectName.trim(),
-        value,
-      )
+    if (planningLevel) {
+      onComplete(planningLevel, projectName.trim(), value)
     }
   }
 
   // Build context string showing previous selections
   const contextParts: string[] = []
   if (planningLevel) contextParts.push(planningLevel)
-  if (depth) contextParts.push(depth)
   if (projectName) contextParts.push(`"${projectName}"`)
   const contextString = contextParts.join(' | ')
 
@@ -145,28 +110,6 @@ export function SetupPhase({
         />
       )}
 
-      {step === 'depth' && (
-        <Box flexDirection="column">
-          <Box marginBottom={1}>
-            <Text dimColor>{contextString}</Text>
-          </Box>
-          <Select
-            label="How deep do you want to go today?"
-            options={[
-              {
-                label: 'Light - Quick skim (core questions only)',
-                value: 'Light - Quick skim',
-              },
-              { label: 'Medium - Balanced exploration', value: 'Medium - Balanced' },
-              { label: 'Heavy - Deep dive', value: 'Heavy - Deep dive' },
-              { label: 'Enter your own', value: 'Enter your own' },
-            ]}
-            initialIndex={depthInitialIndex}
-            onSelect={handleDepthSelect}
-          />
-        </Box>
-      )}
-
       {step === 'planning_custom' && (
         <Box flexDirection="column">
           <Box marginBottom={1}>
@@ -182,39 +125,13 @@ export function SetupPhase({
                 setPlanningLevel(v)
                 setPlanningCustom(v)
                 setPlanningInitialIndex(2) // return focus to last preset before custom
-                setStep('depth')
+                setStep('name')
               }
             }}
             placeholder="e.g., I have a rough storyboard and a few notes"
           />
           <Box marginTop={1}>
             <Text dimColor>Optional — whatever you share helps the AI adapt.</Text>
-          </Box>
-        </Box>
-      )}
-
-      {step === 'depth_custom' && (
-        <Box flexDirection="column">
-          <Box marginBottom={1}>
-            <Text dimColor>{contextString}</Text>
-          </Box>
-          <TextInput
-            label="Describe how in-depth you want to go (freeform welcome)"
-            value={depthCustom}
-            onChange={setDepthCustom}
-            onSubmit={(val) => {
-              const v = val.trim()
-              if (v) {
-                setDepth(v)
-                setDepthCustom(v)
-                setDepthInitialIndex(2) // return focus to last preset before custom
-                setStep('name')
-              }
-            }}
-            placeholder="e.g., Just a skim, or deep planning of risks"
-          />
-          <Box marginTop={1}>
-            <Text dimColor>Optional — say whatever sets the right depth for you.</Text>
           </Box>
         </Box>
       )}
@@ -254,7 +171,7 @@ export function SetupPhase({
             <Text dimColor>
               Structured format we send to the AI:
               {' '}
-              planning_level, depth, working_name (optional), one_liner.
+              planning_level, working_name (optional), one_liner.
             </Text>
             <Text dimColor>
               If anything is blank, we'll tell the AI it's okay and keep going.

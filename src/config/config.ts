@@ -12,7 +12,7 @@ import {
   getPlatformDisplayName,
 } from './paths.ts'
 
-function applyConfigUpgrades(config: LachesisConfig): {
+export function applyConfigUpgrades(config: LachesisConfig): {
   config: LachesisConfig
   updated: boolean
 } {

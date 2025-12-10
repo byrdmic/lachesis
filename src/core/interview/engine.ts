@@ -1,34 +1,20 @@
 // Interview engine - manages the flow of questions and phases
 import type { Question, PhaseId, Answer } from './types.ts'
-import { depthToNumber } from './types.ts'
 import { allPhases, setupQuestions } from './phases.ts'
-import type { InterviewDepth } from '../project/types.ts'
 
-export type EngineConfig = {
-  depth: InterviewDepth
+export type EngineConfig = Record<string, never>
+
+/**
+ * Filter questions (all returned now that depth is removed)
+ */
+export function getQuestionsForDepth(questions: Question[]): Question[] {
+  return questions
 }
 
 /**
- * Filter questions based on interview depth
+ * Get all questions for a phase
  */
-export function getQuestionsForDepth(
-  questions: Question[],
-  depth: InterviewDepth,
-): Question[] {
-  const depthNum = depthToNumber(depth)
-  return questions.filter((q) => {
-    const minDepth = q.minDepth ?? 1
-    return minDepth <= depthNum
-  })
-}
-
-/**
- * Get all questions for a phase, filtered by depth
- */
-export function getPhaseQuestions(
-  phaseId: PhaseId,
-  depth: InterviewDepth,
-): Question[] {
+export function getPhaseQuestions(phaseId: PhaseId): Question[] {
   if (phaseId === 'setup') {
     return setupQuestions
   }
@@ -36,7 +22,7 @@ export function getPhaseQuestions(
   const phase = allPhases.find((p) => p.id === phaseId)
   if (!phase) return []
 
-  return getQuestionsForDepth(phase.questions, depth)
+  return getQuestionsForDepth(phase.questions)
 }
 
 /**
@@ -74,10 +60,9 @@ export function getBatchQuestions(
  */
 export function isPhaseComplete(
   phaseId: PhaseId,
-  depth: InterviewDepth,
   answers: Map<string, Answer>,
 ): boolean {
-  const questions = getPhaseQuestions(phaseId, depth)
+  const questions = getPhaseQuestions(phaseId)
   const requiredQuestions = questions.filter((q) => q.required)
 
   return requiredQuestions.every((q) => answers.has(q.id))

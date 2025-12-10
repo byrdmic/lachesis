@@ -59,7 +59,7 @@ const whatHappened =
 ## ${date} – Creation Session
 
 **Context:**
-First \`lachesis new\` interview. Project created from ${project.setup.planningLevel.replace('_', ' ')} with ${project.setup.depth} depth.
+First \`lachesis new\` interview. Project created from ${project.setup.planningLevel.replace('_', ' ')} session.
 
 **What happened:**
 ${whatHappened}

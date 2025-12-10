@@ -2,10 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { Box, Text, useInput } from 'ink'
 import Spinner from 'ink-spinner'
 import type { LachesisConfig } from '../../config/types.ts'
-import type {
-  PlanningLevel,
-  InterviewDepth,
-} from '../../core/project/types.ts'
+import type { PlanningLevel } from '../../core/project/types.ts'
 import type {
   ConversationMessage,
   ExtractedProjectData,
@@ -26,7 +23,6 @@ import { debugLog } from '../../debug/logger.ts'
 type InterviewPhaseProps = {
   config: LachesisConfig
   planningLevel: PlanningLevel
-  depth: InterviewDepth
   projectName: string
   oneLiner: string
   debug?: boolean
@@ -58,7 +54,6 @@ type InterviewState = {
 export function InterviewPhase({
   config,
   planningLevel,
-  depth,
   projectName,
   oneLiner,
   debug = false,
@@ -92,7 +87,6 @@ export function InterviewPhase({
   const streamQuestion = useCallback(
     async (context: {
       planningLevel: PlanningLevel
-      depth: InterviewDepth
       projectName: string
       oneLiner: string
       messages: ConversationMessage[]
@@ -102,7 +96,6 @@ export function InterviewPhase({
         effectiveProjectName,
         effectiveOneLiner,
         planningLevel,
-        depth,
         context.coveredTopics,
         { collectSetupQuestions: true },
       )
@@ -154,7 +147,6 @@ export function InterviewPhase({
     [
       config,
       debug,
-      depth,
       effectiveOneLiner,
       effectiveProjectName,
       planningLevel,
@@ -164,7 +156,6 @@ export function InterviewPhase({
   const generateFirstQuestion = async () => {
     await streamQuestion({
       planningLevel,
-      depth,
       projectName: effectiveProjectName,
       oneLiner: effectiveOneLiner,
       messages: [],
@@ -203,7 +194,6 @@ export function InterviewPhase({
       // Check if we should wrap up
       const context = {
         planningLevel,
-        depth,
         projectName,
         oneLiner,
         messages: newMessages,
@@ -250,7 +240,6 @@ export function InterviewPhase({
       state.coveredTopics,
       config,
       planningLevel,
-      depth,
       projectName,
       oneLiner,
     ],
@@ -281,7 +270,6 @@ export function InterviewPhase({
 
     const context = {
       planningLevel,
-      depth,
       projectName: effectiveProjectName,
       oneLiner: effectiveOneLiner,
       messages,

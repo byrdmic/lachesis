@@ -7,7 +7,6 @@ import type {
   ProjectSolution,
   ExecutionPlan,
   SessionLogEntry,
-  InterviewDepth,
   PlanningLevel,
 } from './types.ts'
 import { createSlug, nowISO } from './types.ts'
@@ -21,7 +20,6 @@ import type {
 type LegacyBuilderInput = {
   name: string
   planningLevel: PlanningLevel
-  depth: InterviewDepth
   answers: Map<string, Answer>
   sessionLog: SessionLogEntry[]
 }
@@ -30,7 +28,6 @@ type LegacyBuilderInput = {
 type AIBuilderInput = {
   name: string
   planningLevel: PlanningLevel
-  depth: InterviewDepth
   extractedData: ExtractedProjectData
   conversationLog: ConversationMessage[]
 }
@@ -172,7 +169,7 @@ function convertConversationToSessionLog(
 // ============================================================================
 
 export function buildProjectDefinition(input: BuilderInput): ProjectDefinition {
-  const { name, planningLevel, depth } = input
+  const { name, planningLevel } = input
   const now = nowISO()
   const slug = createSlug(name)
 
@@ -189,7 +186,6 @@ export function buildProjectDefinition(input: BuilderInput): ProjectDefinition {
       releasePhase: 'seed',
       setup: {
         planningLevel,
-        depth,
       },
       vision: buildVisionFromAI(extractedData),
       constraints: buildConstraintsFromAI(extractedData),
@@ -211,7 +207,6 @@ export function buildProjectDefinition(input: BuilderInput): ProjectDefinition {
       releasePhase: 'seed',
       setup: {
         planningLevel,
-        depth,
       },
       vision: buildVisionFromAnswers(answers),
       constraints: buildConstraintsFromAnswers(answers),

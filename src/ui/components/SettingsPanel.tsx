@@ -11,7 +11,7 @@ type SettingsPanelProps = {
   onClose: () => void
 }
 
-type SettingsView = 'main' | 'provider' | 'model' | 'apikey' | 'depth'
+type SettingsView = 'main' | 'provider' | 'model' | 'apikey'
 
 export function SettingsPanel({ config, onSave, onClose }: SettingsPanelProps) {
   const [view, setView] = useState<SettingsView>('main')
@@ -100,30 +100,6 @@ export function SettingsPanel({ config, onSave, onClose }: SettingsPanelProps) {
     )
   }
 
-  if (view === 'depth') {
-    return (
-      <SettingsContainer
-        title="Default Interview Depth"
-        onBack={() => setView('main')}
-      >
-        <Select
-          label="Select default interview depth:"
-          options={[
-            { label: 'Short (quick overview)', value: 'short' },
-            { label: 'Medium (balanced)', value: 'medium' },
-            { label: 'Deep (comprehensive)', value: 'deep' },
-          ]}
-          onSelect={(value) => {
-            onSave({
-              defaultInterviewDepth: value as 'short' | 'medium' | 'deep',
-            })
-            setView('main')
-          }}
-        />
-      </SettingsContainer>
-    )
-  }
-
   // Main settings view
   return (
     <SettingsContainer title="Settings" onBack={onClose}>
@@ -145,10 +121,6 @@ export function SettingsPanel({ config, onSave, onClose }: SettingsPanelProps) {
           },
           { label: `Model: ${config.defaultModel}`, value: 'model' },
           { label: `API Key Env: ${config.apiKeyEnvVar}`, value: 'apikey' },
-          {
-            label: `Interview Depth: ${config.defaultInterviewDepth}`,
-            value: 'depth',
-          },
           { label: 'Close settings', value: 'close' },
         ]}
         onSelect={(value) => {

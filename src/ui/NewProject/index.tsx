@@ -3,11 +3,7 @@ import { Box, Text, useApp, useInput } from 'ink'
 import Spinner from 'ink-spinner'
 import type { LachesisConfig } from '../../config/types.ts'
 import type { Answer } from '../../core/interview/types.ts'
-import type {
-  InterviewDepth,
-  PlanningLevel,
-  SessionLogEntry,
-} from '../../core/project/types.ts'
+import type { PlanningLevel, SessionLogEntry } from '../../core/project/types.ts'
 import type {
   ConversationMessage,
   ExtractedProjectData,
@@ -30,28 +26,24 @@ type FlowState =
   | {
       step: 'interview_choice'
       planningLevel: PlanningLevel
-      depth: InterviewDepth
       projectName: string
       oneLiner: string
     }
   | {
       step: 'interview'
       planningLevel: PlanningLevel
-      depth: InterviewDepth
       projectName: string
       oneLiner: string
     }
   | {
       step: 'quick_capture'
       planningLevel: PlanningLevel
-      depth: InterviewDepth
       projectName: string
       oneLiner: string
     }
   | {
       step: 'finalize'
       planningLevel: PlanningLevel
-      depth: InterviewDepth
       projectName: string
       oneLiner: string
       extractedData?: ExtractedProjectData
@@ -132,7 +124,6 @@ export function NewProjectFlow({
     setState({
       step: 'interview',
       planningLevel: 'Not provided yet - ask during interview',
-      depth: 'Not provided yet - ask during interview',
       projectName: '',
       oneLiner: '',
     })
@@ -146,7 +137,6 @@ export function NewProjectFlow({
       setState({
         step: choice,
         planningLevel: currentState.planningLevel,
-        depth: currentState.depth,
         projectName: currentState.projectName,
         oneLiner: currentState.oneLiner,
       })
@@ -162,7 +152,6 @@ export function NewProjectFlow({
       projectName: string,
       oneLiner: string,
       planningLevel: PlanningLevel,
-      depth: InterviewDepth,
     ) => {
       const extractedOneLiner = extractedData?.vision?.oneLinePitch?.trim() ?? ''
       const nextProjectName =
@@ -171,12 +160,10 @@ export function NewProjectFlow({
         oneLiner.trim() || extractedOneLiner || 'Not provided yet'
       const nextPlanningLevel =
         planningLevel?.trim() || 'Captured during interview'
-      const nextDepth = depth?.trim() || 'Balanced (auto)'
 
       setState({
         step: 'finalize',
         planningLevel: nextPlanningLevel,
-        depth: nextDepth,
         projectName: nextProjectName,
         oneLiner: nextOneLiner,
         extractedData,
@@ -193,12 +180,10 @@ export function NewProjectFlow({
       projectName: string,
       oneLiner: string,
       planningLevel: PlanningLevel,
-      depth: InterviewDepth,
     ) => {
       setState({
         step: 'finalize',
         planningLevel,
-        depth,
         projectName,
         oneLiner,
         extractedData,
@@ -268,7 +253,6 @@ export function NewProjectFlow({
         <InterviewPhase
           config={config}
           planningLevel={state.planningLevel}
-          depth={state.depth}
           projectName={state.projectName}
           oneLiner={state.oneLiner}
           debug={debug}
@@ -280,7 +264,6 @@ export function NewProjectFlow({
               state.projectName,
               state.oneLiner,
               state.planningLevel,
-              state.depth,
             )
           }
           onCancel={handleCancel}
@@ -303,7 +286,6 @@ export function NewProjectFlow({
               state.projectName,
               state.oneLiner,
               state.planningLevel,
-              state.depth,
             )
           }
           onCancel={handleCancel}
@@ -319,7 +301,6 @@ export function NewProjectFlow({
         <FinalizePhase
           config={config}
           planningLevel={state.planningLevel}
-          depth={state.depth}
           projectName={state.projectName}
           oneLiner={state.oneLiner}
           extractedData={state.extractedData}

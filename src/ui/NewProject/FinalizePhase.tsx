@@ -4,7 +4,6 @@ import Spinner from 'ink-spinner'
 import type { LachesisConfig } from '../../config/types.ts'
 import type { Answer } from '../../core/interview/types.ts'
 import type {
-  InterviewDepth,
   PlanningLevel,
   SessionLogEntry,
 } from '../../core/project/types.ts'
@@ -19,7 +18,6 @@ import { scaffoldProject } from '../../fs/scaffolder.ts'
 type FinalizePhaseProps = {
   config: LachesisConfig
   planningLevel: PlanningLevel
-  depth: InterviewDepth
   projectName: string
   oneLiner: string
   // New AI-based data
@@ -37,7 +35,6 @@ type FinalizeStep = 'confirm' | 'scaffolding' | 'done' | 'error'
 export function FinalizePhase({
   config,
   planningLevel,
-  depth,
   projectName,
   oneLiner,
   extractedData,
@@ -73,7 +70,6 @@ export function FinalizePhase({
           projectDef = buildProjectDefinition({
             name: effectiveName,
             planningLevel,
-            depth,
             extractedData,
             conversationLog,
           })
@@ -82,7 +78,6 @@ export function FinalizePhase({
           projectDef = buildProjectDefinition({
             name: effectiveName,
             planningLevel,
-            depth,
             answers,
             sessionLog,
           })
@@ -109,7 +104,6 @@ export function FinalizePhase({
       config,
       projectName,
       planningLevel,
-      depth,
       extractedData,
       conversationLog,
       answers,

@@ -9,7 +9,7 @@ import {
 } from 'ai'
 import { z } from 'zod'
 import type { LachesisConfig } from '../config/types.ts'
-import type { PlanningLevel, InterviewDepth } from '../core/project/types.ts'
+import type { PlanningLevel } from '../core/project/types.ts'
 import { debugLog } from '../debug/logger.ts'
 
 const DEFAULT_MODEL_ID = 'openai/gpt-5'
@@ -32,7 +32,6 @@ export type ConversationMessage = {
 
 export type ConversationContext = {
   planningLevel: PlanningLevel
-  depth: InterviewDepth
   projectName: string
   oneLiner: string
   messages: ConversationMessage[]
@@ -461,8 +460,8 @@ export async function shouldContinueConversation(
   context: ConversationContext,
   config: LachesisConfig,
 ): Promise<{ continue: boolean; reason?: string }> {
-  // Simple heuristic based on depth and covered topics
-  const topicsNeeded = getTopicsForDepth(context.depth)
+  // Simple heuristic based on covered topics
+  const topicsNeeded = Array.from(DEFAULT_DISCOVERY_TOPICS)
   const covered = new Set(context.coveredTopics)
 
   // Check if we've covered enough topics
@@ -473,17 +472,7 @@ export async function shouldContinueConversation(
   }
 
   // Also check message count as a safety limit
-  const lower = context.depth.toLowerCase()
-  const maxMessages =
-    lower.includes('deep') || lower.includes('heavy')
-      ? 20
-      : lower.includes('medium')
-        ? 14
-        : lower.includes('short') ||
-            lower.includes('light') ||
-            lower === 'quick'
-          ? 8
-          : 12
+  const maxMessages = 12
   if (context.messages.length >= maxMessages) {
     return { continue: false, reason: 'Reached conversation limit' }
   }
@@ -492,22 +481,18 @@ export async function shouldContinueConversation(
 }
 
 /**
- * Get topics that should be covered based on depth
+ * Topics the interviewer should aim to cover
  */
-function getTopicsForDepth(depth: InterviewDepth): string[] {
-  const core = ['core_purpose', 'target_users', 'problem_solved']
-  const extended = [...core, 'constraints', 'success_criteria']
-  const full = [...extended, 'anti_goals', 'first_move', 'tech_considerations']
-
-  const lower = depth.toLowerCase()
-  if (lower.includes('short') || lower.includes('light') || lower === 'quick') {
-    return core
-  }
-  if (lower.includes('deep') || lower.includes('heavy')) {
-    return full
-  }
-  return extended
-}
+const DEFAULT_DISCOVERY_TOPICS = [
+  'core_purpose',
+  'target_users',
+  'problem_solved',
+  'constraints',
+  'success_criteria',
+  'anti_goals',
+  'first_move',
+  'tech_considerations',
+] as const
 
 // Export schema for use elsewhere
 export { ExtractedProjectDataSchema }

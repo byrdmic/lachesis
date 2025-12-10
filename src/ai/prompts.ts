@@ -1,5 +1,5 @@
 // System prompts for Lachesis AI interview
-import type { PlanningLevel, InterviewDepth } from '../core/project/types.ts'
+import type { PlanningLevel } from '../core/project/types.ts'
 
 type CoachingPromptOptions = {
   collectSetupQuestions?: boolean
@@ -20,33 +20,6 @@ export const DISCOVERY_TOPICS = [
 ] as const
 
 export type DiscoveryTopic = (typeof DISCOVERY_TOPICS)[number]
-
-/**
- * Get depth guidance text for the system prompt
- */
-function getDepthGuidance(depth: InterviewDepth): string {
-  const lower = depth.toLowerCase()
-  if (lower.includes('short') || lower.includes('light') || lower === 'quick') {
-    return `This is a SHORT/LIGHT session. Focus on essentials:
-- What it does (core purpose)
-- Who it's for (target users)
-- What problem it solves
-Keep questions brief. Aim for 3-4 exchanges total.`
-  }
-  if (lower.includes('deep') || lower.includes('heavy')) {
-    return `This is a DEEP/HEAVY session. Explore comprehensively:
-- Core purpose and mechanics
-- Target users and their specific pain points
-- Problem being solved in detail
-- All known constraints
-- Success criteria
-- Anti-goals (what this should NOT become)
-- Potential first steps
-- Technology considerations
-Take your time. Probe for depth on important topics.`
-  }
-  return `Balanced depth session. Cover core topics plus key constraints and success signals. Be thorough but efficient.`
-}
 
 /**
  * Get planning level context for the system prompt
@@ -72,7 +45,6 @@ export function buildCoachingPrompt(
   projectName: string,
   oneLiner: string,
   planningLevel: PlanningLevel,
-  depth: InterviewDepth,
   coveredTopics: string[],
   options: CoachingPromptOptions = {},
 ): string {
@@ -84,9 +56,9 @@ export function buildCoachingPrompt(
     oneLiner.trim() ||
     'Not provided yet — ask for a one-line description and help them tighten it.'
 
-  const depthGuidance = collectSetupQuestions
-    ? `You do NOT know the desired depth yet. Begin by asking how deep they want to go (light skim, balanced, or deep dive). Until they answer, act as a balanced session. After they answer, adapt pace and probing to match their choice.`
-    : getDepthGuidance(depth)
+  const paceGuidance = collectSetupQuestions
+    ? `You do NOT know their preferred pace yet. Start balanced and ask if they want a quick skim or a deeper dive. Adjust based on their answer.`
+    : `Keep a balanced pace. If they ask for more detail or a quicker pass, adapt accordingly.`
 
   const planningContext = collectSetupQuestions
     ? `You do NOT know how planned out this idea is. Start by asking how far along they are (light spark, some notes, well defined, or their own phrasing). Mirror their words and adapt the style of questioning based on their answer.`
@@ -95,7 +67,7 @@ export function buildCoachingPrompt(
   const setupQuestions = collectSetupQuestions
     ? `SETUP QUESTIONS (ask these before diving into other topics):
 - How planned is this right now? (light spark, some notes, well defined, or their words)
-- How deep do they want to go today? (light skim, balanced, deep dive)
+- Do they want a quick skim or a more detailed pass? Mirror their preference.
 - Do they have a working name? If not, say a placeholder is fine.
 - Can they share a one-line description? If not, help them craft one quickly.
 Keep this calibration brief (1-2 turns). Confirm their answers, then continue.`
@@ -114,8 +86,8 @@ PROJECT CONTEXT:
 
 ${planningContext}
 
-INTERVIEW DEPTH:
-${depthGuidance}
+PACE:
+${paceGuidance}
 
 ${setupQuestions}
 
@@ -162,13 +134,11 @@ export function buildFirstQuestionPrompt(
   projectName: string,
   oneLiner: string,
   planningLevel: PlanningLevel,
-  depth: InterviewDepth,
 ): string {
   const basePrompt = buildCoachingPrompt(
     projectName,
     oneLiner,
     planningLevel,
-    depth,
     [],
     { collectSetupQuestions: true },
   )

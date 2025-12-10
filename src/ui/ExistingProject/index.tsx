@@ -3,6 +3,7 @@ import { Box, Text, useApp, useInput } from 'ink'
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
 import type { LachesisConfig } from '../../config/types.ts'
+import { loadProjectSettings } from '../../config/project-settings.ts'
 import { StatusBar } from '../components/index.ts'
 
 type ProjectSummary = {
@@ -24,6 +25,18 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [view, setView] = useState<'list' | 'detail' | 'loaded' | 'empty'>('list')
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [projectConfig, setProjectConfig] = useState<LachesisConfig>(config)
+  const [projectSettings, setProjectSettings] = useState<{
+    found: boolean
+    overrides: Partial<LachesisConfig>
+    warnings: string[]
+    error?: string
+    settingsPath?: string
+  }>({
+    found: false,
+    overrides: {},
+    warnings: [],
+  })
 
   const loadProjects = useCallback(() => {
     setLoading(true)
@@ -105,6 +118,32 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
     loadProjects()
   }, [loadProjects])
 
+  const selectedProject = projects[selectedIndex] ?? null
+
+  useEffect(() => {
+    if ((view === 'detail' || view === 'loaded') && selectedProject) {
+      const result = loadProjectSettings(config, selectedProject.path)
+      setProjectConfig(result.config)
+      setProjectSettings({
+        found: result.found,
+        overrides: result.overrides,
+        warnings: result.warnings,
+        error: result.error,
+        settingsPath: result.settingsPath,
+      })
+      return
+    }
+
+    setProjectConfig(config)
+    setProjectSettings({
+      found: false,
+      overrides: {},
+      warnings: [],
+      error: undefined,
+      settingsPath: undefined,
+    })
+  }, [config, selectedProject?.path, view])
+
   useInput(
     (input, key) => {
       const lower = input.toLowerCase()
@@ -154,12 +193,14 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
     { isActive: !loading },
   )
 
-  const selectedProject = projects[selectedIndex] ?? null
+  const statusConfig =
+    view === 'detail' || view === 'loaded' ? projectConfig : config
+  const overrideEntries = Object.entries(projectSettings.overrides)
 
   if (loading) {
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} />
+        <StatusBar config={statusConfig} />
         <Box padding={1}>
           <Text color="cyan">Scanning your vault for projects...</Text>
         </Box>
@@ -171,7 +212,7 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
     const vaultLabel = config.vaultPath || 'your configured vault'
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} />
+        <StatusBar config={statusConfig} />
         <Box padding={1}>
           <Text bold>No projects found in {vaultLabel}</Text>
           {error && <Text color="red">{error}</Text>}
@@ -187,7 +228,7 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
   if (view === 'detail' && selectedProject) {
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} />
+        <StatusBar config={statusConfig} />
         <Box padding={1} flexDirection="column">
           <Text color="cyan" bold>
             {selectedProject.name}
@@ -215,6 +256,36 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
           )}
 
           <Text>{'\n'}</Text>
+          <Box flexDirection="column" marginBottom={1}>
+            <Text bold>Settings</Text>
+            <Box marginLeft={2} flexDirection="column">
+              {projectSettings.error ? (
+                <Text color="red">
+                  {projectSettings.error}
+                  {projectSettings.settingsPath ? ` (${projectSettings.settingsPath})` : ''}
+                </Text>
+              ) : projectSettings.found ? (
+                overrideEntries.length > 0 ? (
+                  overrideEntries.map(([key, value]) => (
+                    <Text key={key}>
+                      {key}: {String(value)}
+                    </Text>
+                  ))
+                ) : (
+                  <Text dimColor>Settings.json found; no recognized overrides.</Text>
+                )
+              ) : (
+                <Text dimColor>No Settings.json found; using global settings.</Text>
+              )}
+              {projectSettings.warnings.map((warning, idx) => (
+                <Text key={`settings-warning-${idx}`} color="yellow">
+                  {warning}
+                </Text>
+              ))}
+            </Box>
+          </Box>
+
+          <Text>{'\n'}</Text>
           <Text dimColor>
             Press Enter to load, Esc/B to go back, or Q to quit.
           </Text>
@@ -225,16 +296,31 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
 
   if (view === 'loaded' && selectedProject) {
     return (
-      <Box flexDirection="column" padding={1}>
-        <Text color="green" bold>
-          Project loaded
-        </Text>
-        <Text>{selectedProject.name}</Text>
-        <Text color="cyan">{selectedProject.path}</Text>
-        <Text>{'\n'}</Text>
-        <Text dimColor>
-          Open this folder in Obsidian to keep working. Press Enter to exit.
-        </Text>
+      <Box flexDirection="column">
+        <StatusBar config={statusConfig} />
+        <Box padding={1} flexDirection="column">
+          <Text color="green" bold>
+            Project loaded
+          </Text>
+          <Text>{selectedProject.name}</Text>
+          <Text color="cyan">{selectedProject.path}</Text>
+          {overrideEntries.length > 0 && (
+            <Box flexDirection="column" marginTop={1}>
+              <Text bold>Applied overrides</Text>
+              <Box marginLeft={2} flexDirection="column">
+                {overrideEntries.map(([key, value]) => (
+                  <Text key={key}>
+                    {key}: {String(value)}
+                  </Text>
+                ))}
+              </Box>
+            </Box>
+          )}
+          <Text>{'\n'}</Text>
+          <Text dimColor>
+            Open this folder in Obsidian to keep working. Press Enter to exit.
+          </Text>
+        </Box>
       </Box>
     )
   }
@@ -242,7 +328,7 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
   // Default: list view
   return (
     <Box flexDirection="column">
-      <StatusBar config={config} />
+      <StatusBar config={statusConfig} />
       <Box padding={1} flexDirection="column">
         <Text bold>Select an existing project</Text>
         <Text dimColor>

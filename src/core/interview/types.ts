@@ -19,9 +19,6 @@ export type Question = {
   type: QuestionType
   options?: SelectOption[] // For select type
   required?: boolean
-  // Depth thresholds - question shown if depth >= threshold
-  // short = 1, medium = 2, deep = 3
-  minDepth?: 1 | 2 | 3
 }
 
 export type Answer = {
@@ -43,16 +40,4 @@ export type InterviewState = {
   currentQuestionIndex: number
   answers: Map<string, Answer>
   isComplete: boolean
-}
-
-// Depth number mapping
-export function depthToNumber(depth: string): 1 | 2 | 3 {
-  const lower = depth.toLowerCase()
-  if (lower.includes('short') || lower.includes('light') || lower === 'quick') {
-    return 1
-  }
-  if (lower.includes('deep') || lower.includes('heavy')) {
-    return 3
-  }
-  return 2
 }
