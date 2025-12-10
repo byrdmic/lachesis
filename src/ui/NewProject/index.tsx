@@ -13,15 +13,16 @@ import { FinalizePhase } from './FinalizePhase.tsx'
 import { StatusBar, SettingsPanel } from '../components/index.ts'
 import { updateConfig } from '../../config/config.ts'
 import { debugLog } from '../../debug/logger.ts'
+import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 
 type NewProjectFlowProps = {
   config: LachesisConfig
   debug?: boolean
+  onExit?: () => void
 }
 
 type FlowState =
   | { step: 'welcome' }
-  | { step: 'ai_check'; checking: boolean; error?: string }
   | {
       step: 'interview_choice'
       planningLevel: PlanningLevel
@@ -57,11 +58,16 @@ type FlowState =
 export function NewProjectFlow({
   config: initialConfig,
   debug = false,
+  onExit,
 }: NewProjectFlowProps) {
   const { exit } = useApp()
   const [state, setState] = useState<FlowState>({ step: 'welcome' })
   const [showSettings, setShowSettings] = useState(false)
   const [config, setConfig] = useState<LachesisConfig>(initialConfig)
+  const [aiStatus, setAIStatus] = useState<AIStatusDescriptor>({
+    state: 'idle',
+    message: 'Ready',
+  })
   const [inputLocked, setInputLocked] = useState(false)
   const settingsHotkeyEnabled =
     !inputLocked && !showSettings && state.step !== 'complete' && state.step !== 'cancelled'
@@ -72,6 +78,33 @@ export function NewProjectFlow({
       debugLog.debug('Flow state changed', { step: state.step })
     }
   }, [state.step, debug])
+
+  // Reflect high-level AI status by flow step (more detailed updates come from child phases)
+  useEffect(() => {
+    switch (state.step) {
+      case 'welcome':
+        setAIStatus({ state: 'idle', message: 'Ready' })
+        break
+      case 'interview':
+        setAIStatus({ state: 'streaming', message: 'Preparing first question' })
+        break
+      case 'interview_choice':
+      case 'quick_capture':
+        setAIStatus({ state: 'idle', message: 'Ready for interview' })
+        break
+      case 'finalize':
+        setAIStatus({ state: 'idle', message: 'Ready to scaffold' })
+        break
+      case 'complete':
+        setAIStatus({ state: 'idle', message: 'Finished' })
+        break
+      case 'cancelled':
+        setAIStatus({ state: 'idle', message: 'Session ended' })
+        break
+      default:
+        break
+    }
+  }, [state])
 
   // Handle 's' key to open settings (except during AI check)
   useInput(
@@ -84,22 +117,8 @@ export function NewProjectFlow({
       ) {
         setShowSettings(true)
       }
-      // Handle 'r' for retry during AI check error
-      if (
-        input.toLowerCase() === 'r' &&
-        state.step === 'ai_check' &&
-        state.error
-      ) {
-        setState({ step: 'ai_check', checking: true })
-      }
-      // Handle 'q' for quit during AI check error
-      if (
-        input.toLowerCase() === 'q' &&
-        state.step === 'ai_check' &&
-        state.error
-      ) {
-        setState({ step: 'cancelled' })
-        setTimeout(() => exit(), 500)
+      if (key.escape) {
+        handleCancel()
       }
     },
     { isActive: !inputLocked },
@@ -117,11 +136,6 @@ export function NewProjectFlow({
 
   // Start AI check after welcome
   const handleStart = useCallback(() => {
-    setState({ step: 'ai_check', checking: true })
-  }, [])
-
-  // Handle AI check completion
-  const handleAICheckComplete = useCallback(() => {
     setState({
       step: 'interview',
       planningLevel: 'Not provided yet - ask during interview',
@@ -201,9 +215,13 @@ export function NewProjectFlow({
 
   // Handle cancellation
   const handleCancel = useCallback(() => {
+    if (onExit) {
+      onExit()
+      return
+    }
     setState({ step: 'cancelled' })
     setTimeout(() => exit(), 500)
-  }, [exit])
+  }, [exit, onExit])
 
   // Show settings panel overlay
   if (showSettings) {
@@ -218,28 +236,19 @@ export function NewProjectFlow({
 
   // Render based on state
   if (state.step === 'welcome') {
-    return <WelcomeScreen onStart={handleStart} config={config} />
-  }
-
-  if (state.step === 'ai_check') {
     return (
-      <AIConnectionCheck
-        config={config}
-        checking={state.checking}
-        error={state.error}
-        showSettingsHint={settingsHotkeyEnabled}
-        onConnected={handleAICheckComplete}
-        onError={(error) =>
-          setState({ step: 'ai_check', checking: false, error })
-        }
-      />
+      <WelcomeScreen onStart={handleStart} config={config} aiStatus={aiStatus} />
     )
   }
 
   if (state.step === 'interview_choice') {
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} showSettingsHint={settingsHotkeyEnabled} />
+        <StatusBar
+          config={config}
+          aiStatus={aiStatus}
+          showSettingsHint={settingsHotkeyEnabled}
+        />
         <InterviewChoiceScreen
           projectName={state.projectName}
           onChoice={(choice) => handleInterviewChoice(choice, state)}
@@ -251,7 +260,11 @@ export function NewProjectFlow({
   if (state.step === 'interview') {
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} showSettingsHint={settingsHotkeyEnabled} />
+        <StatusBar
+          config={config}
+          aiStatus={aiStatus}
+          showSettingsHint={settingsHotkeyEnabled}
+        />
         <InterviewPhase
           config={config}
           planningLevel={state.planningLevel}
@@ -259,6 +272,7 @@ export function NewProjectFlow({
           oneLiner={state.oneLiner}
           debug={debug}
           onInputModeChange={setInputLocked}
+          onAIStatusChange={setAIStatus}
           onComplete={(extractedData, conversationLog) =>
             handleInterviewComplete(
               extractedData,
@@ -277,7 +291,11 @@ export function NewProjectFlow({
   if (state.step === 'quick_capture') {
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} showSettingsHint={settingsHotkeyEnabled} />
+        <StatusBar
+          config={config}
+          aiStatus={aiStatus}
+          showSettingsHint={settingsHotkeyEnabled}
+        />
         <QuickCapturePhase
           config={config}
           projectName={state.projectName}
@@ -299,7 +317,11 @@ export function NewProjectFlow({
   if (state.step === 'finalize') {
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} showSettingsHint={settingsHotkeyEnabled} />
+        <StatusBar
+          config={config}
+          aiStatus={aiStatus}
+          showSettingsHint={settingsHotkeyEnabled}
+        />
         <FinalizePhase
           config={config}
           planningLevel={state.planningLevel}
@@ -349,9 +371,11 @@ export function NewProjectFlow({
 function WelcomeScreen({
   onStart,
   config,
+  aiStatus,
 }: {
   onStart: () => void
   config: LachesisConfig
+  aiStatus: AIStatusDescriptor
 }) {
   useEffect(() => {
     const timer = setTimeout(onStart, 100)
@@ -360,7 +384,7 @@ function WelcomeScreen({
 
   return (
     <Box flexDirection="column">
-      <StatusBar config={config} />
+      <StatusBar config={config} aiStatus={aiStatus} />
       <Box flexDirection="column" padding={1}>
         <Box
           borderStyle="double"
@@ -384,6 +408,7 @@ export function AIConnectionCheck({
   checking,
   error,
   showSettingsHint = true,
+  aiStatus,
   onConnected,
   onError,
 }: {
@@ -391,12 +416,17 @@ export function AIConnectionCheck({
   checking: boolean
   error?: string
   showSettingsHint?: boolean
+  aiStatus?: AIStatusDescriptor
   onConnected: () => void
   onError: (error: string) => void
 }) {
   return (
     <Box flexDirection="column">
-      <StatusBar config={config} showSettingsHint={showSettingsHint} />
+      <StatusBar
+        config={config}
+        aiStatus={aiStatus}
+        showSettingsHint={showSettingsHint}
+      />
       <Box flexDirection="column" padding={1}>
         <Box
           borderStyle="double"

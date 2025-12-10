@@ -19,6 +19,7 @@ import {
 import { TextInput } from '../components/TextInput.tsx'
 import { ConversationView } from '../components/ConversationView.tsx'
 import { debugLog } from '../../debug/logger.ts'
+import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 
 type InterviewPhaseProps = {
   config: LachesisConfig
@@ -27,6 +28,7 @@ type InterviewPhaseProps = {
   oneLiner: string
   debug?: boolean
   onInputModeChange?: (typing: boolean) => void
+  onAIStatusChange?: (status: AIStatusDescriptor) => void
   onComplete: (
     extractedData: ExtractedProjectData,
     conversationLog: ConversationMessage[],
@@ -58,6 +60,7 @@ export function InterviewPhase({
   oneLiner,
   debug = false,
   onInputModeChange,
+  onAIStatusChange,
   onComplete,
   onCancel,
 }: InterviewPhaseProps) {
@@ -78,6 +81,53 @@ export function InterviewPhase({
     onInputModeChange?.(typing)
     return () => onInputModeChange?.(false)
   }, [typing, onInputModeChange])
+
+  // Surface AI activity back to the parent status bar
+  useEffect(() => {
+    if (!onAIStatusChange) return
+
+    switch (state.step) {
+      case 'generating_question':
+        onAIStatusChange({
+          state: 'streaming',
+          message: 'Streaming the next question',
+        })
+        break
+      case 'waiting_for_answer':
+        onAIStatusChange({
+          state: 'waiting',
+          message: 'Waiting for your reply',
+        })
+        break
+      case 'generating_summary':
+        onAIStatusChange({
+          state: 'processing',
+          message: 'Summarizing the conversation',
+        })
+        break
+      case 'showing_summary':
+        onAIStatusChange({
+          state: 'idle',
+          message: 'Review the summary',
+        })
+        break
+      case 'extracting_data':
+        onAIStatusChange({
+          state: 'processing',
+          message: 'Structuring your project notes',
+        })
+        break
+      case 'error':
+        onAIStatusChange({
+          state: 'error',
+          message: state.error || 'Issue talking to AI',
+        })
+        break
+      default:
+        onAIStatusChange({ state: 'idle', message: 'Ready' })
+        break
+    }
+  }, [onAIStatusChange, state.error, state.step])
 
   // Generate first question on mount
   useEffect(() => {

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 import { loadConfig, updateConfig } from '../config/config.ts'
-import { NewProjectFlow, AIConnectionCheck } from './NewProject/index.tsx'
+import { NewProjectFlow } from './NewProject/index.tsx'
 import { ExistingProjectFlow } from './ExistingProject/index.tsx'
 import { DebugLog, Select, SettingsPanel, StatusBar } from './components/index.ts'
 import { debugLog } from '../debug/logger.ts'
 import type { LachesisConfig } from '../config/types.ts'
+import type { AIStatusDescriptor } from './components/StatusBar.tsx'
 
 type AppProps = {
   command: 'new' | 'start'
@@ -124,11 +125,7 @@ export function App({ command, debug = false }: AppProps) {
 // Project Launcher (start command)
 // ============================================================================
 
-type LauncherState =
-  | { step: 'ai_check'; checking: boolean; error?: string }
-  | { step: 'menu' }
-  | { step: 'new' }
-  | { step: 'existing' }
+type LauncherState = { step: 'menu' | 'new' | 'existing' }
 
 function ProjectLauncher({
   config: initialConfig,
@@ -143,8 +140,8 @@ function ProjectLauncher({
     step: 'menu',
   })
   const [showSettings, setShowSettings] = useState(false)
-  const settingsHotkeyEnabled =
-    !showSettings && (state.step === 'ai_check' || state.step === 'menu')
+  const settingsHotkeyEnabled = !showSettings && state.step === 'menu'
+  const aiStatus: AIStatusDescriptor = { state: 'idle', message: 'Ready' }
 
   // Log state changes when debug is enabled
   useEffect(() => {
@@ -179,20 +176,11 @@ function ProjectLauncher({
 
       if (
         lower === 's' &&
-        (state.step === 'ai_check' || state.step === 'menu') &&
+        state.step === 'menu' &&
         !showSettings
       ) {
         setShowSettings(true)
         return
-      }
-
-      if (state.step === 'ai_check' && state.error) {
-        if (lower === 'r') {
-          setState({ step: 'ai_check', checking: true })
-        }
-        if (lower === 'q') {
-          exit()
-        }
       }
     },
     { isActive: state.step !== 'new' && state.step !== 'existing' && !showSettings },
@@ -208,25 +196,14 @@ function ProjectLauncher({
     )
   }
 
-  if (state.step === 'ai_check') {
-    return (
-      <AIConnectionCheck
-        config={config}
-        checking={state.checking}
-        error={state.error}
-        showSettingsHint={settingsHotkeyEnabled}
-        onConnected={() => setState({ step: 'menu' })}
-        onError={(error) =>
-          setState({ step: 'ai_check', checking: false, error })
-        }
-      />
-    )
-  }
-
   if (state.step === 'menu') {
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} showSettingsHint={settingsHotkeyEnabled} />
+        <StatusBar
+          config={config}
+          aiStatus={aiStatus}
+          showSettingsHint={settingsHotkeyEnabled}
+        />
         <Box padding={1} flexDirection="column">
           <Box marginBottom={1}>
             <Text bold>Lachesis Project Foundations Studio</Text>
@@ -260,5 +237,11 @@ function ProjectLauncher({
   }
 
   // state.step === 'new'
-  return <NewProjectFlow config={config} debug={debug} />
+  return (
+    <NewProjectFlow
+      config={config}
+      debug={debug}
+      onExit={() => setState({ step: 'menu' })}
+    />
+  )
 }
