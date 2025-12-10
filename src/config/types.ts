@@ -13,7 +13,7 @@ export type LachesisConfig = {
 export const DEFAULT_CONFIG: LachesisConfig = {
   vaultPath: '', // Will be set based on OS detection
   defaultProvider: 'openai',
-  defaultModel: 'openai/gpt-5',
+  defaultModel: 'gpt-5',
   apiKeyEnvVar: 'OPENAI_API_KEY',
 }
 

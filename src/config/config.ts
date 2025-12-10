@@ -29,9 +29,6 @@ export function applyConfigUpgrades(config: LachesisConfig): {
     if (!openaiModelSet.has(normalized)) {
       next = { ...next, defaultModel: DEFAULT_CONFIG.defaultModel }
       updated = true
-    } else if (normalized !== next.defaultModel) {
-      next = { ...next, defaultModel: normalized }
-      updated = true
     }
   }
 

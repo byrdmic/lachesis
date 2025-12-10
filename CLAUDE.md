@@ -20,7 +20,7 @@ What this project is: a Bun/Ink CLI that interviews a user about a project idea,
 
 ## Configuration & keys
 - Config file lives at `~/.lachesis/config.json`; created on first run with OS-detected vault path (`~/Documents/Obsidian/Projects` by default) and defaults from `src/config/types.ts`.
-- Default AI provider/model: OpenAI `openai/gpt-5` with env var `OPENAI_API_KEY` (`apiKeyEnvVar` in config). Model/provider are user-configurable; code handles missing/invalid keys with helpful errors.
+- Default AI provider/model: OpenAI `gpt-5` with env var `OPENAI_API_KEY` (`apiKeyEnvVar` in config). Model/provider are user-configurable; code handles missing/invalid keys with helpful errors.
 - Vault path must be set to an existing/desired Obsidian workspace before scaffolding; update via settings in the UI or by editing the config file.
 
 ## Typical workflow (what the CLI does)
