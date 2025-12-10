@@ -8,6 +8,22 @@ import {
   getPlatformDisplayName,
 } from './paths.ts'
 
+function applyConfigUpgrades(config: LachesisConfig): {
+  config: LachesisConfig
+  updated: boolean
+} {
+  let updated = false
+  let next = { ...config }
+
+  // gpt-5 is not available for most accounts; migrate to a supported default
+  if (next.defaultModel === 'gpt-5') {
+    next = { ...next, defaultModel: 'gpt-5' }
+    updated = true
+  }
+
+  return { config: next, updated }
+}
+
 export type ConfigLoadResult =
   | { status: 'loaded'; config: LachesisConfig }
   | { status: 'created'; config: LachesisConfig; message: string }
@@ -25,7 +41,11 @@ export function loadConfig(): ConfigLoadResult {
     // Check if config exists
     if (existsSync(configPath)) {
       const content = readFileSync(configPath, 'utf-8')
-      const config = JSON.parse(content) as LachesisConfig
+      const parsed = JSON.parse(content) as LachesisConfig
+      const { config, updated } = applyConfigUpgrades(parsed)
+      if (updated) {
+        saveConfig(config)
+      }
       return { status: 'loaded', config }
     }
 

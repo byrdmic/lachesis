@@ -1,10 +1,17 @@
 // AI Client for Lachesis - handles all AI interactions
-import { openai, createOpenAI } from '@ai-sdk/openai'
-import { generateText, generateObject, streamText } from 'ai'
+import { createOpenAI } from '@ai-sdk/openai'
+import {
+  generateText,
+  generateObject,
+  streamText,
+  type CoreMessage,
+} from 'ai'
 import { z } from 'zod'
 import type { LachesisConfig } from '../config/types.ts'
 import type { PlanningLevel, InterviewDepth } from '../core/project/types.ts'
 import { debugLog } from '../debug/logger.ts'
+
+const DEFAULT_MODEL = 'gpt-5'
 
 // ============================================================================
 // Types
@@ -92,6 +99,40 @@ export type ExtractedProjectData = z.infer<typeof ExtractedProjectDataSchema>
 // Core Functions
 // ============================================================================
 
+function resolveModelId(config: LachesisConfig): string {
+  return config.defaultModel?.trim() || DEFAULT_MODEL
+}
+
+type CompatibleLanguageModel = ReturnType<ReturnType<typeof createOpenAI>>
+
+/**
+ * Create a configured OpenAI model instance for the current settings.
+ * Returns null when no API key is present.
+ */
+export function getOpenAIModel(config: LachesisConfig): CompatibleLanguageModel | null {
+  const apiKey = process.env[config.apiKeyEnvVar]
+
+  if (!apiKey) {
+    return null
+  }
+
+  const client = createOpenAI({ apiKey })
+  return client(resolveModelId(config))
+}
+
+function buildChatMessages(
+  systemPrompt: string,
+  context: ConversationContext,
+): CoreMessage[] {
+  const messages: CoreMessage[] = [{ role: 'system', content: systemPrompt }]
+
+  for (const msg of context.messages) {
+    messages.push({ role: msg.role, content: msg.content })
+  }
+
+  return messages
+}
+
 /**
  * Create an AI client based on config
  */
@@ -102,7 +143,7 @@ export function createAIClient(config: LachesisConfig): AIClient {
   return {
     isConfigured,
     provider: config.defaultProvider,
-    model: config.defaultModel,
+    model: resolveModelId(config),
   }
 }
 
@@ -115,29 +156,16 @@ export function isAIAvailable(config: LachesisConfig): boolean {
 }
 
 /**
- * Get the configured OpenAI provider
- */
-export function getOpenAIProvider(config: LachesisConfig) {
-  const apiKey = process.env[config.apiKeyEnvVar]
-
-  if (!apiKey) {
-    return null
-  }
-
-  return createOpenAI({ apiKey })
-}
-
-/**
  * Test AI connection by making a minimal API call
  */
 export async function testAIConnection(
   config: LachesisConfig,
 ): Promise<AIConnectionResult> {
   debugLog.debug('Testing AI connection', { config: JSON.stringify(config) })
-  const provider = getOpenAIProvider(config)
-  debugLog.debug('Provider', { provider })
+  const model = getOpenAIModel(config)
+  debugLog.debug('Model configured', { modelPresent: Boolean(model) })
 
-  if (!provider) {
+  if (!model) {
     return {
       connected: false,
       error: `No API key found. Set ${config.apiKeyEnvVar} environment variable.`,
@@ -147,9 +175,9 @@ export async function testAIConnection(
   try {
     // Make a minimal API call to verify connection
     await generateText({
-      model: provider(config.defaultModel),
+      model,
       prompt: "Say 'ok'",
-      maxTokens: 5,
+      maxOutputTokens: 5,
     })
 
     return { connected: true }
@@ -172,7 +200,7 @@ export async function testAIConnection(
     if (message.includes('model')) {
       return {
         connected: false,
-        error: `Model "${config.defaultModel}" not available. Check your settings.`,
+        error: `Model "${resolveModelId(config)}" not available. Check your settings.`,
       }
     }
 
@@ -191,9 +219,9 @@ export async function generateNextQuestion(
   systemPrompt: string,
   config: LachesisConfig,
 ): Promise<GenerationResult> {
-  const provider = getOpenAIProvider(config)
+  const model = getOpenAIModel(config)
 
-  if (!provider) {
+  if (!model) {
     debugLog.error('AI not configured for question generation', {
       apiKeyEnvVar: config.apiKeyEnvVar,
     })
@@ -205,24 +233,12 @@ export async function generateNextQuestion(
   }
 
   try {
-    // Build message history for the AI
-    const messages: Array<{
-      role: 'system' | 'user' | 'assistant'
-      content: string
-    }> = [{ role: 'system', content: systemPrompt }]
-
-    // Add conversation history
-    for (const msg of context.messages) {
-      messages.push({
-        role: msg.role,
-        content: msg.content,
-      })
-    }
+    const messages = buildChatMessages(systemPrompt, context)
 
     const result = await generateText({
-      model: provider(config.defaultModel),
+      model,
       messages,
-      maxTokens: 300,
+      maxOutputTokens: 300,
       temperature: 0.7,
     })
 
@@ -237,7 +253,7 @@ export async function generateNextQuestion(
       message,
       stack,
       provider: config.defaultProvider,
-      model: config.defaultModel,
+      model: resolveModelId(config),
       messageCount: context.messages.length,
       coveredTopics: context.coveredTopics,
     })
@@ -258,9 +274,9 @@ export async function streamNextQuestion(
   config: LachesisConfig,
   onUpdate?: (partial: string) => void,
 ): Promise<GenerationResult> {
-  const provider = getOpenAIProvider(config)
+  const model = getOpenAIModel(config)
 
-  if (!provider) {
+  if (!model) {
     debugLog.error('AI not configured for question generation', {
       apiKeyEnvVar: config.apiKeyEnvVar,
     })
@@ -272,22 +288,12 @@ export async function streamNextQuestion(
   }
 
   try {
-    const messages: Array<{
-      role: 'system' | 'user' | 'assistant'
-      content: string
-    }> = [{ role: 'system', content: systemPrompt }]
-
-    for (const msg of context.messages) {
-      messages.push({
-        role: msg.role,
-        content: msg.content,
-      })
-    }
+    const messages = buildChatMessages(systemPrompt, context)
 
     const stream = await streamText({
-      model: provider(config.defaultModel),
+      model,
       messages,
-      maxTokens: 300,
+      maxOutputTokens: 300,
       temperature: 0.7,
     })
 
@@ -306,7 +312,7 @@ export async function streamNextQuestion(
       message,
       stack,
       provider: config.defaultProvider,
-      model: config.defaultModel,
+      model: resolveModelId(config),
       messageCount: context.messages.length,
       coveredTopics: context.coveredTopics,
     })
@@ -325,9 +331,9 @@ export async function generateSummary(
   context: ConversationContext,
   config: LachesisConfig,
 ): Promise<GenerationResult> {
-  const provider = getOpenAIProvider(config)
+  const model = getOpenAIModel(config)
 
-  if (!provider) {
+  if (!model) {
     return {
       success: false,
       error: 'AI not configured',
@@ -340,7 +346,7 @@ export async function generateSummary(
       .join('\n\n')
 
     const result = await generateText({
-      model: provider(config.defaultModel),
+      model,
       messages: [
         {
           role: 'system',
@@ -362,7 +368,7 @@ Summarize what we learned about this project in a clear, bulleted format coverin
 - What success looks like`,
         },
       ],
-      maxTokens: 500,
+      maxOutputTokens: 500,
       temperature: 0.5,
     })
 
@@ -377,7 +383,7 @@ Summarize what we learned about this project in a clear, bulleted format coverin
       message,
       stack,
       provider: config.defaultProvider,
-      model: config.defaultModel,
+      model: resolveModelId(config),
       messageCount: context.messages.length,
     })
     return {
@@ -400,9 +406,9 @@ export async function extractProjectData(
   error?: string
   debugDetails?: string
 }> {
-  const provider = getOpenAIProvider(config)
+  const model = getOpenAIModel(config)
 
-  if (!provider) {
+  if (!model) {
     return {
       success: false,
       error: 'AI not configured',
@@ -415,7 +421,7 @@ export async function extractProjectData(
       .join('\n\n')
 
     const result = await generateObject({
-      model: provider(config.defaultModel),
+      model,
       schema: ExtractedProjectDataSchema,
       prompt: `Extract structured project information from this interview.
 
@@ -440,7 +446,7 @@ Extract all relevant information. For fields not discussed, use reasonable defau
       message,
       stack,
       provider: config.defaultProvider,
-      model: config.defaultModel,
+      model: resolveModelId(config),
       messageCount: context.messages.length,
     })
     return {
