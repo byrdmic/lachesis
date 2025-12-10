@@ -1,6 +1,10 @@
 // Configuration management for Lachesis
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { type LachesisConfig, DEFAULT_CONFIG } from './types.ts'
+import {
+  type LachesisConfig,
+  DEFAULT_CONFIG,
+  OPENAI_MODELS,
+} from './types.ts'
 import {
   getConfigDir,
   getConfigPath,
@@ -14,11 +18,21 @@ function applyConfigUpgrades(config: LachesisConfig): {
 } {
   let updated = false
   let next = { ...config }
+  const openaiModelSet = new Set<string>(OPENAI_MODELS)
 
-  // gpt-5 is not available for most accounts; migrate to a supported default
-  if (next.defaultModel === 'gpt-5') {
-    next = { ...next, defaultModel: 'gpt-5' }
-    updated = true
+  // Normalize and validate OpenAI model identifiers
+  if (next.defaultProvider === 'openai') {
+    const normalized = next.defaultModel.startsWith('openai/')
+      ? next.defaultModel
+      : `openai/${next.defaultModel}`
+
+    if (!openaiModelSet.has(normalized)) {
+      next = { ...next, defaultModel: DEFAULT_CONFIG.defaultModel }
+      updated = true
+    } else if (normalized !== next.defaultModel) {
+      next = { ...next, defaultModel: normalized }
+      updated = true
+    }
   }
 
   return { config: next, updated }
