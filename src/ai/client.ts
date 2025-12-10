@@ -1,18 +1,13 @@
-// AI Client for Lachesis - handles all AI interactions
-import { openai } from '@ai-sdk/openai'
 import {
   generateText,
   generateObject,
   streamText,
   type CoreMessage,
-  type LanguageModel,
 } from 'ai'
 import { z } from 'zod'
 import type { LachesisConfig } from '../config/types.ts'
 import type { PlanningLevel } from '../core/project/types.ts'
 import { debugLog } from '../debug/logger.ts'
-
-const DEFAULT_MODEL_ID = 'openai/gpt-5'
 
 // ============================================================================
 // Types
@@ -99,27 +94,6 @@ export type ExtractedProjectData = z.infer<typeof ExtractedProjectDataSchema>
 // Core Functions
 // ============================================================================
 
-function resolveModelId(config: LachesisConfig): string {
-  const configured = config.defaultModel?.trim() || DEFAULT_MODEL_ID
-  return configured.replace(/^openai\//i, '')
-}
-
-/**
- * Create a configured OpenAI model instance for the current settings.
- * Returns null when no API key is present.
- */
-export function getOpenAIModel(
-  config: LachesisConfig,
-): LanguageModel | null {
-  const apiKey = process.env[config.apiKeyEnvVar]
-  if (!apiKey) {
-    return null
-  }
-
-  const modelId = resolveModelId(config)
-  return openai(modelId) as unknown as LanguageModel
-}
-
 function buildChatMessages(
   systemPrompt: string,
   context: ConversationContext,
@@ -134,134 +108,6 @@ function buildChatMessages(
 }
 
 /**
- * Create an AI client based on config
- */
-export function createAIClient(config: LachesisConfig): AIClient {
-  const apiKey = process.env[config.apiKeyEnvVar]
-  const isConfigured = Boolean(apiKey)
-
-  return {
-    isConfigured,
-    provider: config.defaultProvider,
-    model: resolveModelId(config),
-  }
-}
-
-/**
- * Check if AI features are available (sync check)
- */
-export function isAIAvailable(config: LachesisConfig): boolean {
-  const apiKey = process.env[config.apiKeyEnvVar]
-  return Boolean(apiKey)
-}
-
-/**
- * Test AI connection by making a minimal API call
- */
-export async function testAIConnection(
-  config: LachesisConfig,
-): Promise<AIConnectionResult> {
-  const model = getOpenAIModel(config)
-
-  if (!model) {
-    return {
-      connected: false,
-      error: `Missing API key in ${config.apiKeyEnvVar}. Set it and try again.`,
-    }
-  }
-
-  try {
-    // Make a minimal API call to verify connection
-    await generateText({
-      model,
-      prompt: "Say 'ok'",
-      maxOutputTokens: 5,
-    })
-    return { connected: true }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-
-    // Provide helpful error messages
-    if (message.includes('401') || message.includes('invalid_api_key')) {
-      return {
-        connected: false,
-        error: 'Invalid API key. Check your API key and try again.',
-      }
-    }
-    if (message.includes('429')) {
-      return {
-        connected: false,
-        error: 'Rate limited. Wait a moment and try again.',
-      }
-    }
-    if (message.includes('model')) {
-      return {
-        connected: false,
-        error: `Model "${resolveModelId(config)}" not available. Check your settings.`,
-      }
-    }
-
-    return {
-      connected: false,
-      error: `Connection failed: ${message}`,
-    }
-  }
-}
-
-/**
- * Generate the next interview question based on conversation context
- */
-export async function generateNextQuestion(
-  context: ConversationContext,
-  systemPrompt: string,
-  config: LachesisConfig,
-): Promise<GenerationResult> {
-  const model = getOpenAIModel(config)
-
-  if (!model) {
-    debugLog.error('AI not configured for question generation', {
-      apiKeyEnvVar: config.apiKeyEnvVar,
-    })
-    return {
-      success: false,
-      error: 'AI not configured',
-      debugDetails: `Missing environment variable ${config.apiKeyEnvVar}. Set it to your API key and retry.`,
-    }
-  }
-
-  try {
-    const messages = buildChatMessages(systemPrompt, context)
-
-    const result = await generateText({
-      model,
-      messages,
-      maxOutputTokens: 300,
-    })
-
-    return {
-      success: true,
-      content: result.text.trim(),
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    const stack = err instanceof Error ? err.stack : undefined
-    debugLog.error('Failed to generate interview question', {
-      message,
-      stack,
-      provider: config.defaultProvider,
-      model: resolveModelId(config),
-      messageCount: context.messages.length,
-      coveredTopics: context.coveredTopics,
-    })
-    return {
-      success: false,
-      error: `Failed to generate question: ${message}`,
-      debugDetails: stack ? `${message}\n${stack}` : message,
-    }
-  }
-}
-
-/**
  * Stream the next interview question, emitting incremental text updates.
  */
 export async function streamNextQuestion(
@@ -270,18 +116,7 @@ export async function streamNextQuestion(
   config: LachesisConfig,
   onUpdate?: (partial: string) => void,
 ): Promise<GenerationResult> {
-  const model = getOpenAIModel(config)
-
-  if (!model) {
-    debugLog.error('AI not configured for question generation', {
-      apiKeyEnvVar: config.apiKeyEnvVar,
-    })
-    return {
-      success: false,
-      error: 'AI not configured',
-      debugDetails: `Missing environment variable ${config.apiKeyEnvVar}. Set it to your API key and retry.`,
-    }
-  }
+  const model = config.defaultModel
 
   try {
     const messages = buildChatMessages(systemPrompt, context)
@@ -308,7 +143,7 @@ export async function streamNextQuestion(
       message,
       stack,
       provider: config.defaultProvider,
-      model: resolveModelId(config),
+      model: config.defaultModel,
       messageCount: context.messages.length,
       coveredTopics: context.coveredTopics,
     })
@@ -327,14 +162,7 @@ export async function generateSummary(
   context: ConversationContext,
   config: LachesisConfig,
 ): Promise<GenerationResult> {
-  const model = getOpenAIModel(config)
-
-  if (!model) {
-    return {
-      success: false,
-      error: 'AI not configured',
-    }
-  }
+  const model = config.defaultModel
 
   try {
     const conversationText = context.messages
@@ -379,7 +207,7 @@ Summarize what we learned about this project in a clear, bulleted format coverin
       message,
       stack,
       provider: config.defaultProvider,
-      model: resolveModelId(config),
+      model: config.defaultModel,
       messageCount: context.messages.length,
     })
     return {
@@ -402,14 +230,7 @@ export async function extractProjectData(
   error?: string
   debugDetails?: string
 }> {
-  const model = getOpenAIModel(config)
-
-  if (!model) {
-    return {
-      success: false,
-      error: 'AI not configured',
-    }
-  }
+  const model = config.defaultModel
 
   try {
     const conversationText = context.messages
@@ -442,7 +263,7 @@ Extract all relevant information. For fields not discussed, use reasonable defau
       message,
       stack,
       provider: config.defaultProvider,
-      model: resolveModelId(config),
+      model: config.defaultModel,
       messageCount: context.messages.length,
     })
     return {

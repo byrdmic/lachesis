@@ -1,7 +1,6 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import type { LachesisConfig } from '../../config/types.ts'
-import { isAIAvailable } from '../../ai/client.ts'
 
 type StatusBarProps = {
   config: LachesisConfig
@@ -9,8 +8,6 @@ type StatusBarProps = {
 }
 
 export function StatusBar({ config, onSettingsPress }: StatusBarProps) {
-  const aiConnected = isAIAvailable(config)
-
   return (
     <Box
       borderStyle="single"
@@ -20,11 +17,7 @@ export function StatusBar({ config, onSettingsPress }: StatusBarProps) {
     >
       <Box>
         <Text dimColor>AI: </Text>
-        {aiConnected ? (
-          <Text color="green">Connected ({config.defaultProvider})</Text>
-        ) : (
-          <Text color="yellow">Not configured</Text>
-        )}
+        <Text color="green">Connected ({config.defaultProvider})</Text>
       </Box>
       <Box>
         <Text dimColor>[S] Settings</Text>
@@ -38,18 +31,13 @@ type AIStatusProps = {
 }
 
 export function AIStatus({ config }: AIStatusProps) {
-  const aiConnected = isAIAvailable(config)
 
   return (
     <Box>
       <Text dimColor>AI: </Text>
-      {aiConnected ? (
-        <Text color="green">
-          Connected ({config.defaultProvider}/{config.defaultModel})
-        </Text>
-      ) : (
-        <Text color="yellow">Not configured (set {config.apiKeyEnvVar})</Text>
-      )}
+      <Text color="green">
+        Connected ({config.defaultProvider}/{config.defaultModel})
+      </Text>
     </Box>
   )
 }

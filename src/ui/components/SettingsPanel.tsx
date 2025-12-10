@@ -3,7 +3,6 @@ import { Box, Text, useInput } from 'ink'
 import { Select } from './Select.tsx'
 import { TextInput } from './TextInput.tsx'
 import type { LachesisConfig, AIProvider } from '../../config/types.ts'
-import { isAIAvailable } from '../../ai/client.ts'
 
 type SettingsPanelProps = {
   config: LachesisConfig
@@ -26,8 +25,6 @@ export function SettingsPanel({ config, onSave, onClose }: SettingsPanelProps) {
       setTempApiKeyVar(config.apiKeyEnvVar)
     }
   }, [view, config.defaultModel, config.apiKeyEnvVar])
-
-  const aiConnected = isAIAvailable(config)
 
   useInput((input, key) => {
     if (key.escape) {
@@ -105,11 +102,7 @@ export function SettingsPanel({ config, onSave, onClose }: SettingsPanelProps) {
     <SettingsContainer title="Settings" onBack={onClose}>
       <Box flexDirection="column" marginBottom={1}>
         <Text dimColor>AI Status: </Text>
-        {aiConnected ? (
-          <Text color="green">Connected</Text>
-        ) : (
-          <Text color="yellow">Not configured</Text>
-        )}
+        <Text color="green">Connected ({config.defaultProvider})</Text>
       </Box>
 
       <Select

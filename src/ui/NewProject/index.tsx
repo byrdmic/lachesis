@@ -8,7 +8,6 @@ import type {
   ConversationMessage,
   ExtractedProjectData,
 } from '../../ai/client.ts'
-import { testAIConnection } from '../../ai/client.ts'
 import { InterviewPhase } from './InterviewPhase.tsx'
 import { FinalizePhase } from './FinalizePhase.tsx'
 import { StatusBar, SettingsPanel } from '../components/index.ts'
@@ -390,29 +389,6 @@ export function AIConnectionCheck({
   onConnected: () => void
   onError: (error: string) => void
 }) {
-  useEffect(() => {
-    if (!checking) return
-
-    let cancelled = false
-
-    debugLog.info('Testing AI connection...')
-    testAIConnection(config).then((result) => {
-      if (cancelled) return
-
-      if (result.connected) {
-        debugLog.info('AI connection successful')
-        onConnected()
-      } else {
-        debugLog.error('AI connection failed', result.error)
-        onError(result.error || 'Connection failed')
-      }
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [checking, config, onConnected, onError])
-
   return (
     <Box flexDirection="column">
       <StatusBar config={config} />

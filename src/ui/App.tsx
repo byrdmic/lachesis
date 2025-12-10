@@ -5,7 +5,6 @@ import { NewProjectFlow, AIConnectionCheck } from './NewProject/index.tsx'
 import { ExistingProjectFlow } from './ExistingProject/index.tsx'
 import { DebugLog, Select, SettingsPanel, StatusBar } from './components/index.ts'
 import { debugLog } from '../debug/logger.ts'
-import { testAIConnection } from '../ai/client.ts'
 import type { LachesisConfig } from '../config/types.ts'
 
 type AppProps = {
@@ -34,7 +33,7 @@ export function App({ command, debug = false }: AppProps) {
   useEffect(() => {
     const result = loadConfig()
     if (debug) {
-      debugLog.debug('Config loaded', { result: JSON.stringify(result) })
+      debugLog.debug('Config loaded')
     }
 
     switch (result.status) {
@@ -141,8 +140,7 @@ function ProjectLauncher({
   const { exit } = useApp()
   const [config, setConfig] = useState<LachesisConfig>(initialConfig)
   const [state, setState] = useState<LauncherState>({
-    step: 'ai_check',
-    checking: true,
+    step: 'menu',
   })
   const [showSettings, setShowSettings] = useState(false)
 
@@ -152,35 +150,6 @@ function ProjectLauncher({
       debugLog.debug('Launcher state changed', { step: state.step })
     }
   }, [state.step, debug])
-
-  // Test AI connectivity before showing the menu
-  useEffect(() => {
-    if (state.step !== 'ai_check' || !state.checking) return
-
-    let cancelled = false
-
-    testAIConnection(config).then((result) => {
-      if (cancelled) return
-
-      if (result.connected) {
-        setState({ step: 'menu' })
-      } else {
-        setState({
-          step: 'ai_check',
-          checking: false,
-          error: result.error || 'Connection failed',
-        })
-      }
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [
-    config,
-    state.step,
-    state.step === 'ai_check' ? state.checking : false,
-  ])
 
   const handleSettingsSave = useCallback(
     (updates: Partial<LachesisConfig>) => {
@@ -195,6 +164,16 @@ function ProjectLauncher({
   useInput(
     (input, key) => {
       const lower = input.toLowerCase()
+
+      if (key.escape) {
+        exit()
+        return
+      }
+
+      if (key.shift && lower === 'q') {
+        exit()
+        return
+      }
 
       if (
         lower === 's' &&
@@ -259,7 +238,8 @@ function ProjectLauncher({
           />
           <Box marginTop={1}>
             <Text dimColor>
-              Use ↑/↓ to choose, Enter to confirm. [S] to edit settings.
+              Use ↑/↓ to choose, Enter to confirm. [s] to edit settings. [ESC] or
+              [Q] to quit.
             </Text>
           </Box>
         </Box>
