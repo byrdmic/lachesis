@@ -143,6 +143,8 @@ function ProjectLauncher({
     step: 'menu',
   })
   const [showSettings, setShowSettings] = useState(false)
+  const settingsHotkeyEnabled =
+    !showSettings && (state.step === 'ai_check' || state.step === 'menu')
 
   // Log state changes when debug is enabled
   useEffect(() => {
@@ -212,6 +214,7 @@ function ProjectLauncher({
         config={config}
         checking={state.checking}
         error={state.error}
+        showSettingsHint={settingsHotkeyEnabled}
         onConnected={() => setState({ step: 'menu' })}
         onError={(error) =>
           setState({ step: 'ai_check', checking: false, error })
@@ -223,7 +226,7 @@ function ProjectLauncher({
   if (state.step === 'menu') {
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} />
+        <StatusBar config={config} showSettingsHint={settingsHotkeyEnabled} />
         <Box padding={1} flexDirection="column">
           <Box marginBottom={1}>
             <Text bold>Lachesis Project Foundations Studio</Text>

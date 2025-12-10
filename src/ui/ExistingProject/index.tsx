@@ -149,6 +149,10 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
       const lower = input.toLowerCase()
 
       if (view === 'list') {
+        if (key.escape && onBack) {
+          onBack()
+          return
+        }
         if (key.upArrow || lower === 'k') {
           setSelectedIndex((idx) => Math.max(0, idx - 1))
         }
@@ -225,7 +229,7 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
   if (loading) {
     return (
       <Box flexDirection="column">
-        <StatusBar config={statusConfig} />
+        <StatusBar config={statusConfig} showSettingsHint={false} />
         <Box padding={1}>
           <Text color="cyan">Scanning your vault for projects...</Text>
         </Box>
@@ -237,7 +241,7 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
     const vaultLabel = config.vaultPath || 'your configured vault'
     return (
       <Box flexDirection="column">
-        <StatusBar config={statusConfig} />
+        <StatusBar config={statusConfig} showSettingsHint={false} />
         <Box padding={1}>
           <Text bold>No projects found in {vaultLabel}</Text>
           {error && <Text color="red">{error}</Text>}
@@ -253,7 +257,7 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
   if (view === 'detail' && selectedProject) {
     return (
       <Box flexDirection="column">
-        <StatusBar config={statusConfig} />
+        <StatusBar config={statusConfig} showSettingsHint={false} />
         <Box padding={1} flexDirection="column">
           <Text color="cyan" bold>
             {selectedProject.name}
@@ -322,7 +326,7 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
   if (view === 'loaded' && selectedProject) {
     return (
       <Box flexDirection="column">
-        <StatusBar config={statusConfig} />
+        <StatusBar config={statusConfig} showSettingsHint={false} />
         <Box padding={1} flexDirection="column">
           <Text color="green" bold>
             Project loaded
@@ -353,7 +357,7 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
   // Default: list view
   return (
     <Box flexDirection="column">
-      <StatusBar config={statusConfig} />
+      <StatusBar config={statusConfig} showSettingsHint={false} />
       <Box padding={1} flexDirection="column">
         <Text bold>Select an existing project</Text>
         <Text dimColor>

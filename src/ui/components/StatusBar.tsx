@@ -5,9 +5,14 @@ import type { LachesisConfig } from '../../config/types.ts'
 type StatusBarProps = {
   config: LachesisConfig
   onSettingsPress?: () => void
+  showSettingsHint?: boolean
 }
 
-export function StatusBar({ config, onSettingsPress }: StatusBarProps) {
+export function StatusBar({
+  config,
+  onSettingsPress,
+  showSettingsHint = true,
+}: StatusBarProps) {
   return (
     <Box
       borderStyle="single"
@@ -25,9 +30,11 @@ export function StatusBar({ config, onSettingsPress }: StatusBarProps) {
           <Text color="cyan">{config.vaultPath || 'Not set'}</Text>
         </Box>
       </Box>
-      <Box>
-        <Text dimColor>[S] Settings</Text>
-      </Box>
+      {showSettingsHint && (
+        <Box>
+          <Text dimColor>[s] Settings</Text>
+        </Box>
+      )}
     </Box>
   )
 }

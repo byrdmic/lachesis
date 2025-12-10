@@ -63,6 +63,8 @@ export function NewProjectFlow({
   const [showSettings, setShowSettings] = useState(false)
   const [config, setConfig] = useState<LachesisConfig>(initialConfig)
   const [inputLocked, setInputLocked] = useState(false)
+  const settingsHotkeyEnabled =
+    !inputLocked && !showSettings && state.step !== 'complete' && state.step !== 'cancelled'
 
   // Log state changes in debug mode
   useEffect(() => {
@@ -225,6 +227,7 @@ export function NewProjectFlow({
         config={config}
         checking={state.checking}
         error={state.error}
+        showSettingsHint={settingsHotkeyEnabled}
         onConnected={handleAICheckComplete}
         onError={(error) =>
           setState({ step: 'ai_check', checking: false, error })
@@ -236,7 +239,7 @@ export function NewProjectFlow({
   if (state.step === 'interview_choice') {
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} />
+        <StatusBar config={config} showSettingsHint={settingsHotkeyEnabled} />
         <InterviewChoiceScreen
           projectName={state.projectName}
           onChoice={(choice) => handleInterviewChoice(choice, state)}
@@ -248,7 +251,7 @@ export function NewProjectFlow({
   if (state.step === 'interview') {
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} />
+        <StatusBar config={config} showSettingsHint={settingsHotkeyEnabled} />
         <InterviewPhase
           config={config}
           planningLevel={state.planningLevel}
@@ -274,7 +277,7 @@ export function NewProjectFlow({
   if (state.step === 'quick_capture') {
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} />
+        <StatusBar config={config} showSettingsHint={settingsHotkeyEnabled} />
         <QuickCapturePhase
           config={config}
           projectName={state.projectName}
@@ -296,7 +299,7 @@ export function NewProjectFlow({
   if (state.step === 'finalize') {
     return (
       <Box flexDirection="column">
-        <StatusBar config={config} />
+        <StatusBar config={config} showSettingsHint={settingsHotkeyEnabled} />
         <FinalizePhase
           config={config}
           planningLevel={state.planningLevel}
@@ -380,18 +383,20 @@ export function AIConnectionCheck({
   config,
   checking,
   error,
+  showSettingsHint = true,
   onConnected,
   onError,
 }: {
   config: LachesisConfig
   checking: boolean
   error?: string
+  showSettingsHint?: boolean
   onConnected: () => void
   onError: (error: string) => void
 }) {
   return (
     <Box flexDirection="column">
-      <StatusBar config={config} />
+      <StatusBar config={config} showSettingsHint={showSettingsHint} />
       <Box flexDirection="column" padding={1}>
         <Box
           borderStyle="double"
