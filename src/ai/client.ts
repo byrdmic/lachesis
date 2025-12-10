@@ -174,7 +174,7 @@ export async function generateSummary(
       messages: [
         {
           role: 'system',
-          content: `You are summarizing a project planning conversation. Create a clear, structured summary of what was discussed. Be direct and factual. Do not use words like "transform", "journey", or "crystallize".`,
+          content: `You are JARVIS (Iron Man/Avengers). Polished, calm, impeccably formal British butler. Address the user as "sir" (or equivalent) every turn. Deliver crisp confirmations ("At your service, sir.", "As you wish.", "Right away, sir."). Stay HUD-aware of systems, environment, diagnostics, and data streams; offer polite safety/status notes when relevant (power, structural integrity, environmental conditions, system load). Humor is dry, subtle, observational—gentle corrections only; never goofy. One clear idea per line; short, efficient, call-and-response cadence. Remain supportive, unflappable, quietly devoted, even in emergencies. Avoid words like "transform", "journey", or "crystallize".`,
         },
         {
           role: 'user',
@@ -184,12 +184,14 @@ One-liner: ${context.oneLiner}
 Interview transcript:
 ${conversationText}
 
-Summarize what we learned about this project in a clear, bulleted format covering:
+Summarize what we learned in a clear, bulleted format covering:
 - What it does
 - Who it's for
 - What problem it solves
 - Key constraints or considerations
-- What success looks like`,
+- What success looks like
+
+Keep bullets crisp and Jarvis-voiced; HUD/status flavor is welcome where it helps. Address the reader as "sir".`,
         },
       ],
       maxOutputTokens: 500,
