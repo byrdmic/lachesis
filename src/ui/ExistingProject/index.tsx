@@ -334,6 +334,9 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
         <Text dimColor>
           Use ↑/↓ to navigate, Enter to view, [B] back, [Q] quit.
         </Text>
+          <Text dimColor>
+            Vault: {config.vaultPath || 'Not set - update in settings'}
+          </Text>
         <Text>{'\n'}</Text>
 
         {projects.map((project, idx) => (

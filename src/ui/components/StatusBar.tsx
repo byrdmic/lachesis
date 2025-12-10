@@ -15,9 +15,15 @@ export function StatusBar({ config, onSettingsPress }: StatusBarProps) {
       paddingX={1}
       justifyContent="space-between"
     >
-      <Box>
-        <Text dimColor>AI: </Text>
-        <Text color="green">Connected ({config.defaultProvider})</Text>
+      <Box flexDirection="column">
+        <Box>
+          <Text dimColor>AI: </Text>
+          <Text color="green">Connected ({config.defaultProvider})</Text>
+        </Box>
+        <Box>
+          <Text dimColor>Vault: </Text>
+          <Text color="cyan">{config.vaultPath || 'Not set'}</Text>
+        </Box>
       </Box>
       <Box>
         <Text dimColor>[S] Settings</Text>
