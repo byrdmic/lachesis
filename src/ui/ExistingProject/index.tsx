@@ -149,10 +149,10 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
       const lower = input.toLowerCase()
 
       if (view === 'list') {
-        if (key.upArrow) {
+        if (key.upArrow || lower === 'k') {
           setSelectedIndex((idx) => Math.max(0, idx - 1))
         }
-        if (key.downArrow) {
+        if (key.downArrow || lower === 'j') {
           setSelectedIndex((idx) =>
             Math.min(Math.max(projects.length - 1, 0), idx + 1),
           )
@@ -196,6 +196,31 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
   const statusConfig =
     view === 'detail' || view === 'loaded' ? projectConfig : config
   const overrideEntries = Object.entries(projectSettings.overrides)
+  const formattedProjects = projects.map((project) => {
+    const overviewSnippet = project.overview?.split('\n')[0] ?? ''
+    const updatedLabel = project.updatedAt
+      ? `Updated ${new Date(project.updatedAt).toLocaleDateString()}`
+      : ''
+
+    return {
+      ...project,
+      overviewSnippet,
+      updatedLabel,
+    }
+  })
+
+  const nameWidth = formattedProjects.reduce(
+    (max, project) => Math.max(max, project.name.length),
+    0,
+  )
+  const updatedWidth = formattedProjects.reduce(
+    (max, project) => Math.max(max, project.updatedLabel.length),
+    0,
+  )
+  const overviewWidth = formattedProjects.reduce(
+    (max, project) => Math.max(max, project.overviewSnippet.length),
+    0,
+  )
 
   if (loading) {
     return (
@@ -339,22 +364,36 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
           </Text>
         <Text>{'\n'}</Text>
 
-        {projects.map((project, idx) => (
-          <Box key={project.path} flexDirection="column" marginBottom={1}>
-            <Text color={idx === selectedIndex ? 'cyan' : undefined}>
-              {idx === selectedIndex ? '❯ ' : '  '}
-              {project.name}
+        {formattedProjects.map((project, idx) => {
+          const isSelected = idx === selectedIndex
+          const prefix = isSelected ? '❯ ' : '  '
+          const paddedName = project.name.padEnd(nameWidth)
+          const paddedUpdated =
+            updatedWidth > 0 ? project.updatedLabel.padEnd(updatedWidth) : ''
+          const paddedOverview =
+            overviewWidth > 0
+              ? project.overviewSnippet.padEnd(overviewWidth)
+              : project.overviewSnippet
+
+          return (
+            <Text key={project.path} color={isSelected ? 'cyan' : undefined}>
+              {prefix}
+              {paddedName}
+              {updatedWidth > 0 && (
+                <>
+                  {'  '}
+                  <Text dimColor>{paddedUpdated}</Text>
+                </>
+              )}
+              {overviewWidth > 0 && (
+                <>
+                  {'  '}
+                  <Text dimColor>{paddedOverview}</Text>
+                </>
+              )}
             </Text>
-            {project.updatedAt && (
-              <Text dimColor>
-                {'  '}Updated {new Date(project.updatedAt).toLocaleString()}
-              </Text>
-            )}
-            {project.overview && (
-              <Text dimColor>{'  '}{project.overview.split('\n')[0]}</Text>
-            )}
-          </Box>
-        ))}
+          )
+        })}
       </Box>
     </Box>
   )
