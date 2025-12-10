@@ -125,7 +125,6 @@ export async function streamNextQuestion(
       model,
       messages,
       maxOutputTokens: 300,
-      temperature: 0.7,
     })
 
     let fullText = ''
@@ -251,7 +250,6 @@ Interview transcript:
 ${conversationText}
 
 Extract all relevant information. For fields not discussed, use reasonable defaults or leave optional fields empty. Be direct and factual.`,
-      temperature: 0.3,
     })
 
     return {
