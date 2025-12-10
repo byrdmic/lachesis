@@ -1,12 +1,13 @@
-// System prompts for Lachesis AI interview
+// System prompts for Lachesis AI planning/building conversations
 import type { PlanningLevel } from '../core/project/types.ts'
 
 type CoachingPromptOptions = {
   collectSetupQuestions?: boolean
+  mode?: 'planning' | 'building'
 }
 
 /**
- * Topics the AI should cover during the interview
+ * Topics the AI should cover during the planning conversation
  */
 export const DISCOVERY_TOPICS = [
   'core_purpose',
@@ -20,6 +21,20 @@ export const DISCOVERY_TOPICS = [
 ] as const
 
 export type DiscoveryTopic = (typeof DISCOVERY_TOPICS)[number]
+
+function getModeContext(mode: 'planning' | 'building'): string {
+  if (mode === 'building') {
+    return `Mode: BUILDING.
+- Keep the conversation focused on execution, implementation details, and unblocking.
+- Suggest concrete next moves, clarify requirements, and keep scope tight.
+- Assume decisions may have been made already; confirm before changing direction.`
+  }
+
+  return `Mode: PLANNING.
+- Focus on shaping the project itself: problem, audience, constraints, and plan.
+- Help them design the approach and surface risks before they start building.
+- Avoid prescribing implementation until the plan is clear.`
+}
 
 /**
  * Get planning level context for the system prompt
@@ -49,6 +64,7 @@ export function buildCoachingPrompt(
   options: CoachingPromptOptions = {},
 ): string {
   const collectSetupQuestions = options.collectSetupQuestions ?? false
+  const mode = options.mode ?? 'planning'
 
   const nameLine =
     projectName.trim() || 'Not provided yet — ask for a working name first.'
@@ -77,12 +93,16 @@ Keep this calibration brief (1-2 turns). Confirm their answers, then continue.`
       ? `Topics already discussed: ${coveredTopics.join(', ')}`
       : 'No topics covered yet - this is the start of the conversation.'
 
-  return `You are a project ideation coach helping someone clarify their project idea.
+  const modeContext = getModeContext(mode)
+
+  return `You are a project coach helping someone shape and progress their project.
 
 PROJECT CONTEXT:
 - Name: ${nameLine}
 - Description: ${oneLinerLine}
 - Planning level: ${collectSetupQuestions ? 'To be collected during the chat' : planningLevel}
+
+${modeContext}
 
 ${planningContext}
 
@@ -141,7 +161,7 @@ export function buildFirstQuestionPrompt(
     oneLiner,
     planningLevel,
     [],
-    { collectSetupQuestions: true },
+    { collectSetupQuestions: true, mode: 'planning' },
   )
 
   return `${basePrompt}
@@ -157,7 +177,7 @@ Remember: ONE question only. Keep it conversational.`
  * Build prompt for summarization
  */
 export function buildSummaryPrompt(): string {
-  return `You are summarizing a project ideation interview. Create a clear, structured summary.
+  return `You are summarizing a project planning conversation. Create a clear, structured summary.
 
 RULES:
 - Be direct and factual

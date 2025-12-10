@@ -21,6 +21,11 @@ export function generateOverview(project: ProjectDefinition): string {
     project.execution.thirdMove,
   ].filter(Boolean)
 
+  const currentStateDescription =
+    project.status === 'building'
+      ? 'In building mode. Focused on execution, unblocking, and delivering concrete increments.'
+      : 'In planning mode. Clarifying scope, constraints, and the shape of the solution.'
+
   const nonGoals =
     project.vision.nonGoals.length > 0
       ? project.vision.nonGoals.map((g) => `- ${g}`).join('\n')
@@ -55,7 +60,7 @@ ${project.vision.secondaryAudience ? `- Secondary audience: ${project.vision.sec
 - **Short goal:** (not yet defined)
 
 **Right now, this project is…**
-Just created. Ready for exploration and first steps.
+${currentStateDescription}
 
 ---
 

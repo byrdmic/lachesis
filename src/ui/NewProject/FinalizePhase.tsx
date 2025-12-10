@@ -124,7 +124,7 @@ export function FinalizePhase({
           marginBottom={1}
         >
           <Text color="green" bold>
-            Interview Complete
+            Planning conversation complete
           </Text>
         </Box>
 

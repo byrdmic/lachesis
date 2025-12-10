@@ -1,4 +1,4 @@
-// Builds a ProjectDefinition from interview answers or AI-extracted data
+// Builds a ProjectDefinition from planning answers or AI-extracted data
 import type { Answer } from '../interview/types.ts'
 import type {
   ProjectDefinition,
@@ -182,7 +182,7 @@ export function buildProjectDefinition(input: BuilderInput): ProjectDefinition {
       slug,
       createdAt: now,
       updatedAt: now,
-      status: 'idea',
+      status: 'planning',
       releasePhase: 'seed',
       setup: {
         planningLevel,
@@ -203,7 +203,7 @@ export function buildProjectDefinition(input: BuilderInput): ProjectDefinition {
       slug,
       createdAt: now,
       updatedAt: now,
-      status: 'idea',
+      status: 'planning',
       releasePhase: 'seed',
       setup: {
         planningLevel,

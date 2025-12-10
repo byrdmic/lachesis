@@ -96,7 +96,7 @@ export function App({ command, debug = false }: AppProps) {
         <Text>{'\n'}</Text>
         <Text dimColor>{state.message}</Text>
         <Text>{'\n'}</Text>
-        <Text color="cyan">Starting interview...</Text>
+        <Text color="cyan">Starting planning session...</Text>
       </Box>,
     )
   }
@@ -211,7 +211,7 @@ function ProjectLauncher({
           <Select
             label="What would you like to do?"
             options={[
-              { label: 'Start a new project interview', value: 'new' },
+              { label: 'Start a new project planning session', value: 'new' },
               { label: 'Load an existing project', value: 'existing' },
             ]}
             onSelect={(value) => setState({ step: value as 'new' | 'existing' })}

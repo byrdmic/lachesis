@@ -147,7 +147,7 @@ export function InterviewPhase({
         effectiveOneLiner,
         planningLevel,
         context.coveredTopics,
-        { collectSetupQuestions: true },
+        { collectSetupQuestions: true, mode: 'planning' },
       )
 
       const streamId = new Date().toISOString()

@@ -108,7 +108,7 @@ function buildChatMessages(
 }
 
 /**
- * Stream the next interview question, emitting incremental text updates.
+ * Stream the next planning question, emitting incremental text updates.
  */
 export async function streamNextQuestion(
   context: ConversationContext,
@@ -139,7 +139,7 @@ export async function streamNextQuestion(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     const stack = err instanceof Error ? err.stack : undefined
-    debugLog.error('Failed to stream interview question', {
+    debugLog.error('Failed to stream planning question', {
       message,
       stack,
       provider: config.defaultProvider,
@@ -156,8 +156,8 @@ export async function streamNextQuestion(
 }
 
 /**
- * Generate a summary of the conversation so far
- */
+   * Generate a summary of the conversation so far
+   */
 export async function generateSummary(
   context: ConversationContext,
   config: LachesisConfig,
@@ -174,7 +174,7 @@ export async function generateSummary(
       messages: [
         {
           role: 'system',
-          content: `You are summarizing a project ideation interview. Create a clear, structured summary of what was discussed. Be direct and factual. Do not use words like "transform", "journey", or "crystallize".`,
+          content: `You are summarizing a project planning conversation. Create a clear, structured summary of what was discussed. Be direct and factual. Do not use words like "transform", "journey", or "crystallize".`,
         },
         {
           role: 'user',
@@ -240,7 +240,7 @@ export async function extractProjectData(
     const result = await generateObject({
       model,
       schema: ExtractedProjectDataSchema,
-      prompt: `Extract structured project information from this interview.
+      prompt: `Extract structured project information from this planning conversation.
 
 Project name: ${context.projectName}
 One-liner: ${context.oneLiner}
@@ -302,7 +302,7 @@ export async function shouldContinueConversation(
 }
 
 /**
- * Topics the interviewer should aim to cover
+ * Topics to cover during the planning conversation
  */
 const DEFAULT_DISCOVERY_TOPICS = [
   'core_purpose',

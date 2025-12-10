@@ -20,7 +20,7 @@ Lachesis - Project Foundations Studio
 
 Usage:
   lachesis start     Launch Lachesis and choose a workflow
-  lachesis new       Start a new project interview
+  lachesis new       Start a new project planning session
   lachesis help      Show this help message
   lachesis version   Show version
 

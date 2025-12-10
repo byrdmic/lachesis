@@ -86,11 +86,11 @@ export function NewProjectFlow({
         setAIStatus({ state: 'idle', message: 'Ready' })
         break
       case 'interview':
-        setAIStatus({ state: 'streaming', message: 'Preparing first question' })
+        setAIStatus({ state: 'streaming', message: 'Preparing first planning question' })
         break
       case 'interview_choice':
       case 'quick_capture':
-        setAIStatus({ state: 'idle', message: 'Ready for interview' })
+        setAIStatus({ state: 'idle', message: 'Ready for planning' })
         break
       case 'finalize':
         setAIStatus({ state: 'idle', message: 'Ready to scaffold' })
@@ -138,7 +138,7 @@ export function NewProjectFlow({
   const handleStart = useCallback(() => {
     setState({
       step: 'interview',
-      planningLevel: 'Not provided yet - ask during interview',
+      planningLevel: 'Not provided yet - ask during planning',
       projectName: '',
       oneLiner: '',
     })
@@ -174,7 +174,7 @@ export function NewProjectFlow({
       const nextOneLiner =
         oneLiner.trim() || extractedOneLiner || 'Not provided yet'
       const nextPlanningLevel =
-        planningLevel?.trim() || 'Captured during interview'
+        planningLevel?.trim() || 'Captured during planning'
 
       setState({
         step: 'finalize',
@@ -472,9 +472,9 @@ function InterviewChoiceScreen({
   const [selected, setSelected] = useState(0)
   const options = [
     {
-      label: 'AI-guided interview',
+      label: 'AI-guided planning chat',
       value: 'interview' as const,
-      desc: 'Have a conversation to explore your idea',
+      desc: 'Have a conversation to explore and plan your idea',
     },
     {
       label: 'Quick capture',

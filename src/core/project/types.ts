@@ -3,7 +3,7 @@
 // Freeform strings so the AI/user can provide any description
 export type PlanningLevel = string
 
-export type ProjectStatus = 'idea' | 'active' | 'paused' | 'done'
+export type ProjectStatus = 'planning' | 'building'
 export type ReleasePhase =
   | 'seed'
   | 'explore'

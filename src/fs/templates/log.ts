@@ -37,7 +37,7 @@ const whatHappened =
         : null,
     ]
       .filter(Boolean)
-      .join('\n') || '- (captured in interview responses)'
+      .join('\n') || '- (captured during the planning conversation)'
 
   const nextSteps =
     [
@@ -59,7 +59,7 @@ const whatHappened =
 ## ${date} – Creation Session
 
 **Context:**
-First \`lachesis new\` interview. Project created from ${project.setup.planningLevel.replace('_', ' ')} session.
+First \`lachesis new\` planning session. Project created from ${project.setup.planningLevel.replace('_', ' ')} conversation.
 
 **What happened:**
 ${whatHappened}

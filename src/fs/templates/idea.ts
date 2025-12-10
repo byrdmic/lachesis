@@ -11,7 +11,7 @@ export function generateIdea(project: ProjectDefinition): string {
 
   const excitement = project.solution.excitement
     ? `- ${project.solution.excitement}`
-    : '- (captured during interview)'
+    : '- (captured during planning conversation)'
 
   const coreLoop = project.solution.coreLoop
     ? `- Core loop/interaction: ${project.solution.coreLoop}`
