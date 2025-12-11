@@ -3,7 +3,9 @@ import {
   generateObject,
   streamText,
   type CoreMessage,
+  type LanguageModel,
 } from 'ai'
+import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 import type { LachesisConfig } from '../config/types.ts'
 import type { PlanningLevel } from '../core/project/types.ts'
@@ -116,7 +118,7 @@ export async function streamNextQuestion(
   config: LachesisConfig,
   onUpdate?: (partial: string) => void,
 ): Promise<GenerationResult> {
-  const model = config.defaultModel
+  const model = openai(config.defaultModel) as unknown as LanguageModel
 
   try {
     const messages = buildChatMessages(systemPrompt, context)
@@ -181,7 +183,7 @@ export async function generateSummary(
   context: ConversationContext,
   config: LachesisConfig,
 ): Promise<GenerationResult> {
-  const model = config.defaultModel
+  const model = openai(config.defaultModel) as unknown as LanguageModel
 
   try {
     const conversationText = context.messages
@@ -266,7 +268,7 @@ export async function extractProjectData(
   error?: string
   debugDetails?: string
 }> {
-  const model = config.defaultModel
+  const model = openai(config.defaultModel) as unknown as LanguageModel
 
   try {
     const conversationText = context.messages

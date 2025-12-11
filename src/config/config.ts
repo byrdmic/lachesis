@@ -22,11 +22,7 @@ export function applyConfigUpgrades(config: LachesisConfig): {
 
   // Normalize and validate OpenAI model identifiers
   if (next.defaultProvider === 'openai') {
-    const normalized = next.defaultModel.startsWith('openai/')
-      ? next.defaultModel
-      : `openai/${next.defaultModel}`
-
-    if (!openaiModelSet.has(normalized)) {
+    if (!openaiModelSet.has(next.defaultModel)) {
       next = { ...next, defaultModel: DEFAULT_CONFIG.defaultModel }
       updated = true
     }

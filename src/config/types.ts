@@ -13,26 +13,12 @@ export type LachesisConfig = {
 export const DEFAULT_CONFIG: LachesisConfig = {
   vaultPath: '', // Will be set based on OS detection
   defaultProvider: 'openai',
-  defaultModel: 'gpt-5',
+  defaultModel: 'gpt-5.1',
   apiKeyEnvVar: 'OPENAI_API_KEY',
 }
 
 export const OPENAI_MODELS = [
-  'openai/gpt-5.1-codex-mini',
-  'openai/gpt-5.1-codex',
-  'openai/gpt-5.1-chat-latest',
-  'openai/gpt-5.1',
-  'openai/gpt-5-pro',
-  'openai/gpt-5',
-  'openai/gpt-5-mini',
-  'openai/gpt-5-nano',
-  'openai/gpt-5-codex',
-  'openai/gpt-5-chat-latest',
-  'openai/gpt-4.1',
-  'openai/gpt-4.1-mini',
-  'openai/gpt-4.1-nano',
-  'openai/gpt-4o',
-  'openai/gpt-4o-mini',
+  'gpt-5.1',
 ] as const
 
 export type OpenAIModelId = (typeof OPENAI_MODELS)[number]
