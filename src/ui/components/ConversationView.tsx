@@ -5,6 +5,12 @@ import type { ConversationMessage } from '../../ai/client.ts'
 type ConversationViewProps = {
   messages: ConversationMessage[]
   maxVisible?: number // How many recent exchanges to show (default 3)
+  /**
+   * Optional index (0-based) of the message to anchor the view on.
+   * When provided, the view will show a window ending at this message,
+   * letting callers implement simple scrolling/browsing behavior.
+   */
+  anchorIndex?: number | null
 }
 
 /**
@@ -15,21 +21,42 @@ type ConversationViewProps = {
 export function ConversationView({
   messages,
   maxVisible = 3,
+  anchorIndex = null,
 }: ConversationViewProps) {
   if (messages.length === 0) {
     return null
   }
 
+  const totalMessages = messages.length
+
+  // Determine which message to end the window on (defaults to the newest)
+  const anchor = Math.min(
+    Math.max(anchorIndex ?? totalMessages - 1, 0),
+    totalMessages - 1,
+  )
+
   // Calculate how many messages to show
   // We want to show pairs (assistant + user), but the last message might be unpaired
-  const visibleMessages = messages.slice(-maxVisible * 2)
+  const visibleWindow = maxVisible * 2
+  const windowStart = Math.max(0, anchor - visibleWindow + 1)
+  const visibleMessages = messages.slice(windowStart, anchor + 1)
 
   // Split into context (older) and current (newest assistant message)
   const lastMessage = visibleMessages[visibleMessages.length - 1]
   const contextMessages = visibleMessages.slice(0, -1)
+  const isBrowsingHistory = anchor < totalMessages - 1
 
   return (
     <Box flexDirection="column">
+      {isBrowsingHistory && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text dimColor>
+            Viewing chat {anchor + 1}/{totalMessages} - j/k to move, Enter to
+            resume typing
+          </Text>
+        </Box>
+      )}
+
       {/* Context: older messages shown in dimmed format */}
       {contextMessages.length > 0 && (
         <Box flexDirection="column" marginBottom={1}>

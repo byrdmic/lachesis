@@ -9,6 +9,11 @@ type TextInputProps = {
   onSubmit: (value: string) => void
   placeholder?: string
   required?: boolean
+  /**
+   * Control whether the input should capture keystrokes.
+   * Useful for modal/menu flows where you need to temporarily pause typing.
+   */
+  focus?: boolean
 }
 
 export function TextInput({
@@ -18,6 +23,7 @@ export function TextInput({
   onSubmit,
   placeholder,
   required,
+  focus = true,
 }: TextInputProps) {
   const handleSubmit = (val: string) => {
     // If required and empty, don't submit
@@ -42,6 +48,7 @@ export function TextInput({
           onChange={onChange}
           onSubmit={handleSubmit}
           placeholder={placeholder ?? 'Type your answer...'}
+          focus={focus}
         />
       </Box>
     </Box>

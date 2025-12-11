@@ -83,15 +83,41 @@ export function ConversationPhase({
     error: null,
     errorDetails: null,
   })
+  const [interactionMode, setInteractionMode] = useState<'text' | 'menu'>('text')
+  const [historyAnchor, setHistoryAnchor] = useState<number | null>(null)
+  const [menuMessage, setMenuMessage] = useState<string | null>(null)
 
   const effectiveProjectName = projectName.trim() || 'Untitled Project'
   const effectiveOneLiner = oneLiner.trim() || 'Not provided yet'
 
-  const typing = state.step === 'waiting_for_answer'
+  const typing =
+    state.step === 'waiting_for_answer' && interactionMode === 'text'
   useEffect(() => {
     onInputModeChange?.(typing)
     return () => onInputModeChange?.(false)
   }, [typing, onInputModeChange])
+
+  // Reset browsing state when returning to text mode
+  useEffect(() => {
+    if (interactionMode === 'text') {
+      setHistoryAnchor(null)
+      setMenuMessage(null)
+    }
+  }, [interactionMode])
+
+  // Keep history anchor in bounds as messages stream in/out
+  useEffect(() => {
+    if (historyAnchor === null) return
+    if (state.messages.length === 0) {
+      setHistoryAnchor(null)
+      return
+    }
+
+    const maxIndex = state.messages.length - 1
+    if (historyAnchor > maxIndex) {
+      setHistoryAnchor(maxIndex)
+    }
+  }, [historyAnchor, state.messages.length])
 
   // Surface AI activity back to the parent status bar
   useEffect(() => {
@@ -425,6 +451,61 @@ export function ConversationPhase({
     generateFirstQuestion()
   }, [])
 
+  const messageCount = state.messages.length
+
+  const bumpHistoryAnchor = useCallback(
+    (delta: number) => {
+      if (messageCount === 0) {
+        setHistoryAnchor(null)
+        return
+      }
+      setHistoryAnchor((current) => {
+        const latestIndex = messageCount - 1
+        const base = current ?? latestIndex
+        const next = Math.min(Math.max(base + delta, 0), latestIndex)
+        return next === latestIndex ? null : next
+      })
+    },
+    [messageCount],
+  )
+
+  // Vim-like mode handling while the user is answering
+  useInput(
+    (input, key) => {
+      if (state.step !== 'waiting_for_answer') return
+
+      if (interactionMode === 'text') {
+        if (key.escape) {
+          setInteractionMode('menu')
+          setMenuMessage(null)
+        }
+        return
+      }
+
+      // Menu mode
+      if (key.escape) {
+        onCancel()
+        return
+      }
+
+      if (key.return) {
+        setInteractionMode('text')
+        return
+      }
+
+      if (input === 'j' || key.downArrow) {
+        bumpHistoryAnchor(1)
+      } else if (input === 'k' || key.upArrow) {
+        bumpHistoryAnchor(-1)
+      } else if (input?.toLowerCase() === 's') {
+        setMenuMessage(
+          'Settings live in your config file - tweak and relaunch to apply.',
+        )
+      }
+    },
+    { isActive: state.step === 'waiting_for_answer' },
+  )
+
   // Handle escape to cancel
   useInput(
     (input, key) => {
@@ -500,16 +581,38 @@ export function ConversationPhase({
   }
 
   // waiting_for_answer
+  const latestIndex = state.messages.length
+    ? state.messages.length - 1
+    : null
+  const anchorIndex =
+    interactionMode === 'menu' && historyAnchor !== null
+      ? historyAnchor
+      : latestIndex
+  const modeLabel =
+    interactionMode === 'text'
+      ? 'Text Mode | [ESC] open menu'
+      : 'Menu Mode | [j/k] scroll chat | [s] Settings | [ESC] quit | [Enter] back to Text Mode'
+  const historyLabel =
+    interactionMode === 'menu' && anchorIndex !== null
+      ? ` | Viewing ${anchorIndex + 1}/${state.messages.length}`
+      : ''
+
   return (
     <Box flexDirection="column" padding={1}>
-      <ConversationView messages={state.messages} />
+      <ConversationView messages={state.messages} anchorIndex={anchorIndex} />
       <Box marginTop={1}>
-        <ChatInput onSubmit={handleUserAnswer} />
+        <ChatInput
+          onSubmit={handleUserAnswer}
+          isFocused={interactionMode === 'text'}
+        />
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>
-          Tip: Say "summarize" when you're ready to wrap up | Esc to cancel
-        </Text>
+        <Text dimColor>{modeLabel + historyLabel}</Text>
+        {menuMessage && (
+          <Text dimColor>
+            {menuMessage} (press Enter to jump back into Text Mode)
+          </Text>
+        )}
       </Box>
     </Box>
   )
@@ -519,7 +622,13 @@ export function ConversationPhase({
 // Sub-components
 // ============================================================================
 
-function ChatInput({ onSubmit }: { onSubmit: (value: string) => void }) {
+function ChatInput({
+  onSubmit,
+  isFocused,
+}: {
+  onSubmit: (value: string) => void
+  isFocused: boolean
+}) {
   const [value, setValue] = useState('')
 
   const handleSubmit = (val: string) => {
@@ -538,6 +647,7 @@ function ChatInput({ onSubmit }: { onSubmit: (value: string) => void }) {
         onChange={setValue}
         onSubmit={handleSubmit}
         placeholder="Type your response..."
+        focus={isFocused}
       />
     </Box>
   )
