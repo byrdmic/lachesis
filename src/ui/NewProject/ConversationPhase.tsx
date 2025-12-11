@@ -88,6 +88,23 @@ export function ConversationPhase({
   const [interactionMode, setInteractionMode] = useState<'text' | 'menu'>('text')
   const [historyAnchor, setHistoryAnchor] = useState<number | null>(null)
   const [menuMessage, setMenuMessage] = useState<string | null>(null)
+  const renderScreen = (
+    main: React.ReactNode,
+    footer?: React.ReactNode,
+  ): React.ReactNode => (
+    <Box
+      flexDirection="column"
+      height="100%"
+      width="100%"
+      paddingX={1}
+      paddingY={1}
+    >
+      <Box flexDirection="column" flexGrow={1} minHeight={0}>
+        {main}
+      </Box>
+      {footer ? <Box marginTop={1}>{footer}</Box> : null}
+    </Box>
+  )
 
   const effectiveProjectName = projectName.trim() || 'Untitled Project'
   const effectiveOneLiner = oneLiner.trim() || 'Not provided yet'
@@ -531,8 +548,8 @@ export function ConversationPhase({
 
   // Render based on step
   if (state.step === 'error') {
-    return (
-      <Box flexDirection="column" padding={1}>
+    return renderScreen(
+      <Box flexDirection="column">
         <Text color="red">Error: {state.error}</Text>
         {debug && state.errorDetails && (
           <>
@@ -543,7 +560,7 @@ export function ConversationPhase({
         <Text>{'\n'}</Text>
         <Text dimColor>Press any key to retry, or Esc to cancel</Text>
         <RetryHandler onRetry={handleRetry} />
-      </Box>
+      </Box>,
     )
   }
 
@@ -551,45 +568,39 @@ export function ConversationPhase({
     state.step === 'generating_question' ||
     state.step === 'extracting_data'
   ) {
-    return (
-      <Box flexDirection="column" padding={1}>
-        <ConversationView messages={state.messages} />
-        <Box marginTop={1}>
-          <Text color="cyan">
-            <Spinner type="dots" />
-          </Text>
-          <Text>
-            {' '}
-            {state.step === 'extracting_data' ? 'Processing...' : 'Thinking...'}
-          </Text>
-        </Box>
-      </Box>
+    return renderScreen(
+      <ConversationView messages={state.messages} />,
+      <Box>
+        <Text color="cyan">
+          <Spinner type="dots" />
+        </Text>
+        <Text>
+          {' '}
+          {state.step === 'extracting_data' ? 'Processing...' : 'Thinking...'}
+        </Text>
+      </Box>,
     )
   }
 
   if (state.step === 'generating_summary') {
-    return (
-      <Box flexDirection="column" padding={1}>
-        <ConversationView messages={state.messages} />
-        <Box marginTop={1}>
-          <Text color="cyan">
-            <Spinner type="dots" />
-          </Text>
-          <Text> Generating summary...</Text>
-        </Box>
-      </Box>
+    return renderScreen(
+      <ConversationView messages={state.messages} />,
+      <Box>
+        <Text color="cyan">
+          <Spinner type="dots" />
+        </Text>
+        <Text> Generating summary...</Text>
+      </Box>,
     )
   }
 
   if (state.step === 'showing_summary' && state.summary) {
-    return (
-      <Box flexDirection="column" padding={1}>
-        <SummaryConfirmation
-          summary={state.summary}
-          onConfirm={handleSummaryConfirm}
-          onRevise={handleSummaryRevise}
-        />
-      </Box>
+    return renderScreen(
+      <SummaryConfirmation
+        summary={state.summary}
+        onConfirm={handleSummaryConfirm}
+        onRevise={handleSummaryRevise}
+      />,
     )
   }
 
@@ -610,15 +621,13 @@ export function ConversationPhase({
       ? ` | Viewing ${anchorIndex + 1}/${state.messages.length}`
       : ''
 
-  return (
-    <Box flexDirection="column" padding={1}>
-      <ConversationView messages={state.messages} anchorIndex={anchorIndex} />
-      <Box marginTop={1}>
-        <ChatInput
-          onSubmit={handleUserAnswer}
-          isFocused={interactionMode === 'text'}
-        />
-      </Box>
+  return renderScreen(
+    <ConversationView messages={state.messages} anchorIndex={anchorIndex} />,
+    <Box flexDirection="column">
+      <ChatInput
+        onSubmit={handleUserAnswer}
+        isFocused={interactionMode === 'text'}
+      />
       <Box marginTop={1}>
         <Text dimColor>{modeLabel + historyLabel}</Text>
         {menuMessage && (
@@ -627,7 +636,7 @@ export function ConversationPhase({
           </Text>
         )}
       </Box>
-    </Box>
+    </Box>,
   )
 }
 

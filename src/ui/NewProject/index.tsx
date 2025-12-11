@@ -77,6 +77,21 @@ export function NewProjectFlow({
     (enabled: boolean) => onDebugHotkeysChange?.(enabled),
     [onDebugHotkeysChange],
   )
+  const renderWithStatusBar = useCallback(
+    (content: React.ReactNode, showSettingsHint = settingsHotkeyEnabled) => (
+      <Box flexDirection="column" height="100%" width="100%">
+        <StatusBar
+          config={config}
+          aiStatus={aiStatus}
+          showSettingsHint={showSettingsHint}
+        />
+        <Box flexDirection="column" flexGrow={1} minHeight={0}>
+          {content}
+        </Box>
+      </Box>
+    ),
+    [aiStatus, config, settingsHotkeyEnabled],
+  )
 
   // Log state changes in debug mode
   useEffect(() => {
@@ -251,28 +266,18 @@ export function NewProjectFlow({
 
   if (state.step === 'conversation_choice') {
     return (
-      <Box flexDirection="column">
-        <StatusBar
-          config={config}
-          aiStatus={aiStatus}
-          showSettingsHint={settingsHotkeyEnabled}
-        />
+      renderWithStatusBar(
         <ConversationChoiceScreen
           projectName={state.projectName}
           onChoice={(choice) => handleConversationChoice(choice, state)}
-        />
-      </Box>
+        />,
+      )
     )
   }
 
   if (state.step === 'conversation') {
     return (
-      <Box flexDirection="column">
-        <StatusBar
-          config={config}
-          aiStatus={aiStatus}
-          showSettingsHint={settingsHotkeyEnabled}
-        />
+      renderWithStatusBar(
         <ConversationPhase
           config={config}
           planningLevel={state.planningLevel}
@@ -293,19 +298,14 @@ export function NewProjectFlow({
             )
           }
           onCancel={handleCancel}
-        />
-      </Box>
+        />,
+      )
     )
   }
 
   if (state.step === 'quick_capture') {
     return (
-      <Box flexDirection="column">
-        <StatusBar
-          config={config}
-          aiStatus={aiStatus}
-          showSettingsHint={settingsHotkeyEnabled}
-        />
+      renderWithStatusBar(
         <QuickCapturePhase
           config={config}
           projectName={state.projectName}
@@ -319,19 +319,14 @@ export function NewProjectFlow({
             )
           }
           onCancel={handleCancel}
-        />
-      </Box>
+        />,
+      )
     )
   }
 
   if (state.step === 'finalize') {
     return (
-      <Box flexDirection="column">
-        <StatusBar
-          config={config}
-          aiStatus={aiStatus}
-          showSettingsHint={settingsHotkeyEnabled}
-        />
+      renderWithStatusBar(
         <FinalizePhase
           config={config}
           planningLevel={state.planningLevel}
@@ -343,14 +338,14 @@ export function NewProjectFlow({
           sessionLog={state.sessionLog}
           onComplete={handleFinalizeComplete}
           onCancel={handleCancel}
-        />
-      </Box>
+        />,
+      )
     )
   }
 
   if (state.step === 'complete') {
     return (
-      <Box flexDirection="column" padding={1}>
+      <Box flexDirection="column" padding={1} height="100%" width="100%">
         <Text color="green" bold>
           Project created successfully!
         </Text>
@@ -365,7 +360,7 @@ export function NewProjectFlow({
 
   if (state.step === 'cancelled') {
     return (
-      <Box padding={1}>
+      <Box padding={1} height="100%" width="100%">
         <Text dimColor>Session cancelled.</Text>
       </Box>
     )
@@ -393,9 +388,9 @@ function WelcomeScreen({
   }, [onStart])
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" height="100%" width="100%">
       <StatusBar config={config} aiStatus={aiStatus} />
-      <Box flexDirection="column" padding={1}>
+      <Box flexDirection="column" padding={1} flexGrow={1}>
         <Box
           borderStyle="double"
           borderColor="cyan"
@@ -431,13 +426,13 @@ export function AIConnectionCheck({
   onError: (error: string) => void
 }) {
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" height="100%" width="100%">
       <StatusBar
         config={config}
         aiStatus={aiStatus}
         showSettingsHint={showSettingsHint}
       />
-      <Box flexDirection="column" padding={1}>
+      <Box flexDirection="column" padding={1} flexGrow={1}>
         <Box
           borderStyle="double"
           borderColor="cyan"

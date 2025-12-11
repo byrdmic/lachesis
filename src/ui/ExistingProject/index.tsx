@@ -200,6 +200,14 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
   const statusConfig =
     view === 'detail' || view === 'loaded' ? projectConfig : config
   const overrideEntries = Object.entries(projectSettings.overrides)
+  const renderWithStatusBar = (content: React.ReactNode) => (
+    <Box flexDirection="column" height="100%" width="100%">
+      <StatusBar config={statusConfig} showSettingsHint={false} />
+      <Box flexDirection="column" flexGrow={1} minHeight={0}>
+        {content}
+      </Box>
+    </Box>
+  )
   const formattedProjects = projects.map((project) => {
     const overviewSnippet = project.overview?.split('\n')[0] ?? ''
     const updatedLabel = project.updatedAt
@@ -228,37 +236,34 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
 
   if (loading) {
     return (
-      <Box flexDirection="column">
-        <StatusBar config={statusConfig} showSettingsHint={false} />
+      renderWithStatusBar(
         <Box padding={1}>
           <Text color="cyan">Scanning your vault for projects...</Text>
-        </Box>
-      </Box>
+        </Box>,
+      )
     )
   }
 
   if (view === 'empty') {
     const vaultLabel = config.vaultPath || 'your configured vault'
     return (
-      <Box flexDirection="column">
-        <StatusBar config={statusConfig} showSettingsHint={false} />
-        <Box padding={1}>
+      renderWithStatusBar(
+        <Box padding={1} flexDirection="column">
           <Text bold>No projects found in {vaultLabel}</Text>
           {error && <Text color="red">{error}</Text>}
           <Text>{'\n'}</Text>
           <Text dimColor>
             Create a project first, or press [B] to go back / [Q] to quit.
           </Text>
-        </Box>
-      </Box>
+        </Box>,
+      )
     )
   }
 
   if (view === 'detail' && selectedProject) {
     return (
-      <Box flexDirection="column">
-        <StatusBar config={statusConfig} showSettingsHint={false} />
-        <Box padding={1} flexDirection="column">
+      renderWithStatusBar(
+        <Box padding={1} flexDirection="column" flexGrow={1}>
           <Text color="cyan" bold>
             {selectedProject.name}
           </Text>
@@ -318,15 +323,14 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
           <Text dimColor>
             Press Enter to load, Esc/B to go back, or Q to quit.
           </Text>
-        </Box>
-      </Box>
+        </Box>,
+      )
     )
   }
 
   if (view === 'loaded' && selectedProject) {
     return (
-      <Box flexDirection="column">
-        <StatusBar config={statusConfig} showSettingsHint={false} />
+      renderWithStatusBar(
         <Box padding={1} flexDirection="column">
           <Text color="green" bold>
             Project loaded
@@ -349,23 +353,22 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
           <Text dimColor>
             Open this folder in Obsidian to keep working. Press Enter to exit.
           </Text>
-        </Box>
-      </Box>
+        </Box>,
+      )
     )
   }
 
   // Default: list view
   return (
-    <Box flexDirection="column">
-      <StatusBar config={statusConfig} showSettingsHint={false} />
-      <Box padding={1} flexDirection="column">
+    renderWithStatusBar(
+      <Box padding={1} flexDirection="column" flexGrow={1}>
         <Text bold>Select an existing project</Text>
         <Text dimColor>
           Use ↑/↓ to navigate, Enter to view, [B] back, [Q] quit.
         </Text>
-          <Text dimColor>
-            Vault: {config.vaultPath || 'Not set - update in settings'}
-          </Text>
+        <Text dimColor>
+          Vault: {config.vaultPath || 'Not set - update in settings'}
+        </Text>
         <Text>{'\n'}</Text>
 
         {formattedProjects.map((project, idx) => {
@@ -398,8 +401,8 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
             </Text>
           )
         })}
-      </Box>
-    </Box>
+      </Box>,
+    )
   )
 }
 

@@ -47,7 +47,7 @@ export function ConversationView({
   const isBrowsingHistory = anchor < totalMessages - 1
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" width="100%" flexGrow={1} minHeight={0}>
       {isBrowsingHistory && (
         <Box flexDirection="column" marginBottom={1}>
           <Text dimColor>

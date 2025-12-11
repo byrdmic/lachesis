@@ -61,10 +61,17 @@ export function App({ command, debug = false }: AppProps) {
 
   // Wrapper component for debug layout
   const withDebugPanel = (content: React.ReactNode) => {
-    if (!debug) return content
+    if (!debug) {
+      return (
+        <Box flexDirection="column" height="100%" width="100%">
+          {content}
+        </Box>
+      )
+    }
+
     return (
-      <Box flexDirection="column" height="100%">
-        <Box flexDirection="column" flexGrow={1}>
+      <Box flexDirection="column" height="100%" width="100%">
+        <Box flexDirection="column" flexGrow={1} minHeight={0} width="100%">
           {content}
         </Box>
         <DebugLog maxLines={6} isActive={debugHotkeysEnabled} />
@@ -209,13 +216,13 @@ function ProjectLauncher({
 
   if (state.step === 'menu') {
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" height="100%" width="100%">
         <StatusBar
           config={config}
           aiStatus={aiStatus}
           showSettingsHint={settingsHotkeyEnabled}
         />
-        <Box padding={1} flexDirection="column">
+        <Box padding={1} flexDirection="column" flexGrow={1}>
           <Box marginBottom={1}>
             <Text bold>Lachesis Project Foundations Studio</Text>
           </Box>
