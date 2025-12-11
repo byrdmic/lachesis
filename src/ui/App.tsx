@@ -105,7 +105,11 @@ export function App({ command, debug = false }: AppProps) {
   // Ready state
   if (command === 'start') {
     return withDebugPanel(
-      <ProjectLauncher config={state.config} debug={debug} />,
+      <ProjectLauncher
+        config={state.config}
+        debug={debug}
+        onDebugHotkeysChange={setDebugHotkeysEnabled}
+      />,
     )
   }
 
@@ -135,9 +139,11 @@ type LauncherState = { step: 'menu' | 'new' | 'existing' }
 function ProjectLauncher({
   config: initialConfig,
   debug = false,
+  onDebugHotkeysChange,
 }: {
   config: LachesisConfig
   debug?: boolean
+  onDebugHotkeysChange?: (enabled: boolean) => void
 }) {
   const { exit } = useApp()
   const [config, setConfig] = useState<LachesisConfig>(initialConfig)
@@ -247,6 +253,7 @@ function ProjectLauncher({
       config={config}
       debug={debug}
       onExit={() => setState({ step: 'menu' })}
+      onDebugHotkeysChange={onDebugHotkeysChange}
     />
   )
 }
