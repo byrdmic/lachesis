@@ -153,6 +153,14 @@ export function ConversationPhase({
       messages: ConversationMessage[]
       coveredTopics: string[]
     }) => {
+      debugLog.info('Conversation: preparing to stream next question', {
+        planningLevel,
+        projectName: context.projectName,
+        oneLiner: context.oneLiner,
+        coveredTopics: context.coveredTopics,
+        messageCount: context.messages.length,
+      })
+
       const prompt = buildCoachingPrompt(
         effectiveProjectName,
         effectiveOneLiner,
@@ -165,6 +173,10 @@ export function ConversationPhase({
           existingContext: sessionKind === 'existing' ? projectContext : undefined,
         },
       )
+
+      debugLog.debug('Conversation: coaching prompt built', {
+        promptPreview: prompt.slice(0, 200),
+      })
 
       const streamId = new Date().toISOString()
       setState((s) => ({ ...s, step: 'generating_question' }))
@@ -190,9 +202,19 @@ export function ConversationPhase({
 
           return { ...s, messages }
         })
+        debugLog.debug('Conversation: streaming partial question', {
+          streamId,
+          length: partial.length,
+          preview: partial.slice(0, 120),
+        })
       })
 
-      if (result.success && result.content) {
+      if (result.success && result.content !== undefined) {
+        debugLog.info('Conversation: full question received', {
+          streamId,
+          length: result.content.length,
+          preview: result.content.slice(0, 200),
+        })
         setState((s) => ({
           ...s,
           step: 'waiting_for_answer',
@@ -223,6 +245,7 @@ export function ConversationPhase({
   )
 
   const generateFirstQuestion = async () => {
+    debugLog.info('Conversation: starting first question')
     await streamQuestion({
       planningLevel,
       projectName: effectiveProjectName,
@@ -234,6 +257,11 @@ export function ConversationPhase({
 
   const handleUserAnswer = useCallback(
     async (answer: string) => {
+      debugLog.info('Conversation: user answer received', {
+        length: answer.length,
+        preview: answer.slice(0, 200),
+      })
+
       // Check for "take the wheel" trigger
       const takeWheelTriggers = [
         'take the wheel',
@@ -270,12 +298,23 @@ export function ConversationPhase({
       }
 
       const shouldContinue = await shouldContinueConversation(context, config)
+      debugLog.info('Conversation: should continue result', {
+        isWrapUp,
+        continue: shouldContinue.continue,
+        reason: shouldContinue.reason,
+      })
 
       if (isWrapUp || !shouldContinue.continue) {
         // Generate summary
         setState((s) => ({ ...s, step: 'generating_summary' }))
 
         const summaryResult = await generateSummary(context, config)
+        debugLog.info('Conversation: summary result', {
+          success: summaryResult.success,
+          length: summaryResult.content?.length,
+          preview: summaryResult.content?.slice(0, 200),
+          error: summaryResult.error,
+        })
 
         if (summaryResult.success && summaryResult.content) {
           setState((s) => ({
@@ -346,6 +385,11 @@ export function ConversationPhase({
     }
 
     const result = await extractProjectData(context, config)
+    debugLog.info('Conversation: extract project data result', {
+      success: result.success,
+      error: result.error,
+      keys: result.data ? Object.keys(result.data) : undefined,
+    })
 
     if (result.success && result.data) {
       onComplete(result.data, messages)

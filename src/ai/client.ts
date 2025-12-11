@@ -121,6 +121,15 @@ export async function streamNextQuestion(
   try {
     const messages = buildChatMessages(systemPrompt, context)
 
+    debugLog.info('Streaming next question: sending request', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      systemPromptPreview: systemPrompt.slice(0, 200),
+      messageCount: messages.length,
+      coveredTopics: context.coveredTopics,
+      lastMessage: context.messages.at(-1),
+    })
+
     const stream = await streamText({
       model,
       messages,
@@ -131,9 +140,20 @@ export async function streamNextQuestion(
     for await (const delta of stream.textStream) {
       fullText += delta
       onUpdate?.(fullText)
+      debugLog.debug('Streaming next question: received delta', {
+        delta,
+        accumulatedLength: fullText.length,
+      })
     }
 
     const trimmed = fullText.trim()
+
+    debugLog.info('Streaming next question: completed', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      contentPreview: trimmed.slice(0, 200),
+      totalLength: trimmed.length,
+    })
     return { success: true, content: trimmed }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -168,6 +188,14 @@ export async function generateSummary(
       .map((m) => `${m.role === 'assistant' ? 'Q' : 'A'}: ${m.content}`)
       .join('\n\n')
 
+    debugLog.info('Generating summary: sending request', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      messageCount: context.messages.length,
+      planningLevel: context.planningLevel,
+      projectName: context.projectName,
+    })
+
     const result = await generateText({
       model,
       messages: [
@@ -195,6 +223,13 @@ Keep bullets crisp and Jarvis-voiced; HUD/status flavor is welcome where it help
       ],
       maxOutputTokens: 500,
       temperature: 0.5,
+    })
+
+    debugLog.info('Generating summary: received response', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      contentPreview: result.text.slice(0, 200),
+      totalLength: result.text.length,
     })
 
     return {
@@ -238,6 +273,14 @@ export async function extractProjectData(
       .map((m) => `${m.role === 'assistant' ? 'Q' : 'A'}: ${m.content}`)
       .join('\n\n')
 
+    debugLog.info('Extracting project data: sending request', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      messageCount: context.messages.length,
+      planningLevel: context.planningLevel,
+      projectName: context.projectName,
+    })
+
     const result = await generateObject({
       model,
       schema: ExtractedProjectDataSchema,
@@ -250,6 +293,12 @@ Conversation transcript:
 ${conversationText}
 
 Extract all relevant information. For fields not discussed, use reasonable defaults or leave optional fields empty. Be direct and factual.`,
+    })
+
+    debugLog.info('Extracting project data: received response', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      fields: Object.keys(result.object || {}),
     })
 
     return {
