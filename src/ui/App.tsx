@@ -21,6 +21,7 @@ type AppState =
 
 export function App({ command, debug = false }: AppProps) {
   const [state, setState] = useState<AppState>({ phase: 'loading' })
+  const [debugHotkeysEnabled, setDebugHotkeysEnabled] = useState(false)
 
   // Enable debug logging if flag is set
   useEffect(() => {
@@ -66,7 +67,7 @@ export function App({ command, debug = false }: AppProps) {
         <Box flexDirection="column" flexGrow={1}>
           {content}
         </Box>
-        <DebugLog maxLines={6} />
+        <DebugLog maxLines={6} isActive={debugHotkeysEnabled} />
       </Box>
     )
   }
@@ -110,7 +111,11 @@ export function App({ command, debug = false }: AppProps) {
 
   if (command === 'new') {
     return withDebugPanel(
-      <NewProjectFlow config={state.config} debug={debug} />,
+      <NewProjectFlow
+        config={state.config}
+        debug={debug}
+        onDebugHotkeysChange={setDebugHotkeysEnabled}
+      />,
     )
   }
 

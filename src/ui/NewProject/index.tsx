@@ -19,6 +19,7 @@ type NewProjectFlowProps = {
   config: LachesisConfig
   debug?: boolean
   onExit?: () => void
+  onDebugHotkeysChange?: (enabled: boolean) => void
 }
 
 type FlowState =
@@ -59,6 +60,7 @@ export function NewProjectFlow({
   config: initialConfig,
   debug = false,
   onExit,
+  onDebugHotkeysChange,
 }: NewProjectFlowProps) {
   const { exit } = useApp()
   const [state, setState] = useState<FlowState>({ step: 'welcome' })
@@ -71,13 +73,19 @@ export function NewProjectFlow({
   const [inputLocked, setInputLocked] = useState(false)
   const settingsHotkeyEnabled =
     !inputLocked && !showSettings && state.step !== 'complete' && state.step !== 'cancelled'
+  const notifyDebugHotkeys = useCallback(
+    (enabled: boolean) => onDebugHotkeysChange?.(enabled),
+    [onDebugHotkeysChange],
+  )
 
   // Log state changes in debug mode
   useEffect(() => {
     if (debug) {
       debugLog.debug('Flow state changed', { step: state.step })
     }
-  }, [state.step, debug])
+    // Disable debug hotkeys unless explicitly enabled by a phase (e.g., menu mode)
+    notifyDebugHotkeys(false)
+  }, [state.step, debug, notifyDebugHotkeys])
 
   // Reflect high-level AI status by flow step (more detailed updates come from child phases)
   useEffect(() => {
@@ -274,6 +282,7 @@ export function NewProjectFlow({
           sessionKind="new"
           onInputModeChange={setInputLocked}
           onAIStatusChange={setAIStatus}
+          onDebugHotkeysChange={notifyDebugHotkeys}
           onComplete={(extractedData, conversationLog) =>
             handleConversationComplete(
               extractedData,

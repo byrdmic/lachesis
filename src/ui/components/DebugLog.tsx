@@ -4,6 +4,11 @@ import { debugLog, type LogEntry, type LogLevel } from '../../debug/logger.ts'
 
 type DebugLogProps = {
   maxLines?: number
+  /**
+   * When false, hotkeys are disabled so we don't steal keystrokes from
+   * higher-priority inputs (e.g., text entry).
+   */
+  isActive?: boolean
 }
 
 const levelColors: Record<LogLevel, string> = {
@@ -52,7 +57,7 @@ function formatData(data: unknown, isExpanded: boolean): FormattedData {
   }
 }
 
-export function DebugLog({ maxLines = 8 }: DebugLogProps) {
+export function DebugLog({ maxLines = 8, isActive = true }: DebugLogProps) {
   const [logs, setLogs] = useState<LogEntry[]>(() => debugLog.getLogs())
   const [scrollOffset, setScrollOffset] = useState(0)
   // Selected index relative to visible logs (0 = top of visible, maxLines-1 = bottom)
@@ -88,30 +93,33 @@ export function DebugLog({ maxLines = 8 }: DebugLogProps) {
   const clampedSelectedIndex = Math.max(0, Math.min(selectedRelativeIndex, visibleLogs.length - 1))
 
   // Handle keyboard navigation with [ and ] keys
-  useInput((input) => {
-    if (input === '[') {
-      // Move selection up (older entries)
-      if (clampedSelectedIndex > 0) {
-        setSelectedRelativeIndex(clampedSelectedIndex - 1)
-        setExpanded(false)
-      } else if (startIndex > 0) {
-        // Scroll up if we can
-        setScrollOffset((prev) => Math.min(prev + 1, Math.max(0, logs.length - maxLines)))
+  useInput(
+    (input) => {
+      if (input === '[') {
+        // Move selection up (older entries)
+        if (clampedSelectedIndex > 0) {
+          setSelectedRelativeIndex(clampedSelectedIndex - 1)
+          setExpanded(false)
+        } else if (startIndex > 0) {
+          // Scroll up if we can
+          setScrollOffset((prev) => Math.min(prev + 1, Math.max(0, logs.length - maxLines)))
+        }
+      } else if (input === ']') {
+        // Move selection down (newer entries)
+        if (clampedSelectedIndex < visibleLogs.length - 1) {
+          setSelectedRelativeIndex(clampedSelectedIndex + 1)
+          setExpanded(false)
+        } else if (scrollOffset > 0) {
+          // Scroll down if we can
+          setScrollOffset((prev) => Math.max(prev - 1, 0))
+        }
+      } else if (input === 'e') {
+        // Toggle expansion of selected log
+        setExpanded((prev) => !prev)
       }
-    } else if (input === ']') {
-      // Move selection down (newer entries)
-      if (clampedSelectedIndex < visibleLogs.length - 1) {
-        setSelectedRelativeIndex(clampedSelectedIndex + 1)
-        setExpanded(false)
-      } else if (scrollOffset > 0) {
-        // Scroll down if we can
-        setScrollOffset((prev) => Math.max(prev - 1, 0))
-      }
-    } else if (input === 'e') {
-      // Toggle expansion of selected log
-      setExpanded((prev) => !prev)
-    }
-  })
+    },
+    { isActive },
+  )
 
   return (
     <Box

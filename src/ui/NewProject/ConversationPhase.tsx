@@ -38,6 +38,7 @@ type ConversationPhaseProps = {
   projectContext?: string
   onInputModeChange?: (typing: boolean) => void
   onAIStatusChange?: (status: AIStatusDescriptor) => void
+  onDebugHotkeysChange?: (enabled: boolean) => void
   onComplete: (
     extractedData: ExtractedProjectData,
     conversationLog: ConversationMessage[],
@@ -72,6 +73,7 @@ export function ConversationPhase({
   projectContext,
   onInputModeChange,
   onAIStatusChange,
+  onDebugHotkeysChange,
   onComplete,
   onCancel,
 }: ConversationPhaseProps) {
@@ -96,6 +98,14 @@ export function ConversationPhase({
     onInputModeChange?.(typing)
     return () => onInputModeChange?.(false)
   }, [typing, onInputModeChange])
+
+  // Only allow debug hotkeys (DebugLog nav) in menu mode
+  useEffect(() => {
+    onDebugHotkeysChange?.(
+      state.step === 'waiting_for_answer' && interactionMode === 'menu',
+    )
+    return () => onDebugHotkeysChange?.(false)
+  }, [interactionMode, onDebugHotkeysChange, state.step])
 
   // Reset browsing state when returning to text mode
   useEffect(() => {
@@ -478,18 +488,21 @@ export function ConversationPhase({
         if (key.escape) {
           setInteractionMode('menu')
           setMenuMessage(null)
+          onDebugHotkeysChange?.(true)
         }
         return
       }
 
       // Menu mode
       if (key.escape) {
+        onDebugHotkeysChange?.(false)
         onCancel()
         return
       }
 
       if (key.return) {
         setInteractionMode('text')
+        onDebugHotkeysChange?.(false)
         return
       }
 
