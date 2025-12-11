@@ -180,7 +180,7 @@ export async function generateSummary(
           content: `Project: ${context.projectName}
 One-liner: ${context.oneLiner}
 
-Interview transcript:
+Conversation transcript:
 ${conversationText}
 
 Summarize what we learned in a clear, bulleted format covering:
@@ -246,7 +246,7 @@ export async function extractProjectData(
 Project name: ${context.projectName}
 One-liner: ${context.oneLiner}
 
-Interview transcript:
+Conversation transcript:
 ${conversationText}
 
 Extract all relevant information. For fields not discussed, use reasonable defaults or leave optional fields empty. Be direct and factual.`,

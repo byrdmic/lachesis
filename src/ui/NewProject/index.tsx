@@ -8,7 +8,7 @@ import type {
   ConversationMessage,
   ExtractedProjectData,
 } from '../../ai/client.ts'
-import { InterviewPhase } from './InterviewPhase.tsx'
+import { ConversationPhase } from './ConversationPhase.tsx'
 import { FinalizePhase } from './FinalizePhase.tsx'
 import { StatusBar, SettingsPanel } from '../components/index.ts'
 import { updateConfig } from '../../config/config.ts'
@@ -24,13 +24,13 @@ type NewProjectFlowProps = {
 type FlowState =
   | { step: 'welcome' }
   | {
-      step: 'interview_choice'
+      step: 'conversation_choice'
       planningLevel: PlanningLevel
       projectName: string
       oneLiner: string
     }
   | {
-      step: 'interview'
+      step: 'conversation'
       planningLevel: PlanningLevel
       projectName: string
       oneLiner: string
@@ -85,10 +85,10 @@ export function NewProjectFlow({
       case 'welcome':
         setAIStatus({ state: 'idle', message: 'Ready' })
         break
-      case 'interview':
-        setAIStatus({ state: 'streaming', message: 'Preparing first planning question' })
+      case 'conversation':
+        setAIStatus({ state: 'streaming', message: 'Preparing first planning message' })
         break
-      case 'interview_choice':
+      case 'conversation_choice':
       case 'quick_capture':
         setAIStatus({ state: 'idle', message: 'Ready for planning' })
         break
@@ -137,17 +137,17 @@ export function NewProjectFlow({
   // Start AI check after welcome
   const handleStart = useCallback(() => {
     setState({
-      step: 'interview',
+      step: 'conversation',
       planningLevel: 'Not provided yet - ask during planning',
       projectName: '',
       oneLiner: '',
     })
   }, [])
 
-  // Handle interview choice
-  const handleInterviewChoice = useCallback(
-    (choice: 'interview' | 'quick_capture', currentState: FlowState) => {
-      if (currentState.step !== 'interview_choice') return
+  // Handle conversation mode choice
+  const handleConversationChoice = useCallback(
+    (choice: 'conversation' | 'quick_capture', currentState: FlowState) => {
+      if (currentState.step !== 'conversation_choice') return
 
       setState({
         step: choice,
@@ -159,8 +159,8 @@ export function NewProjectFlow({
     [],
   )
 
-  // Handle interview completion (AI conversation)
-  const handleInterviewComplete = useCallback(
+  // Handle conversation completion (AI planning chat)
+  const handleConversationComplete = useCallback(
     (
       extractedData: ExtractedProjectData,
       conversationLog: ConversationMessage[],
@@ -241,7 +241,7 @@ export function NewProjectFlow({
     )
   }
 
-  if (state.step === 'interview_choice') {
+  if (state.step === 'conversation_choice') {
     return (
       <Box flexDirection="column">
         <StatusBar
@@ -249,15 +249,15 @@ export function NewProjectFlow({
           aiStatus={aiStatus}
           showSettingsHint={settingsHotkeyEnabled}
         />
-        <InterviewChoiceScreen
+        <ConversationChoiceScreen
           projectName={state.projectName}
-          onChoice={(choice) => handleInterviewChoice(choice, state)}
+          onChoice={(choice) => handleConversationChoice(choice, state)}
         />
       </Box>
     )
   }
 
-  if (state.step === 'interview') {
+  if (state.step === 'conversation') {
     return (
       <Box flexDirection="column">
         <StatusBar
@@ -265,16 +265,17 @@ export function NewProjectFlow({
           aiStatus={aiStatus}
           showSettingsHint={settingsHotkeyEnabled}
         />
-        <InterviewPhase
+        <ConversationPhase
           config={config}
           planningLevel={state.planningLevel}
           projectName={state.projectName}
           oneLiner={state.oneLiner}
           debug={debug}
+          sessionKind="new"
           onInputModeChange={setInputLocked}
           onAIStatusChange={setAIStatus}
           onComplete={(extractedData, conversationLog) =>
-            handleInterviewComplete(
+            handleConversationComplete(
               extractedData,
               conversationLog,
               state.projectName,
@@ -462,18 +463,18 @@ export function AIConnectionCheck({
   )
 }
 
-function InterviewChoiceScreen({
+function ConversationChoiceScreen({
   projectName,
   onChoice,
 }: {
   projectName: string
-  onChoice: (choice: 'interview' | 'quick_capture') => void
+  onChoice: (choice: 'conversation' | 'quick_capture') => void
 }) {
   const [selected, setSelected] = useState(0)
   const options = [
     {
       label: 'AI-guided planning chat',
-      value: 'interview' as const,
+      value: 'conversation' as const,
       desc: 'Have a conversation to explore and plan your idea',
     },
     {

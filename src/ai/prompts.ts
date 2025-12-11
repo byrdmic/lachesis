@@ -4,6 +4,11 @@ import type { PlanningLevel } from '../core/project/types.ts'
 type CoachingPromptOptions = {
   collectSetupQuestions?: boolean
   mode?: 'planning' | 'building'
+  projectStage?: 'new' | 'existing'
+  /**
+   * Optional context for existing projects (notes, goals, changes, blockers).
+   */
+  existingContext?: string
 }
 
 /**
@@ -65,6 +70,8 @@ export function buildCoachingPrompt(
 ): string {
   const collectSetupQuestions = options.collectSetupQuestions ?? false
   const mode = options.mode ?? 'planning'
+  const projectStage = options.projectStage ?? 'new'
+  const existingContext = options.existingContext?.trim()
 
   const nameLine =
     projectName.trim() || 'Not provided yet — ask for a working name first.'
@@ -109,6 +116,15 @@ Secondary calibration (weave naturally, don't interrogate):
 
 Keep this opening phase conversational (1-3 turns). The goal is rapport and understanding, not a checklist.`
     : ''
+  const stageContext =
+    projectStage === 'existing'
+      ? `SESSION TYPE: EXISTING PROJECT.
+- Assume the project already exists. Do not re-ask setup questions unless a critical field is missing.
+- Focus on progress, unblocking, clarifying next moves, and organizing existing material.
+- Ask what changed since the last session and what success would look like for this session.
+${existingContext ? `Existing context or notes:\n${existingContext}\n` : ''}`
+      : `SESSION TYPE: NEW PROJECT.
+- We're shaping something new. Start by understanding what they need from this session, then progressively cover the core topics.`
   const topicsStatus =
     coveredTopics.length > 0
       ? `Topics already discussed: ${coveredTopics.join(', ')}`
@@ -126,6 +142,8 @@ PROJECT CONTEXT:
 ${modeContext}
 
 ${planningContext}
+
+${stageContext}
 
 PACE:
 ${paceGuidance}
@@ -155,8 +173,13 @@ YOUR APPROACH:
 5. Never answer your own questions or assume their response
 6. Never generate content for them unless they say "take the wheel" or similar
 7. If you ask anything optional, explicitly tell them it's fine to skip or say "I don't know" and offer to move on
-8. OPENING: For new projects, greet them properly (time-appropriate: "Good morning/afternoon/evening, sir"), acknowledge we're starting something new, then ask what they need from this session
+8. OPENING: ${
+    projectStage === 'existing'
+      ? 'Greet them (time-appropriate), acknowledge we are continuing an existing project, ask what changed or what they want from this session, and surface any known constraints or goals before moving on.'
+      : 'Greet them properly (time-appropriate: "Good morning/afternoon/evening, sir"), acknowledge we are starting something new, then ask what they need from this session.'
+  }
 9. When asking questions with multiple possible answers, offer examples of what those answers might look like—help them articulate their situation
+10. Keep responses concise so the user has space to reply quickly
 
 LANGUAGE RULES (STRICT):
 - Do NOT use these words: transform, journey, vision, crystallize, empower, leverage, synergy
@@ -178,8 +201,7 @@ SPECIAL TRIGGERS:
 - If they say "take the wheel", "write it for me", or "you decide": Generate a draft summary of everything discussed so far
 - If they seem stuck: Offer 2-3 concrete examples to choose from
 - If they want to wrap up early: Acknowledge and move to summarization
-
-For new projects: Greet them warmly, acknowledge we're starting something new, understand what they need from this session, then naturally move into the relevant topics based on their situation.`
+`
 }
 
 /**

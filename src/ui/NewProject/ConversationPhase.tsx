@@ -21,12 +21,21 @@ import { ConversationView } from '../components/ConversationView.tsx'
 import { debugLog } from '../../debug/logger.ts'
 import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 
-type InterviewPhaseProps = {
+type ConversationPhaseProps = {
   config: LachesisConfig
   planningLevel: PlanningLevel
   projectName: string
   oneLiner: string
   debug?: boolean
+  /**
+   * Marks whether we're starting something new or working on an existing project.
+   * Used to shape the prompt only—code path stays unified.
+   */
+  sessionKind?: 'new' | 'existing'
+  /**
+   * Optional contextual note (e.g., existing project summary, goals, blockers).
+   */
+  projectContext?: string
   onInputModeChange?: (typing: boolean) => void
   onAIStatusChange?: (status: AIStatusDescriptor) => void
   onComplete: (
@@ -36,7 +45,7 @@ type InterviewPhaseProps = {
   onCancel: () => void
 }
 
-type InterviewStep =
+type ConversationStep =
   | 'generating_question'
   | 'waiting_for_answer'
   | 'generating_summary'
@@ -44,8 +53,8 @@ type InterviewStep =
   | 'extracting_data'
   | 'error'
 
-type InterviewState = {
-  step: InterviewStep
+type ConversationState = {
+  step: ConversationStep
   messages: ConversationMessage[]
   coveredTopics: string[]
   summary: string | null
@@ -53,18 +62,20 @@ type InterviewState = {
   errorDetails: string | null
 }
 
-export function InterviewPhase({
+export function ConversationPhase({
   config,
   planningLevel,
   projectName,
   oneLiner,
   debug = false,
+  sessionKind = 'new',
+  projectContext,
   onInputModeChange,
   onAIStatusChange,
   onComplete,
   onCancel,
-}: InterviewPhaseProps) {
-  const [state, setState] = useState<InterviewState>({
+}: ConversationPhaseProps) {
+  const [state, setState] = useState<ConversationState>({
     step: 'generating_question',
     messages: [],
     coveredTopics: [],
@@ -147,7 +158,12 @@ export function InterviewPhase({
         effectiveOneLiner,
         planningLevel,
         context.coveredTopics,
-        { collectSetupQuestions: true, mode: 'planning' },
+        {
+          collectSetupQuestions: sessionKind === 'new',
+          mode: sessionKind === 'existing' ? 'building' : 'planning',
+          projectStage: sessionKind,
+          existingContext: sessionKind === 'existing' ? projectContext : undefined,
+        },
       )
 
       const streamId = new Date().toISOString()
@@ -185,6 +201,7 @@ export function InterviewPhase({
           ),
         }))
       } else {
+        console.error('Failed to generate question', { result: JSON.stringify(result) })
         debugLog.error('Failed to generate question', { result: JSON.stringify(result) })
         setState((s) => ({
           ...s,
@@ -200,6 +217,8 @@ export function InterviewPhase({
       effectiveOneLiner,
       effectiveProjectName,
       planningLevel,
+      projectContext,
+      sessionKind,
     ],
   )
 
@@ -266,7 +285,7 @@ export function InterviewPhase({
           }))
         } else {
           // Proceed without summary
-          await finishInterview(newMessages)
+          await finishConversation(newMessages)
         }
         return
       }
@@ -296,7 +315,7 @@ export function InterviewPhase({
   )
 
   const handleSummaryConfirm = useCallback(async () => {
-    await finishInterview(state.messages)
+    await finishConversation(state.messages)
   }, [state.messages])
 
   const handleSummaryRevise = useCallback(async () => {
@@ -315,7 +334,7 @@ export function InterviewPhase({
     }))
   }, [])
 
-  const finishInterview = async (messages: ConversationMessage[]) => {
+  const finishConversation = async (messages: ConversationMessage[]) => {
     setState((s) => ({ ...s, step: 'extracting_data' }))
 
     const context = {
