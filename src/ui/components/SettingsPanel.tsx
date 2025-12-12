@@ -6,6 +6,7 @@ import type { LachesisConfig, AIProvider } from '../../config/types.ts'
 
 type ProjectSettingsSummary = {
   projectName?: string
+  projectPath?: string
   settingsPath?: string
   found?: boolean
   overrides?: Partial<LachesisConfig>
@@ -17,23 +18,42 @@ type SettingsPanelProps = {
   config: LachesisConfig
   projectSettings?: ProjectSettingsSummary
   onSave: (updates: Partial<LachesisConfig>) => void
+  onSaveProject?: (updates: Partial<LachesisConfig>) => void
   onClose: () => void
 }
 
-type SettingsView = 'main' | 'provider' | 'model' | 'apikey' | 'vault'
+type SettingsView =
+  | 'main'
+  | 'provider'
+  | 'model'
+  | 'apikey'
+  | 'vault'
+  | 'project-provider'
+  | 'project-model'
+  | 'project-apikey'
 
 export function SettingsPanel({
   config,
   projectSettings,
   onSave,
+  onSaveProject,
   onClose,
 }: SettingsPanelProps) {
   const [view, setView] = useState<SettingsView>('main')
   const [tempModel, setTempModel] = useState(config.defaultModel)
   const [tempApiKeyVar, setTempApiKeyVar] = useState(config.apiKeyEnvVar)
   const [tempVaultPath, setTempVaultPath] = useState(config.vaultPath)
+
+  // Project-level temp values
+  const [tempProjectModel, setTempProjectModel] = useState(
+    projectSettings?.overrides?.defaultModel ?? '',
+  )
+  const [tempProjectApiKeyVar, setTempProjectApiKeyVar] = useState(
+    projectSettings?.overrides?.apiKeyEnvVar ?? '',
+  )
+
   const projectOverrides = projectSettings?.overrides ?? {}
-  const hasProjectOverrides = Object.keys(projectOverrides).length > 0
+  const hasProjectContext = Boolean(projectSettings?.projectPath)
 
   // Reset temp values when view changes
   useEffect(() => {
@@ -43,8 +63,19 @@ export function SettingsPanel({
       setTempApiKeyVar(config.apiKeyEnvVar)
     } else if (view === 'vault') {
       setTempVaultPath(config.vaultPath)
+    } else if (view === 'project-model') {
+      setTempProjectModel(projectOverrides.defaultModel ?? '')
+    } else if (view === 'project-apikey') {
+      setTempProjectApiKeyVar(projectOverrides.apiKeyEnvVar ?? '')
     }
-  }, [view, config.defaultModel, config.apiKeyEnvVar, config.vaultPath])
+  }, [
+    view,
+    config.defaultModel,
+    config.apiKeyEnvVar,
+    config.vaultPath,
+    projectOverrides.defaultModel,
+    projectOverrides.apiKeyEnvVar,
+  ])
 
   useInput((input, key) => {
     if (key.escape) {
@@ -56,6 +87,109 @@ export function SettingsPanel({
     }
   })
 
+  // Project provider selection view
+  if (view === 'project-provider') {
+    return (
+      <SettingsContainer title="Project AI Provider" onBack={() => setView('main')}>
+        <Select
+          label="Select AI provider for this project:"
+          options={[
+            { label: 'OpenAI', value: 'openai' },
+            { label: 'Anthropic', value: 'anthropic' },
+            { label: 'Vertex AI', value: 'vertex' },
+            { label: 'Other', value: 'other' },
+            { label: 'Use global default', value: '__clear__' },
+          ]}
+          onSelect={(value) => {
+            if (onSaveProject) {
+              if (value === '__clear__') {
+                // Remove the override by saving without this key
+                const newOverrides = { ...projectOverrides }
+                delete newOverrides.defaultProvider
+                onSaveProject(newOverrides)
+              } else {
+                onSaveProject({ ...projectOverrides, defaultProvider: value as AIProvider })
+              }
+            }
+            setView('main')
+          }}
+        />
+        <Box marginTop={1}>
+          <Text dimColor>
+            Global default: {config.defaultProvider}
+          </Text>
+        </Box>
+      </SettingsContainer>
+    )
+  }
+
+  // Project model input view
+  if (view === 'project-model') {
+    return (
+      <SettingsContainer title="Project Model" onBack={() => setView('main')}>
+        <TextInput
+          label="Enter model name for this project:"
+          value={tempProjectModel}
+          onChange={setTempProjectModel}
+          placeholder={config.defaultModel}
+          onSubmit={(value) => {
+            if (onSaveProject) {
+              const trimmed = value.trim()
+              if (trimmed) {
+                onSaveProject({ ...projectOverrides, defaultModel: trimmed })
+              } else {
+                // Clear the override
+                const newOverrides = { ...projectOverrides }
+                delete newOverrides.defaultModel
+                onSaveProject(newOverrides)
+              }
+            }
+            setView('main')
+          }}
+        />
+        <Box marginTop={1}>
+          <Text dimColor>
+            Leave empty to use global default: {config.defaultModel}
+          </Text>
+        </Box>
+      </SettingsContainer>
+    )
+  }
+
+  // Project API key env var input view
+  if (view === 'project-apikey') {
+    return (
+      <SettingsContainer title="Project API Key Env Var" onBack={() => setView('main')}>
+        <TextInput
+          label="Enter env variable name for this project:"
+          value={tempProjectApiKeyVar}
+          onChange={setTempProjectApiKeyVar}
+          placeholder={config.apiKeyEnvVar}
+          onSubmit={(value) => {
+            if (onSaveProject) {
+              const trimmed = value.trim()
+              if (trimmed) {
+                onSaveProject({ ...projectOverrides, apiKeyEnvVar: trimmed })
+              } else {
+                // Clear the override
+                const newOverrides = { ...projectOverrides }
+                delete newOverrides.apiKeyEnvVar
+                onSaveProject(newOverrides)
+              }
+            }
+            setView('main')
+          }}
+        />
+        <Box marginTop={1}>
+          <Text dimColor>
+            Leave empty to use global default: {config.apiKeyEnvVar}
+          </Text>
+        </Box>
+      </SettingsContainer>
+    )
+  }
+
+  // Global provider selection view
   if (view === 'provider') {
     return (
       <SettingsContainer title="Global AI Provider" onBack={() => setView('main')}>
@@ -79,6 +213,7 @@ export function SettingsPanel({
     )
   }
 
+  // Global model input view
   if (view === 'model') {
     return (
       <SettingsContainer title="Global Model" onBack={() => setView('main')}>
@@ -101,6 +236,7 @@ export function SettingsPanel({
     )
   }
 
+  // Global API key env var input view
   if (view === 'apikey') {
     return (
       <SettingsContainer
@@ -126,6 +262,7 @@ export function SettingsPanel({
     )
   }
 
+  // Global vault path input view
   if (view === 'vault') {
     return (
       <SettingsContainer title="Vault Path" onBack={() => setView('main')}>
@@ -151,25 +288,28 @@ export function SettingsPanel({
     )
   }
 
-  // Main settings view
-  return (
-    <SettingsContainer title="Settings" onBack={onClose}>
-      <SettingsSection
-        title="Global settings"
-        subtitle="Applies to all projects (stored in ~/.lachesis/config.json)"
+  // Main settings view - show EITHER Project Settings OR Global Settings
+  if (hasProjectContext) {
+    // Project Settings only
+    return (
+      <SettingsContainer
+        title={`Project Settings: ${projectSettings?.projectName || 'Project'}`}
+        onBack={onClose}
       >
         <Select
-          label="Choose a global setting to modify:"
+          label="Choose a setting to modify:"
           options={[
             {
-              label: `AI Provider: ${config.defaultProvider}`,
-              value: 'provider',
+              label: `AI Provider: ${projectOverrides.defaultProvider || `(${config.defaultProvider})`}`,
+              value: 'project-provider',
             },
-            { label: `Model: ${config.defaultModel}`, value: 'model' },
-            { label: `API Key Env: ${config.apiKeyEnvVar}`, value: 'apikey' },
             {
-              label: `Vault Path: ${config.vaultPath || 'Not set'}`,
-              value: 'vault',
+              label: `Model: ${projectOverrides.defaultModel || `(${config.defaultModel})`}`,
+              value: 'project-model',
+            },
+            {
+              label: `API Key Env: ${projectOverrides.apiKeyEnvVar || `(${config.apiKeyEnvVar})`}`,
+              value: 'project-apikey',
             },
             { label: 'Close settings', value: 'close' },
           ]}
@@ -181,57 +321,56 @@ export function SettingsPanel({
             }
           }}
         />
-
         <Box marginTop={1}>
           <Text dimColor>
-            Updates in this section change your global defaults for every project.
+            Values in parentheses show the global default. Set a value to override for this
+            project.
           </Text>
         </Box>
-      </SettingsSection>
+        {projectSettings?.warnings?.map((warning, idx) => (
+          <Text key={`project-settings-warning-${idx}`} color="yellow">
+            {warning}
+          </Text>
+        ))}
+        {projectSettings?.error && <Text color="red">{projectSettings.error}</Text>}
+        <Box marginTop={1}>
+          <Text dimColor>Press Esc to close</Text>
+        </Box>
+      </SettingsContainer>
+    )
+  }
 
-      <SettingsSection
-        title="Project settings"
-        subtitle="Overrides defined per project in Settings.json"
-      >
-        {projectSettings ? (
-          <>
-            {projectSettings.settingsPath && (
-              <Text dimColor>Path: {projectSettings.settingsPath}</Text>
-            )}
-            {projectSettings.error ? (
-              <Text color="red">{projectSettings.error}</Text>
-            ) : projectSettings.found ? (
-              hasProjectOverrides ? (
-                Object.entries(projectOverrides).map(([key, value]) => (
-                  <Text key={key}>
-                    {key}: {String(value)}
-                  </Text>
-                ))
-              ) : (
-                <Text dimColor>Settings.json found; no recognized overrides.</Text>
-              )
-            ) : (
-              <Text dimColor>No project settings loaded; using global defaults.</Text>
-            )}
-            {projectSettings.warnings?.map((warning, idx) => (
-              <Text key={`project-settings-warning-${idx}`} color="yellow">
-                {warning}
-              </Text>
-            ))}
-          </>
-        ) : (
-          <>
-            <Text dimColor>
-              Project settings live in a project-local Settings.json and can override
-              provider, model, or API key env var.
-            </Text>
-            <Text dimColor>
-              Open a project to view its overrides alongside the global settings.
-            </Text>
-          </>
-        )}
-      </SettingsSection>
-
+  // Global Settings only (no project loaded)
+  return (
+    <SettingsContainer title="Global Settings" onBack={onClose}>
+      <Select
+        label="Choose a setting to modify:"
+        options={[
+          {
+            label: `AI Provider: ${config.defaultProvider}`,
+            value: 'provider',
+          },
+          { label: `Model: ${config.defaultModel}`, value: 'model' },
+          { label: `API Key Env: ${config.apiKeyEnvVar}`, value: 'apikey' },
+          {
+            label: `Vault Path: ${config.vaultPath || 'Not set'}`,
+            value: 'vault',
+          },
+          { label: 'Close settings', value: 'close' },
+        ]}
+        onSelect={(value) => {
+          if (value === 'close') {
+            onClose()
+          } else {
+            setView(value as SettingsView)
+          }
+        }}
+      />
+      <Box marginTop={1}>
+        <Text dimColor>
+          These settings apply to all projects.
+        </Text>
+      </Box>
       <Box marginTop={1}>
         <Text dimColor>Press Esc to close</Text>
       </Box>
@@ -245,11 +384,7 @@ type SettingsContainerProps = {
   children: React.ReactNode
 }
 
-function SettingsContainer({
-  title,
-  onBack,
-  children,
-}: SettingsContainerProps) {
+function SettingsContainer({ title, onBack, children }: SettingsContainerProps) {
   return (
     <Box
       flexDirection="column"
@@ -268,20 +403,3 @@ function SettingsContainer({
   )
 }
 
-type SettingsSectionProps = {
-  title: string
-  subtitle?: string
-  children: React.ReactNode
-}
-
-function SettingsSection({ title, subtitle, children }: SettingsSectionProps) {
-  return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Text bold>{title}</Text>
-      {subtitle && <Text dimColor>{subtitle}</Text>}
-      <Box marginLeft={2} flexDirection="column">
-        {children}
-      </Box>
-    </Box>
-  )
-}

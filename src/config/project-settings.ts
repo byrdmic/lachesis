@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { join, dirname } from 'path'
 import type { AIProvider, LachesisConfig } from './types.ts'
 import { applyConfigUpgrades } from './config.ts'
 
@@ -106,6 +106,57 @@ export function loadProjectSettings(
       overrides: {},
       warnings: [],
       error: `Failed to read Settings.json: ${message}`,
+    }
+  }
+}
+
+export type SaveProjectSettingsResult = {
+  success: boolean
+  settingsPath: string
+  error?: string
+}
+
+/**
+ * Save project-scoped settings to Settings.json in a project directory.
+ * Only saves the allowed project-level settings (provider, model, apiKeyEnvVar).
+ */
+export function saveProjectSettings(
+  projectPath: string,
+  settings: Partial<LachesisConfig>,
+): SaveProjectSettingsResult {
+  const settingsPath = join(projectPath, SETTINGS_FILE_NAME)
+
+  // Filter to only allowed project-level settings
+  const projectSettings: Partial<LachesisConfig> = {}
+  if (settings.defaultProvider !== undefined) {
+    projectSettings.defaultProvider = settings.defaultProvider
+  }
+  if (settings.defaultModel !== undefined) {
+    projectSettings.defaultModel = settings.defaultModel
+  }
+  if (settings.apiKeyEnvVar !== undefined) {
+    projectSettings.apiKeyEnvVar = settings.apiKeyEnvVar
+  }
+
+  try {
+    // Ensure directory exists
+    const dir = dirname(settingsPath)
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+
+    writeFileSync(settingsPath, JSON.stringify(projectSettings, null, 2) + '\n', 'utf-8')
+
+    return {
+      success: true,
+      settingsPath,
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return {
+      success: false,
+      settingsPath,
+      error: `Failed to save Settings.json: ${message}`,
     }
   }
 }

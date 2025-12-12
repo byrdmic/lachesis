@@ -290,6 +290,7 @@ export function NewProjectFlow({
           onInputModeChange={setInputLocked}
           onAIStatusChange={setAIStatus}
           onDebugHotkeysChange={notifyDebugHotkeys}
+          onShowSettings={() => setShowSettings(true)}
           onComplete={(extractedData, conversationLog) =>
             handleConversationComplete(
               extractedData,

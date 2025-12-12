@@ -3,15 +3,21 @@ import { Box, Text, useApp, useInput } from 'ink'
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
 import type { LachesisConfig } from '../../config/types.ts'
-import { loadProjectSettings } from '../../config/project-settings.ts'
-import { StatusBar } from '../components/index.ts'
+import { loadProjectSettings, saveProjectSettings } from '../../config/project-settings.ts'
+import { updateConfig } from '../../config/config.ts'
+import { StatusBar, SettingsPanel } from '../components/index.ts'
 import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 import {
   buildProjectContext,
   serializeContextForPrompt,
 } from '../../core/project/context-builder.ts'
+import {
+  getConversationState,
+  saveConversationState,
+  clearConversationState,
+} from '../../core/conversation-store.ts'
 import type { ExtractedProjectData, ConversationMessage } from '../../ai/client.ts'
-import { ConversationPhase } from '../NewProject/ConversationPhase.tsx'
+import { ConversationPhase, type StoredConversationState } from '../NewProject/ConversationPhase.tsx'
 import { debugLog } from '../../debug/logger.ts'
 
 /**
@@ -46,18 +52,24 @@ type ViewState =
   | 'empty'
 
 export function ExistingProjectFlow({
-  config,
+  config: initialConfig,
   debug = false,
   onBack,
   onDebugHotkeysChange,
 }: ExistingProjectFlowProps) {
   const { exit } = useApp()
+  const [config, setConfig] = useState<LachesisConfig>(initialConfig)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [view, setView] = useState<ViewState>('list')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [projectConfig, setProjectConfig] = useState<LachesisConfig>(config)
+  const [showSettings, setShowSettings] = useState(false)
+  const [projectOverrides, setProjectOverrides] = useState<Partial<LachesisConfig>>({})
+
+  // Track the actually loaded project (not just selected in list)
+  const [loadedProject, setLoadedProject] = useState<ProjectSummary | null>(null)
 
   // AI status for status bar
   const [aiStatus, setAIStatus] = useState<AIStatusDescriptor>({
@@ -157,24 +169,24 @@ export function ExistingProjectFlow({
 
   const selectedProject = projects[selectedIndex] ?? null
 
+  // Load project settings when a project is loaded
   useEffect(() => {
-    if (
-      (view === 'loading_context' || view === 'conversation' || view === 'complete') &&
-      selectedProject
-    ) {
-      const result = loadProjectSettings(config, selectedProject.path)
+    if (loadedProject) {
+      const result = loadProjectSettings(config, loadedProject.path)
       setProjectConfig(result.config)
+      setProjectOverrides(result.overrides)
       return
     }
 
     setProjectConfig(config)
-  }, [config, selectedProject?.path, view])
+    setProjectOverrides({})
+  }, [config, loadedProject?.path])
 
   // Effect to build project context when entering loading_context
   useEffect(() => {
-    if (view !== 'loading_context' || !selectedProject) return
+    if (view !== 'loading_context' || !loadedProject) return
 
-    const project = selectedProject
+    const project = loadedProject
     let cancelled = false
 
     async function loadContext() {
@@ -239,7 +251,7 @@ export function ExistingProjectFlow({
     return () => {
       cancelled = true
     }
-  }, [view, selectedProject?.path])
+  }, [view, loadedProject?.path])
 
   // Handle conversation completion
   const handleConversationComplete = useCallback(
@@ -251,14 +263,19 @@ export function ExistingProjectFlow({
         extractedDataKeys: Object.keys(extractedData),
         messageCount: conversationLog.length,
       })
+      // Clear stored conversation state on completion
+      if (loadedProject) {
+        clearConversationState(loadedProject.path)
+      }
       // TODO: Could update project files with new insights here
       setView('complete')
     },
-    [],
+    [loadedProject],
   )
 
   // Handle cancellation from conversation
   const handleCancel = useCallback(() => {
+    setLoadedProject(null)
     if (onBack) {
       onBack()
       return
@@ -266,9 +283,46 @@ export function ExistingProjectFlow({
     setView('list')
   }, [onBack])
 
+  // Handle global settings save
+  const handleSettingsSave = useCallback(
+    (updates: Partial<LachesisConfig>) => {
+      const newConfig = { ...config, ...updates }
+      setConfig(newConfig)
+      updateConfig(updates)
+      // Reload project config to merge with new global settings
+      if (loadedProject) {
+        const result = loadProjectSettings(newConfig, loadedProject.path)
+        setProjectConfig(result.config)
+      }
+    },
+    [config, loadedProject],
+  )
+
+  // Handle project settings save
+  const handleProjectSettingsSave = useCallback(
+    (updates: Partial<LachesisConfig>) => {
+      if (!loadedProject) return
+
+      const result = saveProjectSettings(loadedProject.path, updates)
+      if (result.success) {
+        setProjectOverrides(updates)
+        // Reload merged config
+        const loadResult = loadProjectSettings(config, loadedProject.path)
+        setProjectConfig(loadResult.config)
+      }
+    },
+    [config, loadedProject],
+  )
+
   useInput(
     (input, key) => {
       const lower = input.toLowerCase()
+
+      // Handle settings hotkey - only when a project is actually loaded
+      if (lower === 's' && !showSettings && loadedProject) {
+        setShowSettings(true)
+        return
+      }
 
       if (view === 'list') {
         if (key.escape && onBack) {
@@ -283,8 +337,9 @@ export function ExistingProjectFlow({
             Math.min(Math.max(projects.length - 1, 0), idx + 1),
           )
         }
-        if (key.return && projects.length > 0) {
-          // Start loading project context
+        if (key.return && projects.length > 0 && selectedProject) {
+          // Load the selected project
+          setLoadedProject(selectedProject)
           setSerializedContext(null)
           setView('loading_context')
         }
@@ -295,12 +350,15 @@ export function ExistingProjectFlow({
           exit()
         }
       } else if (view === 'loading_context') {
-        // Allow cancellation with Escape
+        // Allow cancellation with Escape - clear loaded project
         if (key.escape || lower === 'b') {
+          setLoadedProject(null)
           setView('list')
         }
       } else if (view === 'complete') {
         if (lower === 'b') {
+          // Going back to list clears loaded project
+          setLoadedProject(null)
           setView('list')
           return
         }
@@ -316,22 +374,13 @@ export function ExistingProjectFlow({
       }
       // Note: 'conversation' view is handled by ConversationPhase
     },
-    { isActive: !loading && !inputLocked && view !== 'conversation' },
+    { isActive: !inputLocked && view !== 'conversation' && !showSettings },
   )
 
-  const statusConfig =
-    view === 'loading_context' || view === 'conversation' || view === 'complete'
-      ? projectConfig
-      : config
+  const statusConfig = loadedProject ? projectConfig : config
 
   // Determine if we should show project name in status bar
-  const showProjectInStatusBar =
-    view === 'loading_context' ||
-    view === 'conversation' ||
-    view === 'complete'
-  const statusBarProjectName = showProjectInStatusBar
-    ? selectedProject?.name
-    : undefined
+  const statusBarProjectName = loadedProject?.name
 
   const renderWithStatusBar = (content: React.ReactNode) => (
     <Box flexDirection="column" width="100%">
@@ -374,6 +423,29 @@ export function ExistingProjectFlow({
     0,
   )
 
+  // Show settings panel overlay - only with project context if a project is loaded
+  if (showSettings) {
+    return (
+      <SettingsPanel
+        config={config}
+        projectSettings={
+          loadedProject
+            ? {
+                projectName: loadedProject.name,
+                projectPath: loadedProject.path,
+                settingsPath: join(loadedProject.path, 'Settings.json'),
+                found: Object.keys(projectOverrides).length > 0,
+                overrides: projectOverrides,
+              }
+            : undefined
+        }
+        onSave={handleSettingsSave}
+        onSaveProject={loadedProject ? handleProjectSettingsSave : undefined}
+        onClose={() => setShowSettings(false)}
+      />
+    )
+  }
+
   if (loading) {
     return (
       renderWithStatusBar(
@@ -400,7 +472,7 @@ export function ExistingProjectFlow({
     )
   }
 
-  if (view === 'loading_context' && selectedProject) {
+  if (view === 'loading_context' && loadedProject) {
     const steps: LoadingStep[] = ['scanning', 'analyzing']
     const currentStepIndex = steps.indexOf(loadingStep)
 
@@ -445,20 +517,33 @@ export function ExistingProjectFlow({
     )
   }
 
-  if (view === 'conversation' && selectedProject && serializedContext) {
+  if (view === 'conversation' && loadedProject && serializedContext) {
+    // Get any stored conversation state for this project
+    const storedState = getConversationState(loadedProject.path)
+
     return (
       renderWithStatusBar(
         <ConversationPhase
           config={projectConfig}
           planningLevel="Existing project"
-          projectName={selectedProject.name}
-          oneLiner={selectedProject.overview?.split('\n')[0] || 'Existing project'}
+          projectName={loadedProject.name}
+          oneLiner={loadedProject.overview?.split('\n')[0] || 'Existing project'}
           debug={debug}
           sessionKind="existing"
           projectContext={serializedContext}
+          initialState={storedState ?? undefined}
           onInputModeChange={setInputLocked}
           onAIStatusChange={setAIStatus}
           onDebugHotkeysChange={notifyDebugHotkeys}
+          onShowSettings={() => setShowSettings(true)}
+          onStateChange={(state: StoredConversationState) => {
+            // Save conversation state for persistence across settings/menu
+            saveConversationState(loadedProject.path, state)
+          }}
+          onClearConversation={() => {
+            // Clear stored state when user requests restart
+            clearConversationState(loadedProject.path)
+          }}
           onComplete={handleConversationComplete}
           onCancel={handleCancel}
         />,
@@ -466,18 +551,18 @@ export function ExistingProjectFlow({
     )
   }
 
-  if (view === 'complete' && selectedProject) {
+  if (view === 'complete' && loadedProject) {
     return (
       renderWithStatusBar(
         <Box padding={1} flexDirection="column">
           <Text color="green" bold>
             Session complete
           </Text>
-          <Text>{selectedProject.name}</Text>
-          <Text color="cyan">{selectedProject.path}</Text>
+          <Text>{loadedProject.name}</Text>
+          <Text color="cyan">{loadedProject.path}</Text>
           <Text>{'\n'}</Text>
           <Text dimColor>
-            Press [B] to go back to project list, or [Q] to quit.
+            Press [S] settings, [B] to go back to project list, or [Q] to quit.
           </Text>
         </Box>,
       )
@@ -490,7 +575,7 @@ export function ExistingProjectFlow({
       <Box padding={1} flexDirection="column" flexGrow={1}>
         <Text bold>Select an existing project</Text>
         <Text dimColor>
-          Use ↑/↓ to navigate, Enter to view, [B] back, [Q] quit.
+          Use ↑/↓ to navigate, Enter to load, [B] back, [Q] quit.
         </Text>
         <Text dimColor>
           Vault: {config.vaultPath || 'Not set - update in settings'}

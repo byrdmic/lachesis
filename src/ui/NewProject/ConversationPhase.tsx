@@ -21,6 +21,26 @@ import { ConversationView } from '../components/ConversationView.tsx'
 import { debugLog } from '../../debug/logger.ts'
 import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 
+export type ConversationStep =
+  | 'generating_question'
+  | 'waiting_for_answer'
+  | 'generating_summary'
+  | 'showing_summary'
+  | 'extracting_data'
+  | 'error'
+
+export type StoredConversationState = {
+  messages: ConversationMessage[]
+  coveredTopics: string[]
+  step: ConversationStep
+  summary: string | null
+}
+
+type ConversationState = StoredConversationState & {
+  error: string | null
+  errorDetails: string | null
+}
+
 type ConversationPhaseProps = {
   config: LachesisConfig
   planningLevel: PlanningLevel
@@ -36,31 +56,27 @@ type ConversationPhaseProps = {
    * Optional contextual note (e.g., existing project summary, goals, blockers).
    */
   projectContext?: string
+  /**
+   * Initial conversation state to restore (for resuming after settings, etc.)
+   */
+  initialState?: StoredConversationState
   onInputModeChange?: (typing: boolean) => void
   onAIStatusChange?: (status: AIStatusDescriptor) => void
   onDebugHotkeysChange?: (enabled: boolean) => void
+  onShowSettings?: () => void
+  /**
+   * Called whenever conversation state changes, for persistence
+   */
+  onStateChange?: (state: StoredConversationState) => void
+  /**
+   * Called when user requests to clear/restart the conversation
+   */
+  onClearConversation?: () => void
   onComplete: (
     extractedData: ExtractedProjectData,
     conversationLog: ConversationMessage[],
   ) => void
   onCancel: () => void
-}
-
-type ConversationStep =
-  | 'generating_question'
-  | 'waiting_for_answer'
-  | 'generating_summary'
-  | 'showing_summary'
-  | 'extracting_data'
-  | 'error'
-
-type ConversationState = {
-  step: ConversationStep
-  messages: ConversationMessage[]
-  coveredTopics: string[]
-  summary: string | null
-  error: string | null
-  errorDetails: string | null
 }
 
 export function ConversationPhase({
@@ -71,26 +87,58 @@ export function ConversationPhase({
   debug = false,
   sessionKind = 'new',
   projectContext,
+  initialState,
   onInputModeChange,
   onAIStatusChange,
   onDebugHotkeysChange,
+  onShowSettings,
+  onStateChange,
+  onClearConversation,
   onComplete,
   onCancel,
 }: ConversationPhaseProps) {
-  const [state, setState] = useState<ConversationState>({
-    step: 'generating_question',
-    messages: [],
-    coveredTopics: [],
-    summary: null,
-    error: null,
-    errorDetails: null,
+  // Initialize from stored state if provided, otherwise start fresh
+  const [state, setState] = useState<ConversationState>(() => {
+    if (initialState && initialState.messages.length > 0) {
+      return {
+        ...initialState,
+        error: null,
+        errorDetails: null,
+      }
+    }
+    return {
+      step: 'generating_question',
+      messages: [],
+      coveredTopics: [],
+      summary: null,
+      error: null,
+      errorDetails: null,
+    }
   })
+
+  // Track if we restored from initial state (to skip first question generation)
+  const [restoredFromState] = useState(() => Boolean(initialState && initialState.messages.length > 0))
+
+  // Menu mode: when true, text input is paused and menu hotkeys are active
+  const [menuMode, setMenuMode] = useState(false)
+
+  // Notify parent of state changes for persistence
+  useEffect(() => {
+    if (onStateChange) {
+      onStateChange({
+        messages: state.messages,
+        coveredTopics: state.coveredTopics,
+        step: state.step,
+        summary: state.summary,
+      })
+    }
+  }, [state.messages, state.coveredTopics, state.step, state.summary, onStateChange])
 
   const effectiveProjectName = projectName.trim() || 'Untitled Project'
   const effectiveOneLiner = oneLiner.trim() || 'Not provided yet'
 
-  // Notify parent about input mode
-  const typing = state.step === 'waiting_for_answer'
+  // Notify parent about input mode (typing = text input is active)
+  const typing = state.step === 'waiting_for_answer' && !menuMode
   useEffect(() => {
     onInputModeChange?.(typing)
     return () => onInputModeChange?.(false)
@@ -149,10 +197,12 @@ export function ConversationPhase({
     }
   }, [onAIStatusChange, state.error, state.step])
 
-  // Generate first question on mount
+  // Generate first question on mount (skip if restored from state)
   useEffect(() => {
-    generateFirstQuestion()
-  }, [])
+    if (!restoredFromState) {
+      generateFirstQuestion()
+    }
+  }, [restoredFromState])
 
   const streamQuestion = useCallback(
     async (context: {
@@ -440,11 +490,56 @@ export function ConversationPhase({
     generateFirstQuestion()
   }, [])
 
-  // Handle escape to cancel
+  // Handle clearing conversation and restarting
+  const handleClearConversation = useCallback(() => {
+    if (onClearConversation) {
+      onClearConversation()
+    }
+    // Reset state and regenerate first question
+    setState({
+      step: 'generating_question',
+      messages: [],
+      coveredTopics: [],
+      summary: null,
+      error: null,
+      errorDetails: null,
+    })
+    setMenuMode(false)
+    // Trigger new first question
+    setTimeout(() => generateFirstQuestion(), 0)
+  }, [onClearConversation])
+
+  // Handle menu mode toggle and menu hotkeys
   useInput(
     (input, key) => {
-      if (key.escape) {
-        onCancel()
+      const lower = input.toLowerCase()
+
+      if (menuMode) {
+        // In menu mode: handle menu hotkeys
+        if (key.escape || key.return) {
+          // Return to chat mode
+          setMenuMode(false)
+          return
+        }
+        if (lower === 's' && onShowSettings) {
+          onShowSettings()
+          return
+        }
+        if (lower === 'c') {
+          // Clear/restart conversation
+          handleClearConversation()
+          return
+        }
+        if (lower === 'b') {
+          onCancel()
+          return
+        }
+      } else {
+        // In chat mode: ESC toggles to menu mode
+        if (key.escape) {
+          setMenuMode(true)
+          return
+        }
       }
     },
     { isActive: true },
@@ -522,9 +617,18 @@ export function ConversationPhase({
     <Box flexDirection="column" paddingX={1}>
       <ConversationView messages={state.messages} />
       <Box flexDirection="column" marginTop={1}>
-        <ChatInput onSubmit={handleUserAnswer} />
+        <ChatInput onSubmit={handleUserAnswer} focus={!menuMode} />
         <Box marginTop={1}>
-          <Text dimColor>[ESC] cancel</Text>
+          {menuMode ? (
+            <Box flexDirection="column">
+              <Text color="cyan" bold>Menu</Text>
+              <Text dimColor>
+                {onShowSettings ? '[S] Settings  ' : ''}[C] Clear chat  [B] Back  [ESC/Enter] Resume
+              </Text>
+            </Box>
+          ) : (
+            <Text dimColor>[ESC] Menu</Text>
+          )}
         </Box>
       </Box>
     </Box>
@@ -537,8 +641,10 @@ export function ConversationPhase({
 
 function ChatInput({
   onSubmit,
+  focus = true,
 }: {
   onSubmit: (value: string) => void
+  focus?: boolean
 }) {
   const [value, setValue] = useState('')
 
@@ -558,7 +664,7 @@ function ChatInput({
         onChange={setValue}
         onSubmit={handleSubmit}
         placeholder="Type your response..."
-        focus={true}
+        focus={focus}
       />
     </Box>
   )
