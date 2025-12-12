@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import {
   type LachesisConfig,
   DEFAULT_CONFIG,
+  DEFAULT_MCP_CONFIG,
   OPENAI_MODELS,
 } from './types.ts'
 import {
@@ -24,6 +25,38 @@ export function applyConfigUpgrades(config: LachesisConfig): {
   if (next.defaultProvider === 'openai') {
     if (!openaiModelSet.has(next.defaultModel)) {
       next = { ...next, defaultModel: DEFAULT_CONFIG.defaultModel }
+      updated = true
+    }
+  }
+
+  // Add MCP config if missing (for existing users upgrading)
+  if (next.mcp === undefined) {
+    // Don't auto-enable MCP for existing users - just add the config structure
+    next = { ...next, mcp: DEFAULT_MCP_CONFIG }
+    updated = true
+  }
+
+  // Validate MCP config structure if present
+  if (next.mcp) {
+    let mcpUpdated = false
+    const mcp = { ...next.mcp }
+
+    // Ensure all required fields exist
+    if (!mcp.obsidian) {
+      mcp.obsidian = DEFAULT_MCP_CONFIG.obsidian
+      mcpUpdated = true
+    }
+    if (mcp.writeMode === undefined) {
+      mcp.writeMode = DEFAULT_MCP_CONFIG.writeMode
+      mcpUpdated = true
+    }
+    if (mcp.scopeWritesToProject === undefined) {
+      mcp.scopeWritesToProject = DEFAULT_MCP_CONFIG.scopeWritesToProject
+      mcpUpdated = true
+    }
+
+    if (mcpUpdated) {
+      next = { ...next, mcp }
       updated = true
     }
   }

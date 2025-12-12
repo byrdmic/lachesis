@@ -8,7 +8,11 @@
       "Bash(timeout 3 bun run:*)",
       "Bash(cat:*)",
       "Bash(tree:*)",
-      "Bash(bun add:*)"
+      "Bash(bun add:*)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "WebFetch(domain:blog.marcnuri.com)",
+      "WebFetch(domain:ai-sdk.dev)"
     ],
     "deny": [],
     "ask": []

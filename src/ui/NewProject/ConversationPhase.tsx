@@ -12,10 +12,13 @@ import {
   extractProjectData,
   shouldContinueConversation,
   streamNextQuestion,
+  runAgenticConversation,
 } from '../../ai/client.ts'
 import {
   buildCoachingPrompt,
+  buildProjectQAPrompt,
 } from '../../ai/prompts.ts'
+import { getMCPToolNames } from '../../mcp/index.ts'
 import { TextInput } from '../components/TextInput.tsx'
 import { ConversationView } from '../components/ConversationView.tsx'
 import { debugLog } from '../../debug/logger.ts'
@@ -60,6 +63,14 @@ type ConversationPhaseProps = {
    * Initial conversation state to restore (for resuming after settings, etc.)
    */
   initialState?: StoredConversationState
+  /**
+   * Whether MCP is enabled and connected (enables agentic mode with tool-calling)
+   */
+  mcpEnabled?: boolean
+  /**
+   * Project path for MCP scoped operations (required when mcpEnabled is true)
+   */
+  projectPath?: string
   onInputModeChange?: (typing: boolean) => void
   onAIStatusChange?: (status: AIStatusDescriptor) => void
   onDebugHotkeysChange?: (enabled: boolean) => void
@@ -88,6 +99,8 @@ export function ConversationPhase({
   sessionKind = 'new',
   projectContext,
   initialState,
+  mcpEnabled = false,
+  projectPath,
   onInputModeChange,
   onAIStatusChange,
   onDebugHotkeysChange,
@@ -394,19 +407,76 @@ export function ConversationPhase({
         return
       }
 
-      // Generate next question (streaming)
-      await streamQuestion(context)
+      // Generate next response - use agentic mode with MCP tools if enabled
+      if (mcpEnabled && projectPath) {
+        // Use agentic conversation with MCP tools
+        debugLog.info('Conversation: using agentic mode with MCP tools', {
+          projectPath,
+        })
 
-      // Try to detect topic from question (simple heuristic) using latest assistant message
-      setState((s) => {
-        const lastAssistant = [...s.messages].reverse().find((m) => m.role === 'assistant')
-        const finalContent = lastAssistant?.content ?? ''
-        const newTopics = detectTopics(finalContent, s.coveredTopics)
-        return {
-          ...s,
-          coveredTopics: newTopics,
+        const toolNames = getMCPToolNames()
+        const qaPrompt = buildProjectQAPrompt(
+          projectContext ?? '',
+          toolNames,
+          new Date().getHours(),
+        )
+
+        const result = await runAgenticConversation(config, {
+          systemPrompt: qaPrompt,
+          messages: newMessages,
+          projectPath,
+          maxToolCalls: 10,
+          onToolCall: (toolName, args) => {
+            debugLog.info('Conversation: MCP tool called', { toolName, args })
+          },
+          onToolResult: (toolName, result) => {
+            debugLog.info('Conversation: MCP tool result', { toolName, result })
+          },
+        })
+
+        if (result.success && result.response) {
+          const assistantMessage: ConversationMessage = {
+            role: 'assistant',
+            content: result.response,
+            timestamp: new Date().toISOString(),
+          }
+
+          setState((s) => ({
+            ...s,
+            step: 'waiting_for_answer',
+            messages: [...s.messages, assistantMessage],
+          }))
+
+          debugLog.info('Conversation: agentic response received', {
+            responseLength: result.response.length,
+            toolCallCount: result.toolCalls?.length ?? 0,
+          })
+        } else {
+          debugLog.error('Conversation: agentic mode failed', {
+            error: result.error,
+          })
+          setState((s) => ({
+            ...s,
+            step: 'error',
+            error: result.error || 'Failed to generate response',
+            errorDetails: debug ? result.debugDetails || null : null,
+          }))
         }
-      })
+      } else {
+        // Use streaming mode (non-MCP)
+        await streamQuestion(context)
+
+        // Try to detect topic from question (simple heuristic) using latest assistant message
+        setState((s) => {
+          const lastAssistant = [...s.messages].reverse().find((m) => m.role === 'assistant')
+          const finalContent = lastAssistant?.content ?? ''
+          const newTopics = detectTopics(finalContent, s.coveredTopics)
+          return {
+            ...s,
+            coveredTopics: newTopics,
+          }
+        })
+      }
     },
     [
       state.messages,
@@ -415,6 +485,10 @@ export function ConversationPhase({
       planningLevel,
       projectName,
       oneLiner,
+      mcpEnabled,
+      projectPath,
+      projectContext,
+      debug,
     ],
   )
 

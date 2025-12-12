@@ -6,7 +6,7 @@ import type { LachesisConfig } from '../../config/types.ts'
 import { loadProjectSettings, saveProjectSettings } from '../../config/project-settings.ts'
 import { updateConfig } from '../../config/config.ts'
 import { StatusBar, SettingsPanel } from '../components/index.ts'
-import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
+import type { AIStatusDescriptor, MCPStatusDescriptor } from '../components/StatusBar.tsx'
 import {
   buildProjectContext,
   serializeContextForPrompt,
@@ -19,6 +19,12 @@ import {
 import type { ExtractedProjectData, ConversationMessage } from '../../ai/client.ts'
 import { ConversationPhase, type StoredConversationState } from '../NewProject/ConversationPhase.tsx'
 import { debugLog } from '../../debug/logger.ts'
+import {
+  initializeMCPClient,
+  closeMCPClient,
+  isMCPConnected,
+  getMCPToolNames,
+} from '../../mcp/index.ts'
 
 /**
  * Loading progress steps for project context building
@@ -77,6 +83,11 @@ export function ExistingProjectFlow({
     message: 'Ready',
   })
   const [inputLocked, setInputLocked] = useState(false)
+
+  // MCP status for status bar
+  const [mcpStatus, setMCPStatus] = useState<MCPStatusDescriptor>({
+    state: 'idle',
+  })
 
   // Context loading state
   const [serializedContext, setSerializedContext] = useState<string | null>(null)
@@ -253,6 +264,66 @@ export function ExistingProjectFlow({
     }
   }, [view, loadedProject?.path])
 
+  // Effect to initialize MCP client when entering conversation view
+  useEffect(() => {
+    if (view !== 'conversation' || !loadedProject || !projectConfig.mcp?.enabled) {
+      // MCP not needed or not enabled
+      setMCPStatus({ state: 'idle' })
+      return
+    }
+
+    let cancelled = false
+
+    async function connectMCP() {
+      setMCPStatus({ state: 'connecting' })
+      debugLog.info('MCP: Initiating connection for project', {
+        projectName: loadedProject!.name,
+        host: projectConfig.mcp?.obsidian.host,
+        port: projectConfig.mcp?.obsidian.port,
+      })
+
+      try {
+        const result = await initializeMCPClient(projectConfig.mcp!)
+
+        if (cancelled) return
+
+        if (result.connected) {
+          setMCPStatus({
+            state: 'connected',
+            toolCount: result.toolNames.length,
+          })
+          debugLog.info('MCP: Connected successfully', {
+            toolCount: result.toolNames.length,
+            tools: result.toolNames,
+          })
+        } else {
+          setMCPStatus({
+            state: 'error',
+            error: result.error,
+          })
+          debugLog.warn('MCP: Connection failed', { error: result.error })
+        }
+      } catch (err) {
+        if (cancelled) return
+        const message = err instanceof Error ? err.message : String(err)
+        setMCPStatus({ state: 'error', error: message })
+        debugLog.error('MCP: Exception during connection', { error: message })
+      }
+    }
+
+    connectMCP()
+
+    return () => {
+      cancelled = true
+      // Close MCP client on cleanup
+      closeMCPClient().catch((err) => {
+        debugLog.warn('MCP: Error closing client on cleanup', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+    }
+  }, [view, loadedProject?.path, projectConfig.mcp?.enabled])
+
   // Handle conversation completion
   const handleConversationComplete = useCallback(
     (
@@ -392,6 +463,7 @@ export function ExistingProjectFlow({
       <StatusBar
         config={statusConfig}
         aiStatus={aiStatus}
+        mcpStatus={mcpStatus}
         showSettingsHint={false}
         projectName={statusBarProjectName}
       />
@@ -521,6 +593,9 @@ export function ExistingProjectFlow({
     // Get any stored conversation state for this project
     const storedState = getConversationState(loadedProject.path)
 
+    // Check if MCP is enabled and connected
+    const mcpEnabled = mcpStatus.state === 'connected'
+
     return (
       renderWithStatusBar(
         <ConversationPhase
@@ -532,6 +607,8 @@ export function ExistingProjectFlow({
           sessionKind="existing"
           projectContext={serializedContext}
           initialState={storedState ?? undefined}
+          mcpEnabled={mcpEnabled}
+          projectPath={loadedProject.path}
           onInputModeChange={setInputLocked}
           onAIStatusChange={setAIStatus}
           onDebugHotkeysChange={notifyDebugHotkeys}

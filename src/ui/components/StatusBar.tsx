@@ -17,9 +17,18 @@ export type AIStatusDescriptor = {
   message?: string
 }
 
+export type MCPStatusState = 'idle' | 'connecting' | 'connected' | 'error'
+
+export type MCPStatusDescriptor = {
+  state: MCPStatusState
+  toolCount?: number
+  error?: string
+}
+
 type StatusBarProps = {
   config: LachesisConfig
   aiStatus?: AIStatusDescriptor
+  mcpStatus?: MCPStatusDescriptor
   onSettingsPress?: () => void
   showSettingsHint?: boolean
   /** Currently loaded project name */
@@ -77,6 +86,7 @@ function formatProviderLabel(provider: AIProvider): string {
 export function StatusBar({
   config,
   aiStatus = DEFAULT_STATUS,
+  mcpStatus,
   onSettingsPress,
   showSettingsHint = true,
   projectName,
@@ -86,6 +96,27 @@ export function StatusBar({
   const providerLabel = formatProviderLabel(config.defaultProvider)
   const modelLabel = config.defaultModel || 'Not set'
   const showSpinner = Boolean(status.spin)
+
+  // Format MCP status display
+  const getMCPDisplay = () => {
+    if (!mcpStatus || mcpStatus.state === 'idle') {
+      return null
+    }
+
+    switch (mcpStatus.state) {
+      case 'connecting':
+        return { icon: '⟳', color: 'cyan', text: 'Connecting...', spin: true }
+      case 'connected':
+        const tools = mcpStatus.toolCount ?? 0
+        return { icon: '●', color: 'green', text: `Connected (${tools} tools)`, spin: false }
+      case 'error':
+        return { icon: '✖', color: 'red', text: mcpStatus.error || 'Error', spin: false }
+      default:
+        return null
+    }
+  }
+
+  const mcpDisplay = getMCPDisplay()
 
   return (
     <Box
@@ -124,6 +155,22 @@ export function StatusBar({
             )}
           </Text>
         </Box>
+        {mcpDisplay && (
+          <Box>
+            <Text dimColor>MCP: </Text>
+            <Text color={mcpDisplay.color}>
+              {mcpDisplay.spin ? (
+                <>
+                  <Spinner type="dots" /> {mcpDisplay.text}
+                </>
+              ) : (
+                <>
+                  {mcpDisplay.icon} {mcpDisplay.text}
+                </>
+              )}
+            </Text>
+          </Box>
+        )}
         <Box>
           <Text dimColor>Vault: </Text>
           <Text color="cyan">{config.vaultPath || 'Not set'}</Text>

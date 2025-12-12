@@ -2,12 +2,39 @@
 
 export type AIProvider = 'anthropic' | 'openai' | 'vertex' | 'other'
 
+// MCP (Model Context Protocol) configuration
+export type MCPWriteMode = 'confirm' | 'auto' | 'disabled'
+
+export type MCPConfig = {
+  enabled: boolean
+  obsidian: {
+    apiKeyEnvVar: string // Env var name for Obsidian REST API key
+    host: string // Obsidian REST API host (Windows IP from WSL)
+    port: number // Default: 27124
+  }
+  writeMode: MCPWriteMode
+  scopeWritesToProject: boolean // Restrict writes to active project folder
+}
+
+export const DEFAULT_MCP_CONFIG: MCPConfig = {
+  enabled: false,
+  obsidian: {
+    apiKeyEnvVar: 'OBSIDIAN_API_KEY',
+    host: '127.0.0.1',
+    port: 27124,
+  },
+  writeMode: 'auto',
+  scopeWritesToProject: true,
+}
+
 export type LachesisConfig = {
   vaultPath: string // Base Obsidian projects path
   // AI configuration
   defaultProvider: AIProvider
   defaultModel: string
   apiKeyEnvVar: string
+  // MCP configuration (optional, disabled by default)
+  mcp?: MCPConfig
 }
 
 export const DEFAULT_CONFIG: LachesisConfig = {

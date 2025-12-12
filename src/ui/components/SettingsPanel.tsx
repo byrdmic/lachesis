@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { Select } from './Select.tsx'
 import { TextInput } from './TextInput.tsx'
-import type { LachesisConfig, AIProvider } from '../../config/types.ts'
+import type { LachesisConfig, AIProvider, MCPWriteMode } from '../../config/types.ts'
+import { DEFAULT_MCP_CONFIG } from '../../config/types.ts'
 
 type ProjectSettingsSummary = {
   projectName?: string
@@ -28,6 +29,11 @@ type SettingsView =
   | 'model'
   | 'apikey'
   | 'vault'
+  | 'mcp'
+  | 'mcp-host'
+  | 'mcp-port'
+  | 'mcp-apikey'
+  | 'mcp-writemode'
   | 'project-provider'
   | 'project-model'
   | 'project-apikey'
@@ -51,6 +57,12 @@ export function SettingsPanel({
   const [tempProjectApiKeyVar, setTempProjectApiKeyVar] = useState(
     projectSettings?.overrides?.apiKeyEnvVar ?? '',
   )
+
+  // MCP temp values
+  const mcpConfig = config.mcp ?? DEFAULT_MCP_CONFIG
+  const [tempMCPHost, setTempMCPHost] = useState(mcpConfig.obsidian.host)
+  const [tempMCPPort, setTempMCPPort] = useState(String(mcpConfig.obsidian.port))
+  const [tempMCPApiKeyVar, setTempMCPApiKeyVar] = useState(mcpConfig.obsidian.apiKeyEnvVar)
 
   const projectOverrides = projectSettings?.overrides ?? {}
   const hasProjectContext = Boolean(projectSettings?.projectPath)
@@ -288,6 +300,216 @@ export function SettingsPanel({
     )
   }
 
+  // MCP settings menu
+  if (view === 'mcp') {
+    return (
+      <SettingsContainer title="MCP Settings" onBack={() => setView('main')}>
+        <Select
+          label="Configure MCP (Model Context Protocol):"
+          options={[
+            {
+              label: `Enabled: ${mcpConfig.enabled ? 'Yes' : 'No'}`,
+              value: 'toggle-enabled',
+            },
+            {
+              label: `Host: ${mcpConfig.obsidian.host}`,
+              value: 'mcp-host',
+            },
+            {
+              label: `Port: ${mcpConfig.obsidian.port}`,
+              value: 'mcp-port',
+            },
+            {
+              label: `API Key Env: ${mcpConfig.obsidian.apiKeyEnvVar}`,
+              value: 'mcp-apikey',
+            },
+            {
+              label: `Write Mode: ${mcpConfig.writeMode}`,
+              value: 'mcp-writemode',
+            },
+            { label: 'Back', value: 'back' },
+          ]}
+          onSelect={(value) => {
+            if (value === 'toggle-enabled') {
+              onSave({
+                mcp: {
+                  ...mcpConfig,
+                  enabled: !mcpConfig.enabled,
+                },
+              })
+            } else if (value === 'back') {
+              setView('main')
+            } else {
+              setView(value as SettingsView)
+            }
+          }}
+        />
+        <Box marginTop={1}>
+          <Text dimColor>
+            MCP connects to Obsidian's REST API plugin for vault access.
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Requires: Obsidian Local REST API plugin and mcp-obsidian server.
+          </Text>
+        </Box>
+      </SettingsContainer>
+    )
+  }
+
+  // MCP host input view
+  if (view === 'mcp-host') {
+    return (
+      <SettingsContainer title="MCP Host" onBack={() => setView('mcp')}>
+        <TextInput
+          label="Enter Obsidian REST API host:"
+          value={tempMCPHost}
+          onChange={setTempMCPHost}
+          placeholder={mcpConfig.obsidian.host}
+          onSubmit={(value) => {
+            const trimmed = value.trim()
+            if (trimmed) {
+              onSave({
+                mcp: {
+                  ...mcpConfig,
+                  obsidian: {
+                    ...mcpConfig.obsidian,
+                    host: trimmed,
+                  },
+                },
+              })
+            }
+            setView('mcp')
+          }}
+        />
+        <Box marginTop={1}>
+          <Text dimColor>
+            From WSL, use your Windows host IP (check /etc/resolv.conf).
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Common values: 127.0.0.1 (local), host.docker.internal (Docker)
+          </Text>
+        </Box>
+      </SettingsContainer>
+    )
+  }
+
+  // MCP port input view
+  if (view === 'mcp-port') {
+    return (
+      <SettingsContainer title="MCP Port" onBack={() => setView('mcp')}>
+        <TextInput
+          label="Enter Obsidian REST API port:"
+          value={tempMCPPort}
+          onChange={setTempMCPPort}
+          placeholder={String(mcpConfig.obsidian.port)}
+          onSubmit={(value) => {
+            const trimmed = value.trim()
+            const port = parseInt(trimmed, 10)
+            if (!isNaN(port) && port > 0 && port < 65536) {
+              onSave({
+                mcp: {
+                  ...mcpConfig,
+                  obsidian: {
+                    ...mcpConfig.obsidian,
+                    port,
+                  },
+                },
+              })
+            }
+            setView('mcp')
+          }}
+        />
+        <Box marginTop={1}>
+          <Text dimColor>
+            Default is 27124 (Obsidian Local REST API default).
+          </Text>
+        </Box>
+      </SettingsContainer>
+    )
+  }
+
+  // MCP API key env var input view
+  if (view === 'mcp-apikey') {
+    return (
+      <SettingsContainer title="MCP API Key Env Var" onBack={() => setView('mcp')}>
+        <TextInput
+          label="Enter env variable name for Obsidian API key:"
+          value={tempMCPApiKeyVar}
+          onChange={setTempMCPApiKeyVar}
+          placeholder={mcpConfig.obsidian.apiKeyEnvVar}
+          onSubmit={(value) => {
+            const trimmed = value.trim()
+            if (trimmed) {
+              onSave({
+                mcp: {
+                  ...mcpConfig,
+                  obsidian: {
+                    ...mcpConfig.obsidian,
+                    apiKeyEnvVar: trimmed,
+                  },
+                },
+              })
+            }
+            setView('mcp')
+          }}
+        />
+        <Box marginTop={1}>
+          <Text dimColor>
+            The API key value should be set in this environment variable.
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Get the key from Obsidian Local REST API plugin settings.
+          </Text>
+        </Box>
+      </SettingsContainer>
+    )
+  }
+
+  // MCP write mode selection view
+  if (view === 'mcp-writemode') {
+    return (
+      <SettingsContainer title="MCP Write Mode" onBack={() => setView('mcp')}>
+        <Select
+          label="Select write safety mode:"
+          options={[
+            {
+              label: 'Auto - Write directly without confirmation',
+              value: 'auto',
+            },
+            {
+              label: 'Confirm - Show preview before writing',
+              value: 'confirm',
+            },
+            {
+              label: 'Disabled - Read-only access',
+              value: 'disabled',
+            },
+          ]}
+          onSelect={(value) => {
+            onSave({
+              mcp: {
+                ...mcpConfig,
+                writeMode: value as MCPWriteMode,
+              },
+            })
+            setView('mcp')
+          }}
+        />
+        <Box marginTop={1}>
+          <Text dimColor>
+            Controls how the AI handles vault file modifications.
+          </Text>
+        </Box>
+      </SettingsContainer>
+    )
+  }
+
   // Main settings view - show EITHER Project Settings OR Global Settings
   if (hasProjectContext) {
     // Project Settings only
@@ -355,6 +577,10 @@ export function SettingsPanel({
           {
             label: `Vault Path: ${config.vaultPath || 'Not set'}`,
             value: 'vault',
+          },
+          {
+            label: `MCP: ${mcpConfig.enabled ? 'Enabled' : 'Disabled'}`,
+            value: 'mcp',
           },
           { label: 'Close settings', value: 'close' },
         ]}

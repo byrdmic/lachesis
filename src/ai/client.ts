@@ -2,14 +2,18 @@ import {
   generateText,
   generateObject,
   streamText,
+  stepCountIs,
   type CoreMessage,
   type LanguageModel,
+  type Tool,
 } from 'ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 import type { LachesisConfig } from '../config/types.ts'
 import type { PlanningLevel } from '../core/project/types.ts'
 import { debugLog } from '../debug/logger.ts'
+import { isMCPConnected, getMCPToolNames } from '../mcp/index.ts'
+import { createScopedTools } from '../mcp/tools.ts'
 
 // ============================================================================
 // Types
@@ -465,3 +469,158 @@ export async function generateProjectBriefing(
 }
 
 export { AIBriefingResponseSchema }
+
+// ============================================================================
+// Agentic Conversation (MCP Tool-Calling)
+// ============================================================================
+
+export type AgenticToolCall = {
+  name: string
+  args: Record<string, unknown>
+  result: unknown
+}
+
+export type AgenticConversationOptions = {
+  systemPrompt: string
+  messages: ConversationMessage[]
+  projectPath?: string
+  maxToolCalls?: number
+  onToolCall?: (toolName: string, args: Record<string, unknown>) => void
+  onToolResult?: (toolName: string, result: unknown) => void
+}
+
+export type AgenticResult = {
+  success: boolean
+  response?: string
+  toolCalls?: AgenticToolCall[]
+  error?: string
+  debugDetails?: string
+}
+
+/**
+ * Run an agentic conversation with MCP tool access.
+ * The model can autonomously call MCP tools to search, read, and write vault files.
+ */
+export async function runAgenticConversation(
+  config: LachesisConfig,
+  options: AgenticConversationOptions,
+): Promise<AgenticResult> {
+  const model = openai(config.defaultModel) as unknown as LanguageModel
+
+  try {
+    // Get tools if MCP is connected and configured
+    let tools: Record<string, Tool> = {}
+
+    if (isMCPConnected() && config.mcp?.enabled) {
+      if (options.projectPath && config.mcp) {
+        // Use scoped tools that enforce project folder restrictions
+        tools = createScopedTools(options.projectPath, config.mcp)
+      } else {
+        // No scoping - this shouldn't happen in normal flow
+        debugLog.warn(
+          'Agentic: MCP connected but no projectPath provided, skipping tools',
+        )
+      }
+
+      const toolNames = Object.keys(tools)
+      debugLog.info('Agentic: Using MCP tools', {
+        toolCount: toolNames.length,
+        toolNames,
+        projectPath: options.projectPath,
+      })
+    } else {
+      debugLog.info('Agentic: MCP not connected or disabled, running without tools')
+    }
+
+    // Build messages
+    const messages: CoreMessage[] = [
+      { role: 'system', content: options.systemPrompt },
+      ...options.messages.map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      })),
+    ]
+
+    // Track tool calls for reporting
+    const toolCalls: AgenticToolCall[] = []
+
+    debugLog.info('Agentic: Starting conversation', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      messageCount: messages.length,
+      hasTools: Object.keys(tools).length > 0,
+      maxSteps: options.maxToolCalls ?? 10,
+    })
+
+    // Run generation with tool-calling loop
+    const result = await generateText({
+      model,
+      messages,
+      tools: Object.keys(tools).length > 0 ? tools : undefined,
+      stopWhen: stepCountIs(options.maxToolCalls ?? 10),
+      onStepFinish: (step) => {
+        // Track tool calls as they happen
+        if (step.toolCalls && step.toolCalls.length > 0) {
+          for (const call of step.toolCalls) {
+            // Find matching result by toolCallId
+            const toolResult = step.toolResults?.find(
+              (r: { toolCallId: string }) => r.toolCallId === call.toolCallId,
+            )
+
+            // In AI SDK 5, tool calls use 'input' instead of 'args'
+            const toolArgs = (call as { input?: Record<string, unknown> }).input ?? {}
+
+            // Notify callback
+            options.onToolCall?.(call.toolName, toolArgs)
+
+            // Store for later
+            toolCalls.push({
+              name: call.toolName,
+              args: toolArgs,
+              result: toolResult,
+            })
+
+            // Notify result callback
+            if (toolResult !== undefined) {
+              options.onToolResult?.(call.toolName, toolResult)
+            }
+
+            debugLog.info('Agentic: Tool call completed', {
+              tool: call.toolName,
+              args: toolArgs,
+              hasResult: toolResult !== undefined,
+            })
+          }
+        }
+      },
+    })
+
+    debugLog.info('Agentic: Conversation complete', {
+      responseLength: result.text.length,
+      toolCallCount: toolCalls.length,
+      finishReason: result.finishReason,
+    })
+
+    return {
+      success: true,
+      response: result.text,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    const stack = err instanceof Error ? err.stack : undefined
+
+    debugLog.error('Agentic: Failed', {
+      message,
+      stack,
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+    })
+
+    return {
+      success: false,
+      error: message,
+      debugDetails: stack ? `${message}\n${stack}` : message,
+    }
+  }
+}

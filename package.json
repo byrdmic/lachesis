@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/mcp": "^0.0.12",
     "@ai-sdk/openai": "^2.0.85",
     "ai": "^5.0.112",
     "ink": "^6.0.0",
