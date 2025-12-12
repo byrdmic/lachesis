@@ -18,6 +18,8 @@ import {
 } from '../../ai/prompts.ts'
 import { TextInput } from '../components/TextInput.tsx'
 import { ConversationView } from '../components/ConversationView.tsx'
+import { MessageLogPanel } from '../components/MessageLogPanel.tsx'
+import { ChatHistoryModal } from '../components/ChatHistoryModal.tsx'
 import { debugLog } from '../../debug/logger.ts'
 import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 
@@ -88,23 +90,51 @@ export function ConversationPhase({
   const [interactionMode, setInteractionMode] = useState<'text' | 'menu'>('text')
   const [historyAnchor, setHistoryAnchor] = useState<number | null>(null)
   const [menuMessage, setMenuMessage] = useState<string | null>(null)
+  const [logSelectedIndex, setLogSelectedIndex] = useState<number | null>(null)
+  const [showFullChatModal, setShowFullChatModal] = useState(false)
   const renderScreen = (
     main: React.ReactNode,
     footer?: React.ReactNode,
-  ): React.ReactNode => (
-    <Box
-      flexDirection="column"
-      height="100%"
-      width="100%"
-      paddingX={1}
-      paddingY={1}
-    >
-      <Box flexDirection="column" flexGrow={1} minHeight={0}>
-        {main}
+  ): React.ReactNode => {
+    // Show full chat modal if open
+    if (showFullChatModal) {
+      return (
+        <ChatHistoryModal
+          messages={state.messages}
+          initialIndex={logSelectedIndex ?? undefined}
+          onClose={() => setShowFullChatModal(false)}
+        />
+      )
+    }
+
+    return (
+      <Box flexDirection="row" height="100%" width="100%">
+        {/* Left: Main content */}
+        <Box
+          flexDirection="column"
+          flexGrow={1}
+          minWidth={0}
+          paddingX={1}
+          paddingY={1}
+        >
+          <Box flexDirection="column" flexGrow={1} minHeight={0}>
+            {main}
+          </Box>
+          {footer ? <Box marginTop={1}>{footer}</Box> : null}
+        </Box>
+
+        {/* Right: Message Log Panel */}
+        <MessageLogPanel
+          messages={state.messages}
+          width={35}
+          selectedIndex={interactionMode === 'menu' ? logSelectedIndex : null}
+          isActive={interactionMode === 'menu' && state.step === 'waiting_for_answer' && !showFullChatModal}
+          onSelectChange={setLogSelectedIndex}
+          onOpenFullChat={() => setShowFullChatModal(true)}
+        />
       </Box>
-      {footer ? <Box marginTop={1}>{footer}</Box> : null}
-    </Box>
-  )
+    )
+  }
 
   const effectiveProjectName = projectName.trim() || 'Untitled Project'
   const effectiveOneLiner = oneLiner.trim() || 'Not provided yet'
@@ -129,8 +159,29 @@ export function ConversationPhase({
     if (interactionMode === 'text') {
       setHistoryAnchor(null)
       setMenuMessage(null)
+      setLogSelectedIndex(null)
     }
   }, [interactionMode])
+
+  // Set log selection when entering menu mode
+  useEffect(() => {
+    if (interactionMode === 'menu' && state.messages.length > 0 && logSelectedIndex === null) {
+      setLogSelectedIndex(state.messages.length - 1)
+    }
+  }, [interactionMode, state.messages.length, logSelectedIndex])
+
+  // Keep log selection in bounds when messages change
+  useEffect(() => {
+    if (logSelectedIndex === null) return
+    if (state.messages.length === 0) {
+      setLogSelectedIndex(null)
+      return
+    }
+    const maxIndex = state.messages.length - 1
+    if (logSelectedIndex > maxIndex) {
+      setLogSelectedIndex(maxIndex)
+    }
+  }, [logSelectedIndex, state.messages.length])
 
   // Keep history anchor in bounds as messages stream in/out
   useEffect(() => {
@@ -527,13 +578,15 @@ export function ConversationPhase({
         bumpHistoryAnchor(1)
       } else if (input === 'k' || key.upArrow) {
         bumpHistoryAnchor(-1)
+      } else if (input === 'h') {
+        setShowFullChatModal(true)
       } else if (input?.toLowerCase() === 's') {
         setMenuMessage(
           'Settings live in your config file - tweak and relaunch to apply.',
         )
       }
     },
-    { isActive: state.step === 'waiting_for_answer' },
+    { isActive: state.step === 'waiting_for_answer' && !showFullChatModal },
   )
 
   // Handle escape to cancel
@@ -615,7 +668,7 @@ export function ConversationPhase({
   const modeLabel =
     interactionMode === 'text'
       ? 'Text Mode | [ESC] open menu'
-      : 'Menu Mode | [j/k] scroll chat | [s] Settings | [ESC] quit | [Enter] back to Text Mode'
+      : 'Menu Mode | [j/k] scroll | [h] full chat | [s] Settings | [ESC] quit | [Enter] text'
   const historyLabel =
     interactionMode === 'menu' && anchorIndex !== null
       ? ` | Viewing ${anchorIndex + 1}/${state.messages.length}`

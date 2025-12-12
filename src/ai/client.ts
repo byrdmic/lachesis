@@ -368,3 +368,100 @@ const DEFAULT_DISCOVERY_TOPICS = [
 
 // Export schema for use elsewhere
 export { ExtractedProjectDataSchema }
+
+// Schema for AI briefing response when loading existing projects
+const AIBriefingResponseSchema = z.object({
+  greeting: z.string().describe('Time-appropriate JARVIS greeting'),
+  reorientation: z
+    .string()
+    .describe('1-2 sentences on what this project is and who it serves'),
+  recentActivity: z
+    .string()
+    .describe('Summary of recent activity or lack thereof'),
+  healthAssessment: z
+    .string()
+    .describe('Diplomatic assessment of missing/weak areas'),
+  recommendations: z
+    .array(z.string())
+    .describe('2-3 concrete next moves'),
+  question: z
+    .string()
+    .describe('One focused question to understand session intent'),
+  suggestedActions: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        description: z.string(),
+        actionType: z.enum([
+          'continue_planning',
+          'start_building',
+          'review_roadmap',
+          'update_log',
+          'open_obsidian',
+          'custom',
+        ]),
+      }),
+    )
+    .describe('Actions for the UI menu'),
+})
+
+export type AIBriefingResponse = z.infer<typeof AIBriefingResponseSchema>
+
+/**
+ * Generate a project briefing for an existing project
+ */
+export async function generateProjectBriefing(
+  contextSerialized: string,
+  systemPrompt: string,
+  config: LachesisConfig,
+): Promise<{
+  success: boolean
+  briefing?: AIBriefingResponse
+  error?: string
+  debugDetails?: string
+}> {
+  const model = openai(config.defaultModel) as unknown as LanguageModel
+
+  try {
+    debugLog.info('Generating project briefing: sending request', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      contextLength: contextSerialized.length,
+    })
+
+    const result = await generateObject({
+      model,
+      schema: AIBriefingResponseSchema,
+      prompt: systemPrompt,
+    })
+
+    debugLog.info('Generating project briefing: received response', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      hasGreeting: !!result.object.greeting,
+      actionCount: result.object.suggestedActions.length,
+    })
+
+    return {
+      success: true,
+      briefing: result.object,
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    const stack = err instanceof Error ? err.stack : undefined
+    debugLog.error('Failed to generate project briefing', {
+      message,
+      stack,
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+    })
+    return {
+      success: false,
+      error: `Failed to generate briefing: ${message}`,
+      debugDetails: stack ? `${message}\n${stack}` : message,
+    }
+  }
+}
+
+export { AIBriefingResponseSchema }

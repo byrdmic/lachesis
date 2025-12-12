@@ -158,6 +158,7 @@ function ProjectLauncher({
     step: 'menu',
   })
   const [showSettings, setShowSettings] = useState(false)
+  const [consoleHeight, setConsoleHeight] = useState(process.stdout.rows)
   const settingsHotkeyEnabled = !showSettings && state.step === 'menu'
   const aiStatus: AIStatusDescriptor = { state: 'idle', message: 'Ready' }
 
@@ -216,7 +217,7 @@ function ProjectLauncher({
 
   if (state.step === 'menu') {
     return (
-      <Box flexDirection="column" height="100%" width="100%">
+      <Box flexDirection="column" height={consoleHeight - 1} width="100%">
         <StatusBar
           config={config}
           aiStatus={aiStatus}

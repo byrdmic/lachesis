@@ -2,6 +2,15 @@
 import { render } from 'ink'
 import React from 'react'
 import { App } from '../ui/App.tsx'
+import { debugLog } from '../debug/logger.ts'
+
+// Enable file logging for all sessions
+debugLog.enableFileLogging()
+debugLog.info('Lachesis CLI started', {
+  args: process.argv.slice(2),
+  nodeVersion: process.version,
+  platform: process.platform,
+})
 
 // Parse command line arguments
 const args = process.argv.slice(2)

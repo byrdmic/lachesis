@@ -6,7 +6,9 @@
       "Bash(bun run:*)",
       "Bash(echo:*)",
       "Bash(timeout 3 bun run:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(tree:*)",
+      "Bash(bun add:*)"
     ],
     "deny": [],
     "ask": []

@@ -22,6 +22,8 @@ type StatusBarProps = {
   aiStatus?: AIStatusDescriptor
   onSettingsPress?: () => void
   showSettingsHint?: boolean
+  /** Currently loaded project name */
+  projectName?: string
 }
 
 const STATUS_STYLES: Record<
@@ -77,6 +79,7 @@ export function StatusBar({
   aiStatus = DEFAULT_STATUS,
   onSettingsPress,
   showSettingsHint = true,
+  projectName,
 }: StatusBarProps) {
   const status = STATUS_STYLES[aiStatus.state] ?? STATUS_STYLES.idle
   const message = aiStatus.message || status.defaultMessage
@@ -87,11 +90,19 @@ export function StatusBar({
   return (
     <Box
       borderStyle="single"
-      borderColor="gray"
+      borderColor={projectName ? 'cyan' : 'gray'}
       paddingX={1}
       justifyContent="space-between"
     >
       <Box flexDirection="column">
+        {projectName && (
+          <Box>
+            <Text dimColor>Project: </Text>
+            <Text color="green" bold>
+              {projectName}
+            </Text>
+          </Box>
+        )}
         <Box>
           <Text dimColor>Provider: </Text>
           <Text color="cyan">{providerLabel}</Text>
@@ -119,10 +130,10 @@ export function StatusBar({
         </Box>
       </Box>
       {showSettingsHint && (
-    <Box>
-      <Text dimColor>[s] Settings</Text>
-    </Box>
-  )}
+        <Box>
+          <Text dimColor>[s] Settings</Text>
+        </Box>
+      )}
     </Box>
   )
 }
