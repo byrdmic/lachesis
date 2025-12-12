@@ -8,16 +8,24 @@ import type {
   ConversationMessage,
   ExtractedProjectData,
 } from '../../ai/client.ts'
+import type { StoredConversationState } from './ConversationPhase.tsx'
 import { ConversationPhase } from './ConversationPhase.tsx'
 import { FinalizePhase } from './FinalizePhase.tsx'
 import { StatusBar, SettingsPanel } from '../components/index.ts'
 import { updateConfig } from '../../config/config.ts'
 import { debugLog } from '../../debug/logger.ts'
 import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
+import {
+  getNewProjectInProgress,
+  saveNewProjectInProgress,
+  clearNewProjectInProgress,
+} from '../../core/conversation-store.ts'
 
 type NewProjectFlowProps = {
   config: LachesisConfig
   debug?: boolean
+  /** If true, resume from saved in-progress state */
+  resuming?: boolean
   onExit?: () => void
   onDebugHotkeysChange?: (enabled: boolean) => void
 }
@@ -59,11 +67,37 @@ type FlowState =
 export function NewProjectFlow({
   config: initialConfig,
   debug = false,
+  resuming = false,
   onExit,
   onDebugHotkeysChange,
 }: NewProjectFlowProps) {
   const { exit } = useApp()
-  const [state, setState] = useState<FlowState>({ step: 'welcome' })
+  
+  // Initialize state - restore from saved state if resuming
+  const [state, setState] = useState<FlowState>(() => {
+    if (resuming) {
+      const saved = getNewProjectInProgress()
+      if (saved && saved.conversationState.messages.length > 0) {
+        return {
+          step: 'conversation',
+          planningLevel: saved.planningLevel as PlanningLevel,
+          projectName: saved.projectName,
+          oneLiner: saved.oneLiner,
+        }
+      }
+    }
+    return { step: 'welcome' }
+  })
+  
+  // Saved conversation state for restoration after settings
+  const [savedConversationState, setSavedConversationState] = useState<StoredConversationState | null>(() => {
+    if (resuming) {
+      const saved = getNewProjectInProgress()
+      return saved?.conversationState ?? null
+    }
+    return null
+  })
+  
   const [showSettings, setShowSettings] = useState(false)
   const [config, setConfig] = useState<LachesisConfig>(initialConfig)
   const [aiStatus, setAIStatus] = useState<AIStatusDescriptor>({
@@ -111,7 +145,11 @@ export function NewProjectFlow({
         setAIStatus({ state: 'idle', message: 'Ready' })
         break
       case 'conversation':
-        setAIStatus({ state: 'streaming', message: 'Preparing first planning message' })
+        // Let the ConversationPhase component manage its own detailed status
+        // Only set a generic status if we're still initializing
+        if (!savedConversationState) {
+          setAIStatus({ state: 'idle', message: 'Starting conversation' })
+        }
         break
       case 'conversation_choice':
       case 'quick_capture':
@@ -129,7 +167,7 @@ export function NewProjectFlow({
       default:
         break
     }
-  }, [state])
+  }, [state, savedConversationState])
 
   // Handle 's' key to open settings (except during AI check)
   useInput(
@@ -235,6 +273,9 @@ export function NewProjectFlow({
 
   // Handle finalization complete
   const handleFinalizeComplete = useCallback((projectPath: string) => {
+    // Clear the saved in-progress state since project is now complete
+    clearNewProjectInProgress()
+    setSavedConversationState(null)
     setState({ step: 'complete', projectPath })
   }, [])
 
@@ -247,6 +288,24 @@ export function NewProjectFlow({
     setState({ step: 'cancelled' })
     setTimeout(() => exit(), 500)
   }, [exit, onExit])
+
+  // Callback to save conversation state for persistence
+  const handleConversationStateChange = useCallback(
+    (conversationState: StoredConversationState) => {
+      if (state.step !== 'conversation') return
+      
+      setSavedConversationState(conversationState)
+      
+      // Save to persistent store for resuming later
+      saveNewProjectInProgress({
+        conversationState,
+        planningLevel: state.planningLevel,
+        projectName: state.projectName,
+        oneLiner: state.oneLiner,
+      })
+    },
+    [state],
+  )
 
   // Show settings panel overlay
   if (showSettings) {
@@ -287,10 +346,12 @@ export function NewProjectFlow({
           oneLiner={state.oneLiner}
           debug={debug}
           sessionKind="new"
+          initialState={savedConversationState ?? undefined}
           onInputModeChange={setInputLocked}
           onAIStatusChange={setAIStatus}
           onDebugHotkeysChange={notifyDebugHotkeys}
           onShowSettings={() => setShowSettings(true)}
+          onStateChange={handleConversationStateChange}
           onComplete={(extractedData, conversationLog) =>
             handleConversationComplete(
               extractedData,

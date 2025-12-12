@@ -150,12 +150,13 @@ export function ConversationPhase({
   const effectiveProjectName = projectName.trim() || 'Untitled Project'
   const effectiveOneLiner = oneLiner.trim() || 'Not provided yet'
 
-  // Notify parent about input mode (typing = text input is active)
-  const typing = state.step === 'waiting_for_answer' && !menuMode
+  // Notify parent about input mode (locked = text input is active OR menu mode is active)
+  // We lock input in menu mode to prevent parent's Esc handler from firing
+  const inputLocked = (state.step === 'waiting_for_answer' && !menuMode) || menuMode
   useEffect(() => {
-    onInputModeChange?.(typing)
+    onInputModeChange?.(inputLocked)
     return () => onInputModeChange?.(false)
-  }, [typing, onInputModeChange])
+  }, [inputLocked, onInputModeChange])
 
   // Enable debug hotkeys when not actively typing
   useEffect(() => {

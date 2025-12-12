@@ -7,6 +7,10 @@ import { DebugLog, Select, SettingsPanel, StatusBar } from './components/index.t
 import { debugLog } from '../debug/logger.ts'
 import type { LachesisConfig } from '../config/types.ts'
 import type { AIStatusDescriptor } from './components/StatusBar.tsx'
+import {
+  hasNewProjectInProgress,
+  clearNewProjectInProgress,
+} from '../core/conversation-store.ts'
 
 type AppProps = {
   command: 'new' | 'start'
@@ -141,7 +145,11 @@ export function App({ command, debug = false }: AppProps) {
 // Project Launcher (start command)
 // ============================================================================
 
-type LauncherState = { step: 'menu' | 'new' | 'existing' }
+type LauncherState = 
+  | { step: 'menu' }
+  | { step: 'new'; resuming: boolean }
+  | { step: 'existing' }
+  | { step: 'confirm_new_project' }
 
 function ProjectLauncher({
   config: initialConfig,
@@ -158,8 +166,16 @@ function ProjectLauncher({
     step: 'menu',
   })
   const [showSettings, setShowSettings] = useState(false)
+  const [hasWIP, setHasWIP] = useState(() => hasNewProjectInProgress())
   const settingsHotkeyEnabled = !showSettings && state.step === 'menu'
   const aiStatus: AIStatusDescriptor = { state: 'idle', message: 'Ready' }
+  
+  // Check for WIP on menu return
+  useEffect(() => {
+    if (state.step === 'menu') {
+      setHasWIP(hasNewProjectInProgress())
+    }
+  }, [state.step])
 
   // Log state changes when debug is enabled
   useEffect(() => {
@@ -201,7 +217,7 @@ function ProjectLauncher({
         return
       }
     },
-    { isActive: state.step !== 'new' && state.step !== 'existing' && !showSettings },
+    { isActive: state.step === 'menu' && !showSettings },
   )
 
   if (showSettings) {
@@ -214,7 +230,38 @@ function ProjectLauncher({
     )
   }
 
+  // Handle menu selection
+  const handleMenuSelect = useCallback((value: string) => {
+    if (value === 'resume') {
+      setState({ step: 'new', resuming: true })
+    } else if (value === 'new') {
+      // Check if there's a WIP - show confirmation first
+      if (hasWIP) {
+        setState({ step: 'confirm_new_project' })
+      } else {
+        setState({ step: 'new', resuming: false })
+      }
+    } else if (value === 'existing') {
+      setState({ step: 'existing' })
+    }
+  }, [hasWIP])
+
   if (state.step === 'menu') {
+    // Build menu options dynamically based on WIP status
+    const menuOptions = []
+    
+    if (hasWIP) {
+      menuOptions.push({
+        label: '⟳ Resume Project (Work in Progress)',
+        value: 'resume',
+      })
+    }
+    
+    menuOptions.push(
+      { label: 'Start a new project planning session', value: 'new' },
+      { label: 'Load an existing project', value: 'existing' },
+    )
+
     return (
       <Box flexDirection="column" width="100%">
         {/* Menu content */}
@@ -224,11 +271,8 @@ function ProjectLauncher({
           </Box>
           <Select
             label="What would you like to do?"
-            options={[
-              { label: 'Start a new project planning session', value: 'new' },
-              { label: 'Load an existing project', value: 'existing' },
-            ]}
-            onSelect={(value) => setState({ step: value as 'new' | 'existing' })}
+            options={menuOptions}
+            onSelect={handleMenuSelect}
           />
           <Box marginTop={1}>
             <Text dimColor>
@@ -244,6 +288,22 @@ function ProjectLauncher({
           showSettingsHint={settingsHotkeyEnabled}
         />
       </Box>
+    )
+  }
+  
+  // Confirmation dialog for starting new project when WIP exists
+  if (state.step === 'confirm_new_project') {
+    return (
+      <ConfirmNewProjectDialog
+        onConfirm={() => {
+          clearNewProjectInProgress()
+          setHasWIP(false)
+          setState({ step: 'new', resuming: false })
+        }}
+        onCancel={() => setState({ step: 'menu' })}
+        config={config}
+        aiStatus={aiStatus}
+      />
     )
   }
 
@@ -263,8 +323,86 @@ function ProjectLauncher({
     <NewProjectFlow
       config={config}
       debug={debug}
+      resuming={state.resuming}
       onExit={() => setState({ step: 'menu' })}
       onDebugHotkeysChange={onDebugHotkeysChange}
     />
+  )
+}
+
+// ============================================================================
+// Confirmation Dialog for New Project when WIP exists
+// ============================================================================
+
+function ConfirmNewProjectDialog({
+  onConfirm,
+  onCancel,
+  config,
+  aiStatus,
+}: {
+  onConfirm: () => void
+  onCancel: () => void
+  config: LachesisConfig
+  aiStatus: AIStatusDescriptor
+}) {
+  const [selected, setSelected] = useState(1) // Default to "No, go back"
+
+  useInput((input, key) => {
+    if (key.upArrow || input === 'k') {
+      setSelected((s) => Math.max(0, s - 1))
+    }
+    if (key.downArrow || input === 'j') {
+      setSelected((s) => Math.min(1, s + 1))
+    }
+    if (key.return) {
+      if (selected === 0) {
+        onConfirm()
+      } else {
+        onCancel()
+      }
+    }
+    if (key.escape) {
+      onCancel()
+    }
+  })
+
+  return (
+    <Box flexDirection="column" width="100%">
+      <Box padding={1} flexDirection="column">
+        <Box marginBottom={1}>
+          <Text bold>Lachesis Project Foundations Studio</Text>
+        </Box>
+        
+        <Box
+          borderStyle="round"
+          borderColor="yellow"
+          paddingX={2}
+          paddingY={1}
+          marginBottom={1}
+          flexDirection="column"
+        >
+          <Text color="yellow" bold>⚠ Warning</Text>
+          <Text>{'\n'}</Text>
+          <Text>You have an existing new project in progress.</Text>
+          <Text>Starting a new project will erase all progress on that project.</Text>
+        </Box>
+        
+        <Text bold>Are you sure you want to start fresh?</Text>
+        <Box flexDirection="column" marginTop={1}>
+          <Text color={selected === 0 ? 'red' : undefined}>
+            {selected === 0 ? '❯ ' : '  '}Yes, discard and start fresh
+          </Text>
+          <Text color={selected === 1 ? 'cyan' : undefined}>
+            {selected === 1 ? '❯ ' : '  '}No, go back to menu
+          </Text>
+        </Box>
+        
+        <Box marginTop={1}>
+          <Text dimColor>Use ↑/↓ to choose, Enter to confirm, ESC to cancel</Text>
+        </Box>
+      </Box>
+      
+      <StatusBar config={config} aiStatus={aiStatus} showSettingsHint={false} />
+    </Box>
   )
 }
