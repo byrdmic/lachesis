@@ -158,7 +158,6 @@ function ProjectLauncher({
     step: 'menu',
   })
   const [showSettings, setShowSettings] = useState(false)
-  const [consoleHeight, setConsoleHeight] = useState(process.stdout.rows)
   const settingsHotkeyEnabled = !showSettings && state.step === 'menu'
   const aiStatus: AIStatusDescriptor = { state: 'idle', message: 'Ready' }
 
@@ -217,13 +216,9 @@ function ProjectLauncher({
 
   if (state.step === 'menu') {
     return (
-      <Box flexDirection="column" height={consoleHeight - 1} width="100%">
-        <StatusBar
-          config={config}
-          aiStatus={aiStatus}
-          showSettingsHint={settingsHotkeyEnabled}
-        />
-        <Box padding={1} flexDirection="column" flexGrow={1}>
+      <Box flexDirection="column" width="100%">
+        {/* Menu content */}
+        <Box padding={1} flexDirection="column">
           <Box marginBottom={1}>
             <Text bold>Lachesis Project Foundations Studio</Text>
           </Box>
@@ -242,6 +237,12 @@ function ProjectLauncher({
             </Text>
           </Box>
         </Box>
+        {/* Status bar at bottom */}
+        <StatusBar
+          config={config}
+          aiStatus={aiStatus}
+          showSettingsHint={settingsHotkeyEnabled}
+        />
       </Box>
     )
   }
@@ -250,7 +251,9 @@ function ProjectLauncher({
     return (
       <ExistingProjectFlow
         config={config}
+        debug={debug}
         onBack={() => setState({ step: 'menu' })}
+        onDebugHotkeysChange={onDebugHotkeysChange}
       />
     )
   }

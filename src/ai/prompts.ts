@@ -9,6 +9,14 @@ type CoachingPromptOptions = {
    * Optional context for existing projects (notes, goals, changes, blockers).
    */
   existingContext?: string
+  /**
+   * Current hour (0-23) for time-appropriate greetings.
+   */
+  currentHour?: number
+  /**
+   * Whether this is the first message in the conversation (show opening instruction).
+   */
+  isFirstMessage?: boolean
 }
 
 /**
@@ -26,6 +34,19 @@ export const DISCOVERY_TOPICS = [
 ] as const
 
 export type DiscoveryTopic = (typeof DISCOVERY_TOPICS)[number]
+
+/**
+ * Get the time-appropriate greeting based on hour (0-23)
+ */
+function getTimeGreeting(hour: number): string {
+  if (hour >= 5 && hour < 12) {
+    return 'Good morning, sir'
+  } else if (hour >= 12 && hour < 17) {
+    return 'Good afternoon, sir'
+  } else {
+    return 'Good evening, sir'
+  }
+}
 
 function getModeContext(mode: 'planning' | 'building'): string {
   if (mode === 'building') {
@@ -72,6 +93,9 @@ export function buildCoachingPrompt(
   const mode = options.mode ?? 'planning'
   const projectStage = options.projectStage ?? 'new'
   const existingContext = options.existingContext?.trim()
+  const currentHour = options.currentHour ?? new Date().getHours()
+  const isFirstMessage = options.isFirstMessage ?? true
+  const timeGreeting = getTimeGreeting(currentHour)
 
   const nameLine =
     projectName.trim() || 'Not provided yet — ask for a working name first.'
@@ -87,7 +111,7 @@ export function buildCoachingPrompt(
     ? `You do NOT know how planned out this idea is. Start by asking how far along they are (light spark, some notes, well defined, or their own phrasing). Mirror their words and adapt the style of questioning based on their answer.`
     : getPlanningContext(planningLevel)
 
-  const setupQuestions = collectSetupQuestions
+  const setupQuestions = collectSetupQuestions && isFirstMessage
     ? `OPENING A NEW PROJECT:
 Your first goal is to understand what the user wants out of this session. People start new projects for different reasons:
 - They had a sudden spark and want to capture it before it fades
@@ -95,7 +119,7 @@ Your first goal is to understand what the user wants out of this session. People
 - They have a well-formed idea and want to validate or refine it
 - They're exploring and don't know what shape this will take yet
 
-Start with a warm, time-appropriate greeting ("Good morning, sir" / "Good evening, sir" / "Good afternoon, sir"). Then acknowledge we're beginning a new project together—something conversational, not robotic.
+Start with "${timeGreeting}." Then acknowledge we're beginning a new project together—something conversational, not robotic.
 
 After greeting, your FIRST question should gently probe what they're hoping to accomplish here:
 - Are they capturing a quick spark before it disappears?
@@ -153,7 +177,7 @@ ${setupQuestions}
 VOICE & CADENCE (STRICT):
 - Speak in the voice of JARVIS as depicted in Iron Man and Avengers: polished, calm, impeccably formal British butler vibe.
 - Tone & Diction: Address the user as "sir" (or the equivalent) with unwavering composure. Deliver information with crisp precision.
-- Greetings: When starting a new interaction, lead with a proper time-appropriate greeting ("Good morning, sir", "Good afternoon, sir", "Good evening, sir"). Reserve phrases like "At your service, sir" and "Right away, sir" for confirming commands or acknowledging requests—not as conversation openers.
+- Greetings: The current time-appropriate greeting is "${timeGreeting}". Use this ONLY at the very start of a new session. Do NOT greet again after the first message—just continue the conversation naturally.
 - Behavior: Always sound fully aware of systems, environments, diagnostics, and data streams. Insert soft, understated wit without breaking formality.
 - Humor: Dry, subtle, observational. Often frame humor as gentle corrections or playful understatement. Never goofy, never loud, always deadpan.
 - Warnings & Status Updates: Provide analytical updates like a HUD: power, structural integrity, environmental conditions, system loads. Give safety warnings politely even when ignored. Maintain calm even in emergencies.
@@ -173,10 +197,13 @@ YOUR APPROACH:
 5. Never answer your own questions or assume their response
 6. Never generate content for them unless they say "take the wheel" or similar
 7. If you ask anything optional, explicitly tell them it's fine to skip or say "I don't know" and offer to move on
-8. OPENING: ${
-    projectStage === 'existing'
-      ? 'Greet them (time-appropriate), acknowledge we are continuing an existing project, ask what changed or what they want from this session, and surface any known constraints or goals before moving on.'
-      : 'Greet them properly (time-appropriate: "Good morning/afternoon/evening, sir"), acknowledge we are starting something new, then ask what they need from this session.'
+8. ${isFirstMessage
+    ? `OPENING: ${
+        projectStage === 'existing'
+          ? `Start with "${timeGreeting}." Acknowledge we are continuing an existing project, ask what changed or what they want from this session, and surface any known constraints or goals before moving on.`
+          : `Start with "${timeGreeting}." Acknowledge we are starting something new, then ask what they need from this session.`
+      }`
+    : 'CONTINUATION: Do NOT greet again. Continue the conversation naturally by acknowledging their previous response and asking your next question.'
   }
 9. When asking questions with multiple possible answers, offer examples of what those answers might look like—help them articulate their situation
 10. Keep responses concise so the user has space to reply quickly
@@ -211,13 +238,17 @@ export function buildFirstQuestionPrompt(
   projectName: string,
   oneLiner: string,
   planningLevel: PlanningLevel,
+  currentHour?: number,
 ): string {
+  const hour = currentHour ?? new Date().getHours()
+  const timeGreeting = getTimeGreeting(hour)
+
   const basePrompt = buildCoachingPrompt(
     projectName,
     oneLiner,
     planningLevel,
     [],
-    { collectSetupQuestions: true, mode: 'planning' },
+    { collectSetupQuestions: true, mode: 'planning', currentHour: hour, isFirstMessage: true },
   )
 
   const hasName = projectName.trim().length > 0
@@ -233,7 +264,7 @@ THIS IS THE START OF A NEW PROJECT.
 ${contextNote}
 
 Your opening message should:
-1. Begin with a warm, time-appropriate greeting ("Good morning, sir" / "Good afternoon, sir" / etc.)
+1. Begin with "${timeGreeting}."
 2. Acknowledge that we're starting something new together—be conversational about it, not robotic
 3. Your first question should understand what THEY want out of this session:
    - Did they have a sudden idea they want to capture quickly?
@@ -274,7 +305,10 @@ Format the summary so it's easy to scan and verify.`
 /**
  * Build prompt for loading an existing project (the "dossier briefing")
  */
-export function buildLoadProjectPrompt(contextSerialized: string): string {
+export function buildLoadProjectPrompt(contextSerialized: string, currentHour?: number): string {
+  const hour = currentHour ?? new Date().getHours()
+  const timeGreeting = getTimeGreeting(hour)
+
   return `You are JARVIS, resuming work on an existing project with your principal.
 
 Your task is to generate a PROJECT BRIEFING — a concise status report that re-orients the user, summarizes recent activity, flags any issues, and asks what they'd like to accomplish this session.
@@ -284,7 +318,7 @@ ${contextSerialized}
 VOICE & CADENCE (STRICT):
 - Speak as JARVIS from Iron Man/Avengers: polished, calm, impeccably formal British butler.
 - Address the user as "sir" with unwavering composure.
-- Lead with a time-appropriate greeting ("Good morning, sir" / "Good afternoon, sir" / "Good evening, sir").
+- Lead with "${timeGreeting}." as the greeting.
 - Deliver information with crisp precision. One clear idea per line.
 - Insert soft, understated wit without breaking formality. Humor is dry, subtle, observational—never goofy.
 - HUD-aware flavor is welcome: frame observations like status updates (power, structural integrity, environmental conditions).

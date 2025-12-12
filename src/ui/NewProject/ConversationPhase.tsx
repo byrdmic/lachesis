@@ -18,8 +18,6 @@ import {
 } from '../../ai/prompts.ts'
 import { TextInput } from '../components/TextInput.tsx'
 import { ConversationView } from '../components/ConversationView.tsx'
-import { MessageLogPanel } from '../components/MessageLogPanel.tsx'
-import { ChatHistoryModal } from '../components/ChatHistoryModal.tsx'
 import { debugLog } from '../../debug/logger.ts'
 import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 
@@ -87,115 +85,22 @@ export function ConversationPhase({
     error: null,
     errorDetails: null,
   })
-  const [interactionMode, setInteractionMode] = useState<'text' | 'menu'>('text')
-  const [historyAnchor, setHistoryAnchor] = useState<number | null>(null)
-  const [menuMessage, setMenuMessage] = useState<string | null>(null)
-  const [logSelectedIndex, setLogSelectedIndex] = useState<number | null>(null)
-  const [showFullChatModal, setShowFullChatModal] = useState(false)
-  const renderScreen = (
-    main: React.ReactNode,
-    footer?: React.ReactNode,
-  ): React.ReactNode => {
-    // Show full chat modal if open
-    if (showFullChatModal) {
-      return (
-        <ChatHistoryModal
-          messages={state.messages}
-          initialIndex={logSelectedIndex ?? undefined}
-          onClose={() => setShowFullChatModal(false)}
-        />
-      )
-    }
-
-    return (
-      <Box flexDirection="row" height="100%" width="100%">
-        {/* Left: Main content */}
-        <Box
-          flexDirection="column"
-          flexGrow={1}
-          minWidth={0}
-          paddingX={1}
-          paddingY={1}
-        >
-          <Box flexDirection="column" flexGrow={1} minHeight={0}>
-            {main}
-          </Box>
-          {footer ? <Box marginTop={1}>{footer}</Box> : null}
-        </Box>
-
-        {/* Right: Message Log Panel */}
-        <MessageLogPanel
-          messages={state.messages}
-          width={35}
-          selectedIndex={interactionMode === 'menu' ? logSelectedIndex : null}
-          isActive={interactionMode === 'menu' && state.step === 'waiting_for_answer' && !showFullChatModal}
-          onSelectChange={setLogSelectedIndex}
-          onOpenFullChat={() => setShowFullChatModal(true)}
-        />
-      </Box>
-    )
-  }
 
   const effectiveProjectName = projectName.trim() || 'Untitled Project'
   const effectiveOneLiner = oneLiner.trim() || 'Not provided yet'
 
-  const typing =
-    state.step === 'waiting_for_answer' && interactionMode === 'text'
+  // Notify parent about input mode
+  const typing = state.step === 'waiting_for_answer'
   useEffect(() => {
     onInputModeChange?.(typing)
     return () => onInputModeChange?.(false)
   }, [typing, onInputModeChange])
 
-  // Only allow debug hotkeys (DebugLog nav) in menu mode
+  // Enable debug hotkeys when not actively typing
   useEffect(() => {
-    onDebugHotkeysChange?.(
-      state.step === 'waiting_for_answer' && interactionMode === 'menu',
-    )
+    onDebugHotkeysChange?.(state.step !== 'waiting_for_answer')
     return () => onDebugHotkeysChange?.(false)
-  }, [interactionMode, onDebugHotkeysChange, state.step])
-
-  // Reset browsing state when returning to text mode
-  useEffect(() => {
-    if (interactionMode === 'text') {
-      setHistoryAnchor(null)
-      setMenuMessage(null)
-      setLogSelectedIndex(null)
-    }
-  }, [interactionMode])
-
-  // Set log selection when entering menu mode
-  useEffect(() => {
-    if (interactionMode === 'menu' && state.messages.length > 0 && logSelectedIndex === null) {
-      setLogSelectedIndex(state.messages.length - 1)
-    }
-  }, [interactionMode, state.messages.length, logSelectedIndex])
-
-  // Keep log selection in bounds when messages change
-  useEffect(() => {
-    if (logSelectedIndex === null) return
-    if (state.messages.length === 0) {
-      setLogSelectedIndex(null)
-      return
-    }
-    const maxIndex = state.messages.length - 1
-    if (logSelectedIndex > maxIndex) {
-      setLogSelectedIndex(maxIndex)
-    }
-  }, [logSelectedIndex, state.messages.length])
-
-  // Keep history anchor in bounds as messages stream in/out
-  useEffect(() => {
-    if (historyAnchor === null) return
-    if (state.messages.length === 0) {
-      setHistoryAnchor(null)
-      return
-    }
-
-    const maxIndex = state.messages.length - 1
-    if (historyAnchor > maxIndex) {
-      setHistoryAnchor(maxIndex)
-    }
-  }, [historyAnchor, state.messages.length])
+  }, [onDebugHotkeysChange, state.step])
 
   // Surface AI activity back to the parent status bar
   useEffect(() => {
@@ -265,6 +170,9 @@ export function ConversationPhase({
         messageCount: context.messages.length,
       })
 
+      // Determine if this is the first message (for opening greeting)
+      const isFirstMessage = context.messages.length === 0
+
       const prompt = buildCoachingPrompt(
         effectiveProjectName,
         effectiveOneLiner,
@@ -275,6 +183,8 @@ export function ConversationPhase({
           mode: sessionKind === 'existing' ? 'building' : 'planning',
           projectStage: sessionKind,
           existingContext: sessionKind === 'existing' ? projectContext : undefined,
+          currentHour: new Date().getHours(),
+          isFirstMessage,
         },
       )
 
@@ -282,7 +192,8 @@ export function ConversationPhase({
         promptPreview: prompt.slice(0, 200),
       })
 
-      const streamId = new Date().toISOString()
+      // Use timestamp + random suffix to avoid collision with user message timestamp
+      const streamId = `${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)}`
       setState((s) => ({ ...s, step: 'generating_question' }))
 
       const result = await streamNextQuestion(context, prompt, config, (partial) => {
@@ -529,66 +440,6 @@ export function ConversationPhase({
     generateFirstQuestion()
   }, [])
 
-  const messageCount = state.messages.length
-
-  const bumpHistoryAnchor = useCallback(
-    (delta: number) => {
-      if (messageCount === 0) {
-        setHistoryAnchor(null)
-        return
-      }
-      setHistoryAnchor((current) => {
-        const latestIndex = messageCount - 1
-        const base = current ?? latestIndex
-        const next = Math.min(Math.max(base + delta, 0), latestIndex)
-        return next === latestIndex ? null : next
-      })
-    },
-    [messageCount],
-  )
-
-  // Vim-like mode handling while the user is answering
-  useInput(
-    (input, key) => {
-      if (state.step !== 'waiting_for_answer') return
-
-      if (interactionMode === 'text') {
-        if (key.escape) {
-          setInteractionMode('menu')
-          setMenuMessage(null)
-          onDebugHotkeysChange?.(true)
-        }
-        return
-      }
-
-      // Menu mode
-      if (key.escape) {
-        onDebugHotkeysChange?.(false)
-        onCancel()
-        return
-      }
-
-      if (key.return) {
-        setInteractionMode('text')
-        onDebugHotkeysChange?.(false)
-        return
-      }
-
-      if (input === 'j' || key.downArrow) {
-        bumpHistoryAnchor(1)
-      } else if (input === 'k' || key.upArrow) {
-        bumpHistoryAnchor(-1)
-      } else if (input === 'h') {
-        setShowFullChatModal(true)
-      } else if (input?.toLowerCase() === 's') {
-        setMenuMessage(
-          'Settings live in your config file - tweak and relaunch to apply.',
-        )
-      }
-    },
-    { isActive: state.step === 'waiting_for_answer' && !showFullChatModal },
-  )
-
   // Handle escape to cancel
   useInput(
     (input, key) => {
@@ -596,24 +447,27 @@ export function ConversationPhase({
         onCancel()
       }
     },
-    { isActive: state.step !== 'waiting_for_answer' },
+    { isActive: true },
   )
 
   // Render based on step
   if (state.step === 'error') {
-    return renderScreen(
-      <Box flexDirection="column">
-        <Text color="red">Error: {state.error}</Text>
-        {debug && state.errorDetails && (
-          <>
-            <Text>{'\n'}</Text>
-            <Text dimColor>{state.errorDetails}</Text>
-          </>
-        )}
-        <Text>{'\n'}</Text>
-        <Text dimColor>Press any key to retry, or Esc to cancel</Text>
-        <RetryHandler onRetry={handleRetry} />
-      </Box>,
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        <ConversationView messages={state.messages} />
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="red">Error: {state.error}</Text>
+          {debug && state.errorDetails && (
+            <>
+              <Text>{'\n'}</Text>
+              <Text dimColor>{state.errorDetails}</Text>
+            </>
+          )}
+          <Text>{'\n'}</Text>
+          <Text dimColor>Press any key to retry, or Esc to cancel</Text>
+          <RetryHandler onRetry={handleRetry} />
+        </Box>
+      </Box>
     )
   }
 
@@ -621,75 +475,59 @@ export function ConversationPhase({
     state.step === 'generating_question' ||
     state.step === 'extracting_data'
   ) {
-    return renderScreen(
-      <ConversationView messages={state.messages} />,
-      <Box>
-        <Text color="cyan">
-          <Spinner type="dots" />
-        </Text>
-        <Text>
-          {' '}
-          {state.step === 'extracting_data' ? 'Processing...' : 'Thinking...'}
-        </Text>
-      </Box>,
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        <ConversationView messages={state.messages} />
+        <Box marginTop={1}>
+          <Text color="cyan">
+            <Spinner type="dots" />
+          </Text>
+          <Text>
+            {' '}
+            {state.step === 'extracting_data' ? 'Processing...' : 'Thinking...'}
+          </Text>
+        </Box>
+      </Box>
     )
   }
 
   if (state.step === 'generating_summary') {
-    return renderScreen(
-      <ConversationView messages={state.messages} />,
-      <Box>
-        <Text color="cyan">
-          <Spinner type="dots" />
-        </Text>
-        <Text> Generating summary...</Text>
-      </Box>,
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        <ConversationView messages={state.messages} />
+        <Box marginTop={1}>
+          <Text color="cyan">
+            <Spinner type="dots" />
+          </Text>
+          <Text> Generating summary...</Text>
+        </Box>
+      </Box>
     )
   }
 
   if (state.step === 'showing_summary' && state.summary) {
-    return renderScreen(
-      <SummaryConfirmation
-        summary={state.summary}
-        onConfirm={handleSummaryConfirm}
-        onRevise={handleSummaryRevise}
-      />,
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        <SummaryConfirmation
+          summary={state.summary}
+          onConfirm={handleSummaryConfirm}
+          onRevise={handleSummaryRevise}
+        />
+      </Box>
     )
   }
 
   // waiting_for_answer
-  const latestIndex = state.messages.length
-    ? state.messages.length - 1
-    : null
-  const anchorIndex =
-    interactionMode === 'menu' && historyAnchor !== null
-      ? historyAnchor
-      : latestIndex
-  const modeLabel =
-    interactionMode === 'text'
-      ? 'Text Mode | [ESC] open menu'
-      : 'Menu Mode | [j/k] scroll | [h] full chat | [s] Settings | [ESC] quit | [Enter] text'
-  const historyLabel =
-    interactionMode === 'menu' && anchorIndex !== null
-      ? ` | Viewing ${anchorIndex + 1}/${state.messages.length}`
-      : ''
-
-  return renderScreen(
-    <ConversationView messages={state.messages} anchorIndex={anchorIndex} />,
-    <Box flexDirection="column">
-      <ChatInput
-        onSubmit={handleUserAnswer}
-        isFocused={interactionMode === 'text'}
-      />
-      <Box marginTop={1}>
-        <Text dimColor>{modeLabel + historyLabel}</Text>
-        {menuMessage && (
-          <Text dimColor>
-            {menuMessage} (press Enter to jump back into Text Mode)
-          </Text>
-        )}
+  return (
+    <Box flexDirection="column" paddingX={1}>
+      <ConversationView messages={state.messages} />
+      <Box flexDirection="column" marginTop={1}>
+        <ChatInput onSubmit={handleUserAnswer} />
+        <Box marginTop={1}>
+          <Text dimColor>[ESC] cancel</Text>
+        </Box>
       </Box>
-    </Box>,
+    </Box>
   )
 }
 
@@ -699,10 +537,8 @@ export function ConversationPhase({
 
 function ChatInput({
   onSubmit,
-  isFocused,
 }: {
   onSubmit: (value: string) => void
-  isFocused: boolean
 }) {
   const [value, setValue] = useState('')
 
@@ -722,7 +558,7 @@ function ChatInput({
         onChange={setValue}
         onSubmit={handleSubmit}
         placeholder="Type your response..."
-        focus={isFocused}
+        focus={true}
       />
     </Box>
   )
@@ -763,10 +599,10 @@ function SummaryConfirmation({
       <Text>Does this capture what you're building?</Text>
       <Box flexDirection="column" marginTop={1}>
         <Text color={selected === 0 ? 'cyan' : undefined}>
-          {selected === 0 ? '❯ ' : '  '}Yes, continue
+          {selected === 0 ? '> ' : '  '}Yes, continue
         </Text>
         <Text color={selected === 1 ? 'cyan' : undefined}>
-          {selected === 1 ? '❯ ' : '  '}No, let me clarify
+          {selected === 1 ? '> ' : '  '}No, let me clarify
         </Text>
       </Box>
     </Box>

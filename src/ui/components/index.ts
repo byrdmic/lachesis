@@ -12,3 +12,4 @@ export {
   SummaryDisplay,
 } from './ConversationView.tsx'
 export { DebugLog } from './DebugLog.tsx'
+export { SimpleLayout, useSimpleLayout } from './SimpleLayout.tsx'

@@ -5,39 +5,23 @@ import { join } from 'path'
 import type { LachesisConfig } from '../../config/types.ts'
 import { loadProjectSettings } from '../../config/project-settings.ts'
 import { StatusBar } from '../components/index.ts'
-import { ProjectBriefingCard } from './ProjectBriefingCard.tsx'
-import { BriefingActionMenu } from './BriefingActionMenu.tsx'
+import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 import {
   buildProjectContext,
   serializeContextForPrompt,
 } from '../../core/project/context-builder.ts'
-import { buildLoadProjectPrompt } from '../../ai/prompts.ts'
-import {
-  generateProjectBriefing,
-  type AIBriefingResponse,
-} from '../../ai/client.ts'
-import type {
-  LoadProjectAction,
-  ProjectContextPackage,
-} from '../../core/project/context.ts'
+import type { ExtractedProjectData, ConversationMessage } from '../../ai/client.ts'
+import { ConversationPhase } from '../NewProject/ConversationPhase.tsx'
 import { debugLog } from '../../debug/logger.ts'
 
 /**
- * Loading progress steps for the briefing generation
+ * Loading progress steps for project context building
  */
-type LoadingStep =
-  | 'scanning'
-  | 'analyzing'
-  | 'sending'
-  | 'waiting'
-  | 'processing'
+type LoadingStep = 'scanning' | 'analyzing'
 
 const LOADING_STEP_MESSAGES: Record<LoadingStep, string> = {
   scanning: 'Scanning project files...',
   analyzing: 'Analyzing project health...',
-  sending: 'Sending context to AI...',
-  waiting: 'Waiting for AI response...',
-  processing: 'Processing briefing...',
 }
 
 type ProjectSummary = {
@@ -49,18 +33,24 @@ type ProjectSummary = {
 
 type ExistingProjectFlowProps = {
   config: LachesisConfig
+  debug?: boolean
   onBack?: () => void
+  onDebugHotkeysChange?: (enabled: boolean) => void
 }
 
 type ViewState =
   | 'list'
-  | 'detail'
-  | 'loading_briefing'
-  | 'briefing'
-  | 'loaded'
+  | 'loading_context'
+  | 'conversation'
+  | 'complete'
   | 'empty'
 
-export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps) {
+export function ExistingProjectFlow({
+  config,
+  debug = false,
+  onBack,
+  onDebugHotkeysChange,
+}: ExistingProjectFlowProps) {
   const { exit } = useApp()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -68,24 +58,22 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
   const [view, setView] = useState<ViewState>('list')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [projectConfig, setProjectConfig] = useState<LachesisConfig>(config)
-  const [projectSettings, setProjectSettings] = useState<{
-    found: boolean
-    overrides: Partial<LachesisConfig>
-    warnings: string[]
-    error?: string
-    settingsPath?: string
-  }>({
-    found: false,
-    overrides: {},
-    warnings: [],
-  })
 
-  // Briefing state
-  const [briefing, setBriefing] = useState<AIBriefingResponse | null>(null)
-  const [briefingError, setBriefingError] = useState<string | null>(null)
-  const [projectContext, setProjectContext] =
-    useState<ProjectContextPackage | null>(null)
+  // AI status for status bar
+  const [aiStatus, setAIStatus] = useState<AIStatusDescriptor>({
+    state: 'idle',
+    message: 'Ready',
+  })
+  const [inputLocked, setInputLocked] = useState(false)
+
+  // Context loading state
+  const [serializedContext, setSerializedContext] = useState<string | null>(null)
   const [loadingStep, setLoadingStep] = useState<LoadingStep>('scanning')
+
+  const notifyDebugHotkeys = useCallback(
+    (enabled: boolean) => onDebugHotkeysChange?.(enabled),
+    [onDebugHotkeysChange],
+  )
 
   const loadProjects = useCallback(() => {
     setLoading(true)
@@ -171,51 +159,36 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
 
   useEffect(() => {
     if (
-      (view === 'detail' || view === 'loaded' || view === 'briefing') &&
+      (view === 'loading_context' || view === 'conversation' || view === 'complete') &&
       selectedProject
     ) {
       const result = loadProjectSettings(config, selectedProject.path)
       setProjectConfig(result.config)
-      setProjectSettings({
-        found: result.found,
-        overrides: result.overrides,
-        warnings: result.warnings,
-        error: result.error,
-        settingsPath: result.settingsPath,
-      })
       return
     }
 
     setProjectConfig(config)
-    setProjectSettings({
-      found: false,
-      overrides: {},
-      warnings: [],
-      error: undefined,
-      settingsPath: undefined,
-    })
   }, [config, selectedProject?.path, view])
 
-  // Effect to build context and generate briefing when entering loading_briefing
+  // Effect to build project context when entering loading_context
   useEffect(() => {
-    if (view !== 'loading_briefing' || !selectedProject) return
+    if (view !== 'loading_context' || !selectedProject) return
 
-    // Capture selectedProject for use in async function
     const project = selectedProject
     let cancelled = false
 
-    async function loadBriefing() {
+    async function loadContext() {
       try {
-        debugLog.info('Starting project load', {
+        debugLog.info('Starting project context load', {
           projectName: project.name,
           projectPath: project.path,
         })
 
         // Step 1: Scanning
         setLoadingStep('scanning')
+        setAIStatus({ state: 'processing', message: 'Scanning project files...' })
         debugLog.info('Scanning project files', { path: project.path })
 
-        // Build project context
         const context = await buildProjectContext(project.path)
         if (cancelled) return
 
@@ -230,115 +203,68 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
 
         // Step 2: Analyzing
         setLoadingStep('analyzing')
+        setAIStatus({ state: 'processing', message: 'Analyzing project health...' })
         debugLog.info('Analyzing project health', {
           overallHealth: context.health.overallHealth,
           missingCategories: context.health.missingCategories,
           weakFiles: context.health.weakFiles,
         })
 
-        setProjectContext(context)
-
-        // Serialize context for the prompt
+        // Serialize context for the conversation
         const serialized = serializeContextForPrompt(context)
         debugLog.debug('Serialized context for AI', {
           contextLength: serialized.length,
           contextPreview: serialized.slice(0, 500),
         })
 
-        const prompt = buildLoadProjectPrompt(serialized)
-        debugLog.debug('Built load project prompt', {
-          promptLength: prompt.length,
-        })
-
-        // Step 3: Sending
-        setLoadingStep('sending')
-        debugLog.info('Sending request to AI', {
-          provider: projectConfig.defaultProvider,
-          model: projectConfig.defaultModel,
-        })
-
-        // Step 4: Waiting
-        setLoadingStep('waiting')
-
-        // Generate briefing from AI
-        const result = await generateProjectBriefing(
-          serialized,
-          prompt,
-          projectConfig,
-        )
-
         if (cancelled) return
 
-        // Step 5: Processing
-        setLoadingStep('processing')
-
-        if (result.success && result.briefing) {
-          debugLog.info('Received AI briefing', {
-            greeting: result.briefing.greeting,
-            recommendationCount: result.briefing.recommendations.length,
-            actionCount: result.briefing.suggestedActions.length,
-          })
-          debugLog.debug('Full AI briefing response', {
-            briefing: result.briefing,
-          })
-
-          setBriefing(result.briefing)
-          setBriefingError(null)
-          setView('briefing')
-        } else {
-          debugLog.error('Failed to generate briefing', {
-            error: result.error,
-            debugDetails: result.debugDetails,
-          })
-          setBriefingError(result.error || 'Failed to generate briefing')
-          // Fall back to loaded view on error
-          setView('loaded')
-        }
+        setSerializedContext(serialized)
+        setView('conversation')
       } catch (err) {
         if (cancelled) return
         const message = err instanceof Error ? err.message : String(err)
         const stack = err instanceof Error ? err.stack : undefined
-        debugLog.error('Exception during project load', {
+        debugLog.error('Exception during project context load', {
           error: message,
           stack,
         })
-        setBriefingError(message)
-        setView('loaded')
+        setError(message)
+        setView('list')
       }
     }
 
-    loadBriefing()
+    loadContext()
 
     return () => {
       cancelled = true
     }
-  }, [view, selectedProject?.path, projectConfig])
+  }, [view, selectedProject?.path])
 
-  // Handle action selection from briefing menu
-  const handleActionSelect = useCallback(
-    (action: LoadProjectAction) => {
-      debugLog.info('Action selected from briefing menu', {
-        actionId: action.id,
-        actionType: action.actionType,
-        actionLabel: action.label,
+  // Handle conversation completion
+  const handleConversationComplete = useCallback(
+    (
+      extractedData: ExtractedProjectData,
+      conversationLog: ConversationMessage[],
+    ) => {
+      debugLog.info('Existing project conversation complete', {
+        extractedDataKeys: Object.keys(extractedData),
+        messageCount: conversationLog.length,
       })
-
-      if (action.actionType === 'continue_planning') {
-        // TODO: Transition to ConversationPhase with existing project context
-        // For now, show loaded state with a message
-        debugLog.info('Continue planning selected - transitioning to loaded state')
-        setView('loaded')
-      } else if (action.actionType === 'open_obsidian') {
-        debugLog.info('Open in Obsidian selected')
-        setView('loaded')
-      } else {
-        // Other actions are stubs for now
-        debugLog.info('Action not yet implemented', { actionType: action.actionType })
-        setView('loaded')
-      }
+      // TODO: Could update project files with new insights here
+      setView('complete')
     },
     [],
   )
+
+  // Handle cancellation from conversation
+  const handleCancel = useCallback(() => {
+    if (onBack) {
+      onBack()
+      return
+    }
+    setView('list')
+  }, [onBack])
 
   useInput(
     (input, key) => {
@@ -358,7 +284,9 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
           )
         }
         if (key.return && projects.length > 0) {
-          setView('detail')
+          // Start loading project context
+          setSerializedContext(null)
+          setView('loading_context')
         }
         if (lower === 'b' && onBack) {
           onBack()
@@ -366,30 +294,12 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
         if (lower === 'q') {
           exit()
         }
-      } else if (view === 'detail') {
-        if (key.escape || lower === 'b') {
-          setView('list')
-          return
-        }
-        if (key.return) {
-          // Start loading the AI briefing
-          setBriefing(null)
-          setBriefingError(null)
-          setView('loading_briefing')
-        }
-      } else if (view === 'loading_briefing') {
+      } else if (view === 'loading_context') {
         // Allow cancellation with Escape
         if (key.escape || lower === 'b') {
-          setView('detail')
-        }
-      } else if (view === 'briefing') {
-        // Escape/B goes back to list
-        if (key.escape || lower === 'b') {
           setView('list')
-          return
         }
-        // Action selection is handled by BriefingActionMenu
-      } else if (view === 'loaded') {
+      } else if (view === 'complete') {
         if (lower === 'b') {
           setView('list')
           return
@@ -404,35 +314,38 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
           exit()
         }
       }
+      // Note: 'conversation' view is handled by ConversationPhase
     },
-    { isActive: !loading && view !== 'loading_briefing' },
+    { isActive: !loading && !inputLocked && view !== 'conversation' },
   )
 
   const statusConfig =
-    view === 'detail' || view === 'loaded' || view === 'briefing' || view === 'loading_briefing'
+    view === 'loading_context' || view === 'conversation' || view === 'complete'
       ? projectConfig
       : config
-  const overrideEntries = Object.entries(projectSettings.overrides)
 
   // Determine if we should show project name in status bar
   const showProjectInStatusBar =
-    view === 'loading_briefing' ||
-    view === 'briefing' ||
-    view === 'loaded'
+    view === 'loading_context' ||
+    view === 'conversation' ||
+    view === 'complete'
   const statusBarProjectName = showProjectInStatusBar
     ? selectedProject?.name
     : undefined
 
   const renderWithStatusBar = (content: React.ReactNode) => (
-    <Box flexDirection="column" height="100%" width="100%">
+    <Box flexDirection="column" width="100%">
+      {/* Main content */}
+      <Box flexDirection="column">
+        {content}
+      </Box>
+      {/* Status bar at bottom */}
       <StatusBar
         config={statusConfig}
+        aiStatus={aiStatus}
         showSettingsHint={false}
         projectName={statusBarProjectName}
       />
-      <Box flexDirection="column" flexGrow={1} minHeight={0}>
-        {content}
-      </Box>
     </Box>
   )
   const formattedProjects = projects.map((project) => {
@@ -487,21 +400,15 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
     )
   }
 
-  if (view === 'loading_briefing' && selectedProject) {
-    const steps: LoadingStep[] = [
-      'scanning',
-      'analyzing',
-      'sending',
-      'waiting',
-      'processing',
-    ]
+  if (view === 'loading_context' && selectedProject) {
+    const steps: LoadingStep[] = ['scanning', 'analyzing']
     const currentStepIndex = steps.indexOf(loadingStep)
 
     return (
       renderWithStatusBar(
         <Box padding={1} flexDirection="column">
           <Text color="cyan" bold>
-            Opening project dossier...
+            Loading project context...
           </Text>
           <Text>{'\n'}</Text>
 
@@ -510,7 +417,6 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
             {steps.map((step, idx) => {
               const isComplete = idx < currentStepIndex
               const isCurrent = idx === currentStepIndex
-              const isPending = idx > currentStepIndex
 
               let icon = '○'
               let color: string | undefined = 'gray'
@@ -539,122 +445,39 @@ export function ExistingProjectFlow({ config, onBack }: ExistingProjectFlowProps
     )
   }
 
-  if (view === 'briefing' && selectedProject && briefing) {
+  if (view === 'conversation' && selectedProject && serializedContext) {
     return (
       renderWithStatusBar(
-        <Box padding={1} flexDirection="column" flexGrow={1}>
-          <ProjectBriefingCard briefing={briefing} />
-          <BriefingActionMenu
-            actions={briefing.suggestedActions}
-            onSelect={handleActionSelect}
-          />
-          <Box marginTop={1}>
-            <Text dimColor>Press Esc/B to go back to project list.</Text>
-          </Box>
-        </Box>,
+        <ConversationPhase
+          config={projectConfig}
+          planningLevel="Existing project"
+          projectName={selectedProject.name}
+          oneLiner={selectedProject.overview?.split('\n')[0] || 'Existing project'}
+          debug={debug}
+          sessionKind="existing"
+          projectContext={serializedContext}
+          onInputModeChange={setInputLocked}
+          onAIStatusChange={setAIStatus}
+          onDebugHotkeysChange={notifyDebugHotkeys}
+          onComplete={handleConversationComplete}
+          onCancel={handleCancel}
+        />,
       )
     )
   }
 
-  if (view === 'detail' && selectedProject) {
-    return (
-      renderWithStatusBar(
-        <Box padding={1} flexDirection="column" flexGrow={1}>
-          <Text color="cyan" bold>
-            {selectedProject.name}
-          </Text>
-          <Text dimColor>{selectedProject.path}</Text>
-          {selectedProject.updatedAt && (
-            <Text dimColor>
-              Last updated:{' '}
-              {new Date(selectedProject.updatedAt).toLocaleString()}
-            </Text>
-          )}
-
-          <Text>{'\n'}</Text>
-          {selectedProject.overview ? (
-            <Box flexDirection="column" marginBottom={1}>
-              <Text bold>Overview preview</Text>
-              <Box marginLeft={2} flexDirection="column">
-                {selectedProject.overview.split('\n').map((line, idx) => (
-                  <Text key={idx}>{line}</Text>
-                ))}
-              </Box>
-            </Box>
-          ) : (
-            <Text dimColor>No Overview.md found in this project.</Text>
-          )}
-
-          <Text>{'\n'}</Text>
-          <Box flexDirection="column" marginBottom={1}>
-            <Text bold>Settings</Text>
-            <Box marginLeft={2} flexDirection="column">
-              {projectSettings.error ? (
-                <Text color="red">
-                  {projectSettings.error}
-                  {projectSettings.settingsPath ? ` (${projectSettings.settingsPath})` : ''}
-                </Text>
-              ) : projectSettings.found ? (
-                overrideEntries.length > 0 ? (
-                  overrideEntries.map(([key, value]) => (
-                    <Text key={key}>
-                      {key}: {String(value)}
-                    </Text>
-                  ))
-                ) : (
-                  <Text dimColor>Settings.json found; no recognized overrides.</Text>
-                )
-              ) : (
-                <Text dimColor>No Settings.json found; using global settings.</Text>
-              )}
-              {projectSettings.warnings.map((warning, idx) => (
-                <Text key={`settings-warning-${idx}`} color="yellow">
-                  {warning}
-                </Text>
-              ))}
-            </Box>
-          </Box>
-
-          <Text>{'\n'}</Text>
-          <Text dimColor>
-            Press Enter to load, Esc/B to go back, or Q to quit.
-          </Text>
-        </Box>,
-      )
-    )
-  }
-
-  if (view === 'loaded' && selectedProject) {
+  if (view === 'complete' && selectedProject) {
     return (
       renderWithStatusBar(
         <Box padding={1} flexDirection="column">
           <Text color="green" bold>
-            Project loaded
+            Session complete
           </Text>
           <Text>{selectedProject.name}</Text>
           <Text color="cyan">{selectedProject.path}</Text>
-          {briefingError && (
-            <Box flexDirection="column" marginTop={1}>
-              <Text color="yellow">
-                Note: Could not generate AI briefing. {briefingError}
-              </Text>
-            </Box>
-          )}
-          {overrideEntries.length > 0 && (
-            <Box flexDirection="column" marginTop={1}>
-              <Text bold>Applied overrides</Text>
-              <Box marginLeft={2} flexDirection="column">
-                {overrideEntries.map(([key, value]) => (
-                  <Text key={key}>
-                    {key}: {String(value)}
-                  </Text>
-                ))}
-              </Box>
-            </Box>
-          )}
           <Text>{'\n'}</Text>
           <Text dimColor>
-            Open this folder in Obsidian to keep working. Press Enter to exit.
+            Press [B] to go back to project list, or [Q] to quit.
           </Text>
         </Box>,
       )

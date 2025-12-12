@@ -79,15 +79,17 @@ export function NewProjectFlow({
   )
   const renderWithStatusBar = useCallback(
     (content: React.ReactNode, showSettingsHint = settingsHotkeyEnabled) => (
-      <Box flexDirection="column" height="100%" width="100%">
+      <Box flexDirection="column" width="100%">
+        {/* Main content */}
+        <Box flexDirection="column">
+          {content}
+        </Box>
+        {/* Status bar at bottom */}
         <StatusBar
           config={config}
           aiStatus={aiStatus}
           showSettingsHint={showSettingsHint}
         />
-        <Box flexDirection="column" flexGrow={1} minHeight={0}>
-          {content}
-        </Box>
       </Box>
     ),
     [aiStatus, config, settingsHotkeyEnabled],
@@ -388,9 +390,9 @@ function WelcomeScreen({
   }, [onStart])
 
   return (
-    <Box flexDirection="column" height="100%" width="100%">
-      <StatusBar config={config} aiStatus={aiStatus} />
-      <Box flexDirection="column" padding={1} flexGrow={1}>
+    <Box flexDirection="column" width="100%">
+      {/* Main content */}
+      <Box flexDirection="column" padding={1}>
         <Box
           borderStyle="double"
           borderColor="cyan"
@@ -404,6 +406,8 @@ function WelcomeScreen({
         </Box>
         <Text>Welcome. Let's shape your idea into a structured project.</Text>
       </Box>
+      {/* Status bar at bottom */}
+      <StatusBar config={config} aiStatus={aiStatus} />
     </Box>
   )
 }
@@ -426,13 +430,9 @@ export function AIConnectionCheck({
   onError: (error: string) => void
 }) {
   return (
-    <Box flexDirection="column" height="100%" width="100%">
-      <StatusBar
-        config={config}
-        aiStatus={aiStatus}
-        showSettingsHint={showSettingsHint}
-      />
-      <Box flexDirection="column" padding={1} flexGrow={1}>
+    <Box flexDirection="column" width="100%">
+      {/* Main content */}
+      <Box flexDirection="column" padding={1}>
         <Box
           borderStyle="double"
           borderColor="cyan"
@@ -463,6 +463,12 @@ export function AIConnectionCheck({
           </Box>
         ) : null}
       </Box>
+      {/* Status bar at bottom */}
+      <StatusBar
+        config={config}
+        aiStatus={aiStatus}
+        showSettingsHint={showSettingsHint}
+      />
     </Box>
   )
 }
