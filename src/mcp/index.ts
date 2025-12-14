@@ -9,7 +9,9 @@ export {
   isMCPConnected,
   getMCPClientState,
   getMCPError,
+  testMCPConnection,
   type MCPClientState,
+  type MCPTestResult,
 } from './client.ts'
 
 // Scoped tools and utilities

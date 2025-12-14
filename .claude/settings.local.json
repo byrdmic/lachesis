@@ -12,7 +12,10 @@
       "WebFetch(domain:github.com)",
       "WebSearch",
       "WebFetch(domain:blog.marcnuri.com)",
-      "WebFetch(domain:ai-sdk.dev)"
+      "WebFetch(domain:ai-sdk.dev)",
+      "Bash(timeout 5 bun run:*)",
+      "Bash(docker ps:*)",
+      "WebFetch(domain:docs.docker.com)"
     ],
     "deny": [],
     "ask": []

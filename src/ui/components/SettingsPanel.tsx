@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { Select } from './Select.tsx'
 import { TextInput } from './TextInput.tsx'
-import type { LachesisConfig, AIProvider, MCPWriteMode } from '../../config/types.ts'
+import type { LachesisConfig, AIProvider, MCPWriteMode, MCPTransportMode } from '../../config/types.ts'
 import { DEFAULT_MCP_CONFIG } from '../../config/types.ts'
 
 type ProjectSettingsSummary = {
@@ -30,6 +30,9 @@ type SettingsView =
   | 'apikey'
   | 'vault'
   | 'mcp'
+  | 'mcp-transport'
+  | 'mcp-docker-image'
+  | 'mcp-gateway-url'
   | 'mcp-host'
   | 'mcp-port'
   | 'mcp-apikey'
@@ -58,11 +61,16 @@ export function SettingsPanel({
     projectSettings?.overrides?.apiKeyEnvVar ?? '',
   )
 
-  // MCP temp values
+  // MCP temp values - ensure obsidian config is always defined
   const mcpConfig = config.mcp ?? DEFAULT_MCP_CONFIG
-  const [tempMCPHost, setTempMCPHost] = useState(mcpConfig.obsidian.host)
-  const [tempMCPPort, setTempMCPPort] = useState(String(mcpConfig.obsidian.port))
-  const [tempMCPApiKeyVar, setTempMCPApiKeyVar] = useState(mcpConfig.obsidian.apiKeyEnvVar)
+  const obsidianConfig = mcpConfig.obsidian ?? DEFAULT_MCP_CONFIG.obsidian
+  const dockerConfig = mcpConfig.docker ?? DEFAULT_MCP_CONFIG.docker
+  const gatewayConfig = mcpConfig.gateway ?? DEFAULT_MCP_CONFIG.gateway
+  const [tempMCPHost, setTempMCPHost] = useState(obsidianConfig.host)
+  const [tempMCPPort, setTempMCPPort] = useState(String(obsidianConfig.port))
+  const [tempMCPApiKeyVar, setTempMCPApiKeyVar] = useState(obsidianConfig.apiKeyEnvVar)
+  const [tempDockerImage, setTempDockerImage] = useState(dockerConfig?.imageName ?? 'mcp/obsidian')
+  const [tempGatewayUrl, setTempGatewayUrl] = useState(gatewayConfig?.url ?? 'http://localhost:8811/sse')
 
   const projectOverrides = projectSettings?.overrides ?? {}
   const hasProjectContext = Boolean(projectSettings?.projectPath)
@@ -89,15 +97,18 @@ export function SettingsPanel({
     projectOverrides.apiKeyEnvVar,
   ])
 
-  useInput((input, key) => {
-    if (key.escape) {
-      if (view === 'main') {
-        onClose()
-      } else {
-        setView('main')
+  useInput(
+    (input, key) => {
+      if (key.escape) {
+        if (view === 'main') {
+          onClose()
+        } else {
+          setView('main')
+        }
       }
-    }
-  })
+    },
+    { isActive: true },
+  )
 
   // Project provider selection view
   if (view === 'project-provider') {
@@ -302,33 +313,73 @@ export function SettingsPanel({
 
   // MCP settings menu
   if (view === 'mcp') {
+    const transportMode = mcpConfig.transportMode ?? 'uvx'
+    const transportLabels: Record<string, string> = {
+      uvx: 'uvx (Python)',
+      docker: 'Docker',
+      gateway: 'MCP Gateway (SSE)',
+    }
+    const transportLabel = transportLabels[transportMode] ?? transportMode
+
+    // Build options dynamically based on transport mode
+    const mcpOptions = [
+      {
+        label: `Enabled: ${mcpConfig.enabled ? 'Yes' : 'No'}`,
+        value: 'toggle-enabled',
+      },
+      {
+        label: `Transport: ${transportLabel}`,
+        value: 'mcp-transport',
+      },
+    ]
+
+    // Show Docker image option only when using docker transport
+    if (transportMode === 'docker') {
+      mcpOptions.push({
+        label: `Docker Image: ${dockerConfig?.imageName ?? 'mcp/obsidian'}`,
+        value: 'mcp-docker-image',
+      })
+    }
+
+    // Show Gateway URL option only when using gateway transport
+    if (transportMode === 'gateway') {
+      mcpOptions.push({
+        label: `Gateway URL: ${gatewayConfig?.url ?? 'http://localhost:8811/sse'}`,
+        value: 'mcp-gateway-url',
+      })
+    }
+
+    // Host/Port/API key only relevant for non-gateway modes
+    if (transportMode !== 'gateway') {
+      mcpOptions.push(
+        {
+          label: `Host: ${obsidianConfig.host}`,
+          value: 'mcp-host',
+        },
+        {
+          label: `Port: ${obsidianConfig.port}`,
+          value: 'mcp-port',
+        },
+        {
+          label: `API Key Env: ${obsidianConfig.apiKeyEnvVar}`,
+          value: 'mcp-apikey',
+        },
+      )
+    }
+
+    mcpOptions.push(
+      {
+        label: `Write Mode: ${mcpConfig.writeMode}`,
+        value: 'mcp-writemode',
+      },
+      { label: 'Back', value: 'back' },
+    )
+
     return (
       <SettingsContainer title="MCP Settings" onBack={() => setView('main')}>
         <Select
           label="Configure MCP (Model Context Protocol):"
-          options={[
-            {
-              label: `Enabled: ${mcpConfig.enabled ? 'Yes' : 'No'}`,
-              value: 'toggle-enabled',
-            },
-            {
-              label: `Host: ${mcpConfig.obsidian.host}`,
-              value: 'mcp-host',
-            },
-            {
-              label: `Port: ${mcpConfig.obsidian.port}`,
-              value: 'mcp-port',
-            },
-            {
-              label: `API Key Env: ${mcpConfig.obsidian.apiKeyEnvVar}`,
-              value: 'mcp-apikey',
-            },
-            {
-              label: `Write Mode: ${mcpConfig.writeMode}`,
-              value: 'mcp-writemode',
-            },
-            { label: 'Back', value: 'back' },
-          ]}
+          options={mcpOptions}
           onSelect={(value) => {
             if (value === 'toggle-enabled') {
               onSave({
@@ -351,7 +402,138 @@ export function SettingsPanel({
         </Box>
         <Box marginTop={1}>
           <Text dimColor>
-            Requires: Obsidian Local REST API plugin and mcp-obsidian server.
+            {transportMode === 'gateway'
+              ? 'Connecting to Docker MCP Gateway via SSE.'
+              : transportMode === 'docker'
+                ? 'Using Docker container for mcp-obsidian server.'
+                : 'Using uvx to run mcp-obsidian (requires Python/uv).'}
+          </Text>
+        </Box>
+      </SettingsContainer>
+    )
+  }
+
+  // MCP transport mode selection view
+  if (view === 'mcp-transport') {
+    return (
+      <SettingsContainer title="MCP Transport" onBack={() => setView('mcp')}>
+        <Select
+          label="Select how to run the MCP server:"
+          options={[
+            {
+              label: 'MCP Gateway (SSE) - Connect to Docker MCP Gateway',
+              value: 'gateway',
+            },
+            {
+              label: 'uvx (Python) - Spawns mcp-obsidian via uvx',
+              value: 'uvx',
+            },
+            {
+              label: 'Docker - Runs mcp-obsidian in a Docker container',
+              value: 'docker',
+            },
+          ]}
+          onSelect={(value) => {
+            onSave({
+              mcp: {
+                ...mcpConfig,
+                transportMode: value as MCPTransportMode,
+              },
+            })
+            setView('mcp')
+          }}
+        />
+        <Box marginTop={1}>
+          <Text dimColor>
+            Gateway: Connect to Docker MCP Gateway running on Windows.
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            uvx: Requires Python and uv installed locally.
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Docker: Requires Docker accessible from this environment.
+          </Text>
+        </Box>
+      </SettingsContainer>
+    )
+  }
+
+  // MCP Gateway URL input view
+  if (view === 'mcp-gateway-url') {
+    return (
+      <SettingsContainer title="MCP Gateway URL" onBack={() => setView('mcp')}>
+        <TextInput
+          label="Enter MCP Gateway URL:"
+          value={tempGatewayUrl}
+          onChange={setTempGatewayUrl}
+          placeholder={gatewayConfig?.url ?? 'http://localhost:8811/sse'}
+          onSubmit={(value) => {
+            const trimmed = value.trim()
+            if (trimmed) {
+              onSave({
+                mcp: {
+                  ...mcpConfig,
+                  gateway: {
+                    ...gatewayConfig,
+                    url: trimmed,
+                  },
+                },
+              })
+            }
+            setView('mcp')
+          }}
+        />
+        <Box marginTop={1}>
+          <Text dimColor>
+            URL of the Docker MCP Gateway SSE endpoint.
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Default: http://localhost:8811/sse
+          </Text>
+        </Box>
+      </SettingsContainer>
+    )
+  }
+
+  // MCP Docker image input view
+  if (view === 'mcp-docker-image') {
+    return (
+      <SettingsContainer title="Docker Image" onBack={() => setView('mcp')}>
+        <TextInput
+          label="Enter Docker image name for mcp-obsidian:"
+          value={tempDockerImage}
+          onChange={setTempDockerImage}
+          placeholder={dockerConfig?.imageName ?? 'mcp/obsidian'}
+          onSubmit={(value) => {
+            const trimmed = value.trim()
+            if (trimmed) {
+              onSave({
+                mcp: {
+                  ...mcpConfig,
+                  docker: {
+                    ...dockerConfig,
+                    imageName: trimmed,
+                  },
+                },
+              })
+            }
+            setView('mcp')
+          }}
+        />
+        <Box marginTop={1}>
+          <Text dimColor>
+            The Docker image containing the mcp-obsidian server.
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>
+            Example: mcp/obsidian, ghcr.io/org/mcp-obsidian
           </Text>
         </Box>
       </SettingsContainer>
@@ -366,7 +548,7 @@ export function SettingsPanel({
           label="Enter Obsidian REST API host:"
           value={tempMCPHost}
           onChange={setTempMCPHost}
-          placeholder={mcpConfig.obsidian.host}
+          placeholder={obsidianConfig.host}
           onSubmit={(value) => {
             const trimmed = value.trim()
             if (trimmed) {
@@ -374,7 +556,7 @@ export function SettingsPanel({
                 mcp: {
                   ...mcpConfig,
                   obsidian: {
-                    ...mcpConfig.obsidian,
+                    ...obsidianConfig,
                     host: trimmed,
                   },
                 },
@@ -405,7 +587,7 @@ export function SettingsPanel({
           label="Enter Obsidian REST API port:"
           value={tempMCPPort}
           onChange={setTempMCPPort}
-          placeholder={String(mcpConfig.obsidian.port)}
+          placeholder={String(obsidianConfig.port)}
           onSubmit={(value) => {
             const trimmed = value.trim()
             const port = parseInt(trimmed, 10)
@@ -414,7 +596,7 @@ export function SettingsPanel({
                 mcp: {
                   ...mcpConfig,
                   obsidian: {
-                    ...mcpConfig.obsidian,
+                    ...obsidianConfig,
                     port,
                   },
                 },
@@ -440,7 +622,7 @@ export function SettingsPanel({
           label="Enter env variable name for Obsidian API key:"
           value={tempMCPApiKeyVar}
           onChange={setTempMCPApiKeyVar}
-          placeholder={mcpConfig.obsidian.apiKeyEnvVar}
+          placeholder={obsidianConfig.apiKeyEnvVar}
           onSubmit={(value) => {
             const trimmed = value.trim()
             if (trimmed) {
@@ -448,7 +630,7 @@ export function SettingsPanel({
                 mcp: {
                   ...mcpConfig,
                   obsidian: {
-                    ...mcpConfig.obsidian,
+                    ...obsidianConfig,
                     apiKeyEnvVar: trimmed,
                   },
                 },

@@ -54,6 +54,21 @@ export function applyConfigUpgrades(config: LachesisConfig): {
       mcp.scopeWritesToProject = DEFAULT_MCP_CONFIG.scopeWritesToProject
       mcpUpdated = true
     }
+    // Add transportMode if missing (defaults to 'uvx' for backward compatibility)
+    if (mcp.transportMode === undefined) {
+      mcp.transportMode = DEFAULT_MCP_CONFIG.transportMode
+      mcpUpdated = true
+    }
+    // Add docker config if missing
+    if (mcp.docker === undefined) {
+      mcp.docker = DEFAULT_MCP_CONFIG.docker
+      mcpUpdated = true
+    }
+    // Add gateway config if missing
+    if (mcp.gateway === undefined) {
+      mcp.gateway = DEFAULT_MCP_CONFIG.gateway
+      mcpUpdated = true
+    }
 
     if (mcpUpdated) {
       next = { ...next, mcp }
