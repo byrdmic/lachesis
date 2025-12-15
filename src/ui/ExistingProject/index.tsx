@@ -15,6 +15,8 @@ import {
   getConversationState,
   saveConversationState,
   clearConversationState,
+  setActiveExistingProject,
+  clearActiveExistingProject,
 } from '../../core/conversation-store.ts'
 import type { ExtractedProjectData, ConversationMessage } from '../../ai/client.ts'
 import { ConversationPhase, type StoredConversationState } from '../NewProject/ConversationPhase.tsx'
@@ -264,6 +266,16 @@ export function ExistingProjectFlow({
     }
   }, [view, loadedProject?.path])
 
+  // Effect to set active existing project when entering conversation
+  useEffect(() => {
+    if (view === 'conversation' && loadedProject) {
+      setActiveExistingProject({
+        name: loadedProject.name,
+        path: loadedProject.path,
+      })
+    }
+  }, [view, loadedProject?.name, loadedProject?.path])
+
   // Effect to initialize MCP client when entering conversation view
   useEffect(() => {
     if (view !== 'conversation' || !loadedProject || !projectConfig.mcp?.enabled) {
@@ -338,6 +350,8 @@ export function ExistingProjectFlow({
       if (loadedProject) {
         clearConversationState(loadedProject.path)
       }
+      // Clear active existing project since conversation is complete
+      clearActiveExistingProject()
       // TODO: Could update project files with new insights here
       setView('complete')
     },
@@ -620,6 +634,8 @@ export function ExistingProjectFlow({
           onClearConversation={() => {
             // Clear stored state when user requests restart
             clearConversationState(loadedProject.path)
+            // Clear active existing project since conversation is being reset
+            clearActiveExistingProject()
           }}
           onComplete={handleConversationComplete}
           onCancel={handleCancel}

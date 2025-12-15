@@ -25,6 +25,11 @@ export type MCPStatusDescriptor = {
   error?: string
 }
 
+export type ActiveChatInfo = {
+  projectName: string
+  type: 'new' | 'existing'
+}
+
 type StatusBarProps = {
   config: LachesisConfig
   aiStatus?: AIStatusDescriptor
@@ -33,6 +38,8 @@ type StatusBarProps = {
   showSettingsHint?: boolean
   /** Currently loaded project name */
   projectName?: string
+  /** Active chat info (for main menu - shows reminder of active chat) */
+  activeChat?: ActiveChatInfo
 }
 
 const STATUS_STYLES: Record<
@@ -90,6 +97,7 @@ export function StatusBar({
   onSettingsPress,
   showSettingsHint = true,
   projectName,
+  activeChat,
 }: StatusBarProps) {
   const status = STATUS_STYLES[aiStatus.state] ?? STATUS_STYLES.idle
   const message = aiStatus.message || status.defaultMessage
@@ -118,14 +126,30 @@ export function StatusBar({
 
   const mcpDisplay = getMCPDisplay()
 
+  // Determine border color: activeChat gets yellow, projectName gets cyan, otherwise gray
+  const borderColor = activeChat ? 'yellow' : projectName ? 'cyan' : 'gray'
+
   return (
     <Box
       borderStyle="single"
-      borderColor={projectName ? 'cyan' : 'gray'}
+      borderColor={borderColor}
       paddingX={1}
       justifyContent="space-between"
     >
       <Box flexDirection="column">
+        {activeChat && (
+          <Box>
+            <Text color="yellow" bold>
+              Active Chat:{' '}
+            </Text>
+            <Text color="yellow" bold>
+              {activeChat.projectName}
+            </Text>
+            <Text dimColor>
+              {' '}({activeChat.type === 'new' ? 'new project' : 'existing'})
+            </Text>
+          </Box>
+        )}
         {projectName && (
           <Box>
             <Text dimColor>Project: </Text>

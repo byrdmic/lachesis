@@ -11,7 +11,10 @@ import type { AIStatusDescriptor, MCPStatusDescriptor } from './components/Statu
 import {
   hasNewProjectInProgress,
   clearNewProjectInProgress,
+  getNewProjectInProgress,
+  getActiveExistingProject,
 } from '../core/conversation-store.ts'
+import type { ActiveChatInfo } from './components/StatusBar.tsx'
 import { testMCPConnection, type MCPTestResult } from '../mcp/index.ts'
 
 type AppProps = {
@@ -299,18 +302,35 @@ function ProjectLauncher({
   if (state.step === 'menu') {
     // Build menu options dynamically based on WIP status
     const menuOptions = []
-    
+
     if (hasWIP) {
       menuOptions.push({
         label: '⟳ Resume Project (Work in Progress)',
         value: 'resume',
       })
     }
-    
+
     menuOptions.push(
       { label: 'Start a new project planning session', value: 'new' },
       { label: 'Load an existing project', value: 'existing' },
     )
+
+    // Compute active chat info for status bar
+    let activeChat: ActiveChatInfo | undefined
+    const newProjectWIP = getNewProjectInProgress()
+    const activeExisting = getActiveExistingProject()
+
+    if (newProjectWIP?.projectName) {
+      activeChat = {
+        projectName: newProjectWIP.projectName,
+        type: 'new',
+      }
+    } else if (activeExisting) {
+      activeChat = {
+        projectName: activeExisting.name,
+        type: 'existing',
+      }
+    }
 
     return (
       <Box flexDirection="column" width="100%">
@@ -336,6 +356,7 @@ function ProjectLauncher({
           aiStatus={aiStatus}
           mcpStatus={debug ? mcpStatus : undefined}
           showSettingsHint={settingsHotkeyEnabled}
+          activeChat={activeChat}
         />
       </Box>
     )

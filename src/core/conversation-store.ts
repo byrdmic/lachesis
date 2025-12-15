@@ -84,3 +84,36 @@ export function saveNewProjectInProgress(state: NewProjectInProgressState): void
 export function clearNewProjectInProgress(): void {
   conversationStore.delete(NEW_PROJECT_KEY)
 }
+
+// ============================================================================
+// Active Existing Project Tracking
+// ============================================================================
+
+export type ActiveExistingProject = {
+  name: string
+  path: string
+}
+
+// Track which existing project has an active chat session
+let activeExistingProject: ActiveExistingProject | null = null
+
+/**
+ * Set the active existing project (when entering conversation)
+ */
+export function setActiveExistingProject(info: ActiveExistingProject): void {
+  activeExistingProject = info
+}
+
+/**
+ * Get the active existing project info
+ */
+export function getActiveExistingProject(): ActiveExistingProject | null {
+  return activeExistingProject
+}
+
+/**
+ * Clear the active existing project (when conversation ends or is cleared)
+ */
+export function clearActiveExistingProject(): void {
+  activeExistingProject = null
+}
