@@ -32,7 +32,6 @@ type SettingsView =
   | 'mcp'
   | 'mcp-transport'
   | 'mcp-docker-image'
-  | 'mcp-gateway-url'
   | 'mcp-host'
   | 'mcp-port'
   | 'mcp-apikey'
@@ -65,12 +64,10 @@ export function SettingsPanel({
   const mcpConfig = config.mcp ?? DEFAULT_MCP_CONFIG
   const obsidianConfig = mcpConfig.obsidian ?? DEFAULT_MCP_CONFIG.obsidian
   const dockerConfig = mcpConfig.docker ?? DEFAULT_MCP_CONFIG.docker
-  const gatewayConfig = mcpConfig.gateway ?? DEFAULT_MCP_CONFIG.gateway
   const [tempMCPHost, setTempMCPHost] = useState(obsidianConfig.host)
   const [tempMCPPort, setTempMCPPort] = useState(String(obsidianConfig.port))
   const [tempMCPApiKeyVar, setTempMCPApiKeyVar] = useState(obsidianConfig.apiKeyEnvVar)
   const [tempDockerImage, setTempDockerImage] = useState(dockerConfig?.imageName ?? 'mcp/obsidian')
-  const [tempGatewayUrl, setTempGatewayUrl] = useState(gatewayConfig?.url ?? 'http://localhost:8811/sse')
 
   const projectOverrides = projectSettings?.overrides ?? {}
   const hasProjectContext = Boolean(projectSettings?.projectPath)
@@ -341,15 +338,7 @@ export function SettingsPanel({
       })
     }
 
-    // Show Gateway URL option only when using gateway transport
-    if (transportMode === 'gateway') {
-      mcpOptions.push({
-        label: `Gateway URL: ${gatewayConfig?.url ?? 'http://localhost:8811/sse'}`,
-        value: 'mcp-gateway-url',
-      })
-    }
-
-    // Host/Port/API key only relevant for non-gateway modes
+    // Host/Port/API key only relevant for non-gateway modes (gateway uses docker mcp gateway run)
     if (transportMode !== 'gateway') {
       mcpOptions.push(
         {
@@ -403,7 +392,7 @@ export function SettingsPanel({
         <Box marginTop={1}>
           <Text dimColor>
             {transportMode === 'gateway'
-              ? 'Connecting to Docker MCP Gateway via SSE.'
+              ? 'Using Docker MCP Gateway (docker mcp gateway run).'
               : transportMode === 'docker'
                 ? 'Using Docker container for mcp-obsidian server.'
                 : 'Using uvx to run mcp-obsidian (requires Python/uv).'}
@@ -421,7 +410,7 @@ export function SettingsPanel({
           label="Select how to run the MCP server:"
           options={[
             {
-              label: 'MCP Gateway (SSE) - Connect to Docker MCP Gateway',
+              label: 'Docker MCP Gateway - Uses Docker Desktop MCP Toolkit',
               value: 'gateway',
             },
             {
@@ -445,7 +434,7 @@ export function SettingsPanel({
         />
         <Box marginTop={1}>
           <Text dimColor>
-            Gateway: Connect to Docker MCP Gateway running on Windows.
+            Gateway: Uses `docker mcp gateway run` (requires Docker Desktop).
           </Text>
         </Box>
         <Box marginTop={1}>
@@ -455,46 +444,7 @@ export function SettingsPanel({
         </Box>
         <Box marginTop={1}>
           <Text dimColor>
-            Docker: Requires Docker accessible from this environment.
-          </Text>
-        </Box>
-      </SettingsContainer>
-    )
-  }
-
-  // MCP Gateway URL input view
-  if (view === 'mcp-gateway-url') {
-    return (
-      <SettingsContainer title="MCP Gateway URL" onBack={() => setView('mcp')}>
-        <TextInput
-          label="Enter MCP Gateway URL:"
-          value={tempGatewayUrl}
-          onChange={setTempGatewayUrl}
-          placeholder={gatewayConfig?.url ?? 'http://localhost:8811/sse'}
-          onSubmit={(value) => {
-            const trimmed = value.trim()
-            if (trimmed) {
-              onSave({
-                mcp: {
-                  ...mcpConfig,
-                  gateway: {
-                    ...gatewayConfig,
-                    url: trimmed,
-                  },
-                },
-              })
-            }
-            setView('mcp')
-          }}
-        />
-        <Box marginTop={1}>
-          <Text dimColor>
-            URL of the Docker MCP Gateway SSE endpoint.
-          </Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text dimColor>
-            Default: http://localhost:8811/sse
+            Docker: Spawns a container directly (requires docker command).
           </Text>
         </Box>
       </SettingsContainer>

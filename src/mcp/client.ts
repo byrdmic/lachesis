@@ -3,7 +3,6 @@
 import {
   experimental_createMCPClient as createMCPClient,
   type experimental_MCPClient as MCPClient,
-  type MCPTransport,
 } from '@ai-sdk/mcp'
 import { Experimental_StdioMCPTransport } from '@ai-sdk/mcp/mcp-stdio'
 import type { Tool } from 'ai'
@@ -37,14 +36,10 @@ let mcpClientState: MCPClientState = {
 // Transport Factory
 // ============================================================================
 
-type TransportResult =
-  | { type: 'stdio'; transport: MCPTransport }
-  | { type: 'sse'; config: { type: 'sse'; url: string } }
-
 /**
  * Create the appropriate transport based on config.transportMode
  */
-function createTransport(config: MCPConfig, apiKey: string): TransportResult {
+function createTransport(config: MCPConfig, apiKey: string) {
   const baseEnv = {
     OBSIDIAN_API_KEY: apiKey,
     OBSIDIAN_HOST: config.obsidian.host,
@@ -57,48 +52,48 @@ function createTransport(config: MCPConfig, apiKey: string): TransportResult {
   )
 
   switch (config.transportMode) {
-    case 'gateway':
-      // Connect to MCP Gateway via SSE transport
-      return {
-        type: 'sse',
-        config: {
-          type: 'sse',
-          url: config.gateway?.url ?? 'http://localhost:8811/sse',
-        },
-      }
+    case 'gateway': {
+      // Connect to Docker MCP Gateway via stdio transport
+      // This spawns `docker mcp gateway run` which handles routing to MCP servers
+      // On WSL, we need to use docker.exe to access Docker Desktop's MCP extension
+      const isWSL = process.platform === 'linux' && process.env.WSL_DISTRO_NAME
+      const dockerCmd = isWSL ? 'docker.exe' : 'docker'
+      // Wrap in shell to suppress stderr (OAuth notifications clutter the terminal)
+      return new Experimental_StdioMCPTransport({
+        command: isWSL ? 'bash' : process.platform === 'win32' ? 'cmd' : 'bash',
+        args: isWSL || process.platform !== 'win32'
+          ? ['-c', `${dockerCmd} mcp gateway run 2>/dev/null`]
+          : ['/c', `${dockerCmd} mcp gateway run 2>NUL`],
+        env: safeEnv,
+      })
+    }
 
     case 'docker':
       // docker run spawns a fresh container with stdio connected
-      return {
-        type: 'stdio',
-        transport: new Experimental_StdioMCPTransport({
-          command: 'docker',
-          args: [
-            'run',
-            '-i',
-            '--rm',
-            '-e',
-            `OBSIDIAN_API_KEY=${apiKey}`,
-            '-e',
-            `OBSIDIAN_HOST=${config.obsidian.host}`,
-            '-e',
-            `OBSIDIAN_PORT=${config.obsidian.port}`,
-            config.docker?.imageName ?? 'mcp/obsidian',
-          ],
-          env: safeEnv,
-        }),
-      }
+      return new Experimental_StdioMCPTransport({
+        command: 'docker',
+        args: [
+          'run',
+          '-i',
+          '--rm',
+          '-e',
+          `OBSIDIAN_API_KEY=${apiKey}`,
+          '-e',
+          `OBSIDIAN_HOST=${config.obsidian.host}`,
+          '-e',
+          `OBSIDIAN_PORT=${config.obsidian.port}`,
+          config.docker?.imageName ?? 'mcp/obsidian',
+        ],
+        env: safeEnv,
+      })
 
     case 'uvx':
     default:
-      return {
-        type: 'stdio',
-        transport: new Experimental_StdioMCPTransport({
-          command: 'uvx',
-          args: ['mcp-obsidian'],
-          env: { ...safeEnv, ...baseEnv },
-        }),
-      }
+      return new Experimental_StdioMCPTransport({
+        command: 'uvx',
+        args: ['mcp-obsidian'],
+        env: { ...safeEnv, ...baseEnv },
+      })
   }
 }
 
@@ -150,27 +145,43 @@ export async function initializeMCPClient(
     })
 
     // Create transport based on configured mode
-    const transportResult = createTransport(config, apiKey)
+    const transport = createTransport(config, apiKey)
 
     // Create MCP client with appropriate transport
     const client = await createMCPClient({
       name: 'lachesis-obsidian',
-      transport:
-        transportResult.type === 'sse'
-          ? transportResult.config
-          : transportResult.transport,
+      transport,
       onUncaughtError: (error) => {
         debugLog.error('MCP: Uncaught error', { error })
       },
     })
 
     // Get available tools from the server
-    const tools = await client.tools()
+    const allTools = await client.tools()
+
+    // Filter out Docker MCP Gateway internal tools that have malformed schemas
+    // These tools (mcp-*, code-mode) are for dynamic server management and not needed
+    const gatewayInternalTools = new Set([
+      'mcp-find',
+      'mcp-add',
+      'mcp-remove',
+      'mcp-config-set',
+      'mcp-exec',
+      'code-mode',
+    ])
+
+    const tools: Record<string, Tool> = {}
+    for (const [name, tool] of Object.entries(allTools)) {
+      if (!gatewayInternalTools.has(name)) {
+        tools[name] = tool
+      }
+    }
 
     const toolNames = Object.keys(tools)
     debugLog.info('MCP: Client initialized successfully', {
       toolCount: toolNames.length,
       toolNames,
+      filtered: Object.keys(allTools).length - toolNames.length,
     })
 
     mcpClientState = {

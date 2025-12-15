@@ -15,7 +15,14 @@
       "WebFetch(domain:ai-sdk.dev)",
       "Bash(timeout 5 bun run:*)",
       "Bash(docker ps:*)",
-      "WebFetch(domain:docs.docker.com)"
+      "WebFetch(domain:docs.docker.com)",
+      "Bash(docker:*)",
+      "Bash(docker.exe mcp:*)",
+      "Bash(timeout 10 docker.exe:*)",
+      "Bash(timeout 30 bun run:*)",
+      "Bash(curl:*)",
+      "Bash(timeout 45 bun run:*)",
+      "Bash(docker.exe run:*)"
     ],
     "deny": [],
     "ask": []
