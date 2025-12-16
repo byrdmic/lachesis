@@ -31,16 +31,58 @@ export function ConversationView({
   )
 }
 
+/**
+ * Parse hint markers from message content
+ * Returns { content: string, hint: string | null }
+ *
+ * STRICT parsing: only accepts exactly {{hint}}...{{/hint}}
+ * Malformed hints are stripped entirely rather than shown broken
+ */
+function parseHint(content: string): { content: string; hint: string | null } {
+  // Strict regex: exactly {{hint}} and {{/hint}} with no typos
+  const strictMatch = content.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
+
+  if (strictMatch && strictMatch[1]) {
+    const hint = strictMatch[1].trim()
+    const cleanContent = content.replace(/\{\{hint\}\}[\s\S]*?\{\{\/hint\}\}/g, '').trim()
+    return { content: cleanContent, hint: hint || null }
+  }
+
+  // If there's a malformed hint marker, strip it entirely (don't show broken hints)
+  // This catches typos like {/{hint}}, {{hint}...{/hint}}, etc.
+  const hasMalformedHint = /\{+\/?hint\}+/i.test(content)
+  if (hasMalformedHint) {
+    // Strip anything that looks like a hint block attempt
+    const cleanContent = content
+      .replace(/\{+hint\}+[\s\S]*?\{+\/?hint\}+/gi, '')
+      .replace(/\{+\/?hint\}+/gi, '')
+      .trim()
+    return { content: cleanContent, hint: null }
+  }
+
+  return { content, hint: null }
+}
+
 function MessageBubble({ message }: { message: ConversationMessage }) {
   const isAssistant = message.role === 'assistant'
+
+  // Parse hints from assistant messages
+  const { content, hint } = isAssistant
+    ? parseHint(message.content)
+    : { content: message.content, hint: null }
 
   return (
     <Box flexDirection="column" marginBottom={1}>
       <Text color={isAssistant ? 'cyan' : 'green'} bold>
         {isAssistant ? 'AI:' : 'You:'}
       </Text>
-      <Box marginLeft={2}>
-        <Text wrap="wrap">{message.content}</Text>
+      <Box marginLeft={2} flexDirection="column">
+        <Text wrap="wrap">{content}</Text>
+        {hint && (
+          <Box marginTop={1}>
+            <Text dimColor wrap="wrap">({hint})</Text>
+          </Box>
+        )}
       </Box>
     </Box>
   )

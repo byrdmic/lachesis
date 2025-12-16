@@ -7,12 +7,12 @@ import type {
   PlanningLevel,
   SessionLogEntry,
 } from '../../core/project/types.ts'
+import { createSlug } from '../../core/project/types.ts'
 import type {
   ConversationMessage,
   ExtractedProjectData,
 } from '../../ai/client.ts'
 import { Select } from '../components/index.ts'
-import { buildProjectDefinition } from '../../core/project/builder.ts'
 import { scaffoldProject } from '../../fs/scaffolder.ts'
 
 type FinalizePhaseProps = {
@@ -62,31 +62,10 @@ export function FinalizePhase({
           oneLiner.trim() ||
           `Untitled Project ${new Date().toISOString().slice(0, 10)}`
 
-        // Build the project definition based on available data
-        let projectDef
+        const projectSlug = createSlug(effectiveName)
 
-        if (extractedData) {
-          // New AI-based input
-          projectDef = buildProjectDefinition({
-            name: effectiveName,
-            planningLevel,
-            extractedData,
-            conversationLog,
-          })
-        } else if (answers && sessionLog) {
-          // Legacy answer-based input
-          projectDef = buildProjectDefinition({
-            name: effectiveName,
-            planningLevel,
-            answers,
-            sessionLog,
-          })
-        } else {
-          throw new Error('No project data available')
-        }
-
-        // Scaffold the project
-        const result = await scaffoldProject(config.vaultPath, projectDef)
+        // Scaffold the project with static templates
+        const result = await scaffoldProject(config.vaultPath, projectSlug)
 
         if (result.success) {
           setStep('done')
@@ -103,11 +82,7 @@ export function FinalizePhase({
     [
       config,
       projectName,
-      planningLevel,
-      extractedData,
-      conversationLog,
-      answers,
-      sessionLog,
+      oneLiner,
       onComplete,
       onCancel,
     ],

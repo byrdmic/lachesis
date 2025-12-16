@@ -220,6 +220,11 @@ export function ExistingProjectFlow({
         if (!mcpState.connected) {
           throw new Error(mcpState.error || 'Failed to connect to MCP')
         }
+        // Update MCP status so ConversationPhase knows it's connected
+        setMCPStatus({
+          state: 'connected',
+          toolCount: mcpState.toolNames.length,
+        })
 
         // Step 2: Build snapshot via MCP
         setLoadingStep('building_snapshot')

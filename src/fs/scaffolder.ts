@@ -1,17 +1,7 @@
 // Project scaffolder - creates the project directory and files
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import type { ProjectDefinition } from '../core/project/types.ts'
-import {
-  generateOverview,
-  generateRoadmap,
-  generateLog,
-  generateIdeas,
-  generateArchive,
-  generateAdvisorsJson,
-  generateAdvisorChat,
-  generatePromptsReadme,
-} from './templates/index.ts'
+import { readTemplate } from './templates/index.ts'
 
 export type ScaffoldResult =
   | { success: true; projectPath: string }
@@ -22,7 +12,7 @@ export type ScaffoldResult =
  */
 export async function scaffoldProject(
   vaultPath: string,
-  project: ProjectDefinition,
+  projectSlug: string,
 ): Promise<ScaffoldResult> {
   try {
     // Validate vault path
@@ -40,7 +30,7 @@ export async function scaffoldProject(
     }
 
     // Create project directory
-    const projectPath = join(vaultPath, project.slug)
+    const projectPath = join(vaultPath, projectSlug)
 
     if (existsSync(projectPath)) {
       return {
@@ -51,49 +41,19 @@ export async function scaffoldProject(
 
     mkdirSync(projectPath, { recursive: true })
 
-    // Create Prompts subdirectory
-    const promptsPath = join(projectPath, 'Prompts')
-    mkdirSync(promptsPath, { recursive: true })
-
-    // Generate and write all files
-    const files: Array<{ path: string; content: string }> = [
-      {
-        path: join(projectPath, 'Overview.md'),
-        content: generateOverview(project),
-      },
-      {
-        path: join(projectPath, 'Roadmap.md'),
-        content: generateRoadmap(project),
-      },
-      {
-        path: join(projectPath, 'Log.md'),
-        content: generateLog(project),
-      },
-      {
-        path: join(projectPath, 'Ideas.md'),
-        content: generateIdeas(project),
-      },
-      {
-        path: join(projectPath, 'Archive.md'),
-        content: generateArchive(project),
-      },
-      {
-        path: join(projectPath, 'Advisors.json'),
-        content: generateAdvisorsJson(project),
-      },
-      {
-        path: join(projectPath, 'AdvisorChat.md'),
-        content: generateAdvisorChat(project),
-      },
-      {
-        path: join(promptsPath, 'PROMPTS-README.md'),
-        content: generatePromptsReadme(project),
-      },
+    // Copy all static templates
+    const files = [
+      { dest: join(projectPath, 'Overview.md'), template: 'overview' as const },
+      { dest: join(projectPath, 'Roadmap.md'), template: 'roadmap' as const },
+      { dest: join(projectPath, 'Tasks.md'), template: 'tasks' as const },
+      { dest: join(projectPath, 'Log.md'), template: 'log' as const },
+      { dest: join(projectPath, 'Ideas.md'), template: 'ideas' as const },
+      { dest: join(projectPath, 'Archive.md'), template: 'archive' as const },
     ]
 
     // Write all files
     for (const file of files) {
-      writeFileSync(file.path, file.content, 'utf-8')
+      writeFileSync(file.dest, readTemplate(file.template), 'utf-8')
     }
 
     return { success: true, projectPath }

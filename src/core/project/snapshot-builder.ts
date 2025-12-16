@@ -135,7 +135,7 @@ function toProjectRelative(path: string, projectFolder: string): string {
 }
 
 async function callTool(tools: ToolMap, name: string, args: Record<string, unknown>) {
-  debugLog.info('callTool', { name, args })
+  // debugLog.info('callTool', { name, args })
   const tool = tools[name]
   if (!tool || typeof (tool as { execute?: Function }).execute !== 'function') {
     throw new Error(`MCP tool not available: ${name}`)
@@ -155,14 +155,14 @@ async function listProjectFiles(
   // Convert full path to vault-relative path for MCP tool
   const relativePath = toVaultRelativePath(projectFolder, vaultPath)
 
-  debugLog.info('MCP snapshot: tool availability', {
-    requestedPath: projectFolder,
-    relativePath,
-    vaultPath,
-    availableTools,
-    hasListDir,
-    hasListVault,
-  })
+  // debugLog.info('MCP snapshot: tool availability', {
+  //   requestedPath: projectFolder,
+  //   relativePath,
+  //   vaultPath,
+  //   availableTools,
+  //   hasListDir,
+  //   hasListVault,
+  // })
 
   // Prefer list_files_in_dir when available
   if (hasListDir) {
@@ -187,11 +187,11 @@ async function listProjectFiles(
 
       // Fallback: if result is already an array (legacy format), use it directly
       if (Array.isArray(result)) {
-        debugLog.info('MCP snapshot: obsidian_list_files_in_dir legacy array result', {
-          relativePath,
-          count: result.length,
-          result: result.slice(0, 5),
-        })
+        // debugLog.info('MCP snapshot: obsidian_list_files_in_dir legacy array result', {
+        //   relativePath,
+        //   count: result.length,
+        //   result: result.slice(0, 5),
+        // })
         return result as ListFilesResult
       }
 
@@ -232,12 +232,12 @@ async function listProjectFiles(
             })
           : []
 
-      debugLog.info('MCP snapshot: list_files_in_vault fallback', {
-        projectFolder,
-        vaultCount: Array.isArray(vaultResult) ? vaultResult.length : undefined,
-        filteredCount: filtered.length,
-        sample: filtered.slice(0, 5),
-      })
+      // debugLog.info('MCP snapshot: list_files_in_vault fallback', {
+      //   projectFolder,
+      //   vaultCount: Array.isArray(vaultResult) ? vaultResult.length : undefined,
+      //   filteredCount: filtered.length,
+      //   sample: filtered.slice(0, 5),
+      // })
       return filtered as ListFilesResult
     } catch (err) {
       debugLog.error('MCP snapshot: list_files_in_vault failed', {

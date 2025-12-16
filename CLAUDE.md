@@ -26,7 +26,7 @@ What this project is: a Bun/Ink CLI that interviews a user about a project idea,
 ## Typical workflow (what the CLI does)
 1) Start (`lachesis start`): loads config, optionally shows settings, checks AI connectivity.  
 2) New interview: collects setup info, uses AI to generate/stream next questions, then extracts structured data and builds a `ProjectDefinition`.  
-3) Finalize/scaffold: writes project folder under the configured vault with `Overview.md`, `Roadmap.md`, `Log.md`, `Idea.md`, `Archive.md`, `Advisors.json`, `AdvisorChat.md`, and `Prompts/PROMPTS-README.md`.
+3) Finalize/scaffold: writes project folder under the configured vault with `Overview.md`, `Roadmap.md`, `Log.md`, `Ideas.md`, `Archive.md`, `Advisors.json`, `AdvisorChat.md`, and `Prompts/PROMPTS-README.md`.
 
 ## Progressive disclosure: where to look for details
 - AI prompts/behavior: `src/ai/client.ts`, `src/ai/prompts.ts`.
@@ -36,4 +36,3 @@ What this project is: a Bun/Ink CLI that interviews a user about a project idea,
 
 ## Testing/verification
 - Run `bun run typecheck` after changes.
-- No automated tests exist; manual verification is via running the CLI in dev mode (`bun run src/cli/index.tsx`) and stepping through `start`/`new`.

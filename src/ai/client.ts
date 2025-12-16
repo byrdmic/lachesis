@@ -139,7 +139,7 @@ export async function streamNextQuestion(
     const stream = await streamText({
       model,
       messages,
-      maxOutputTokens: 300,
+      maxOutputTokens: 500,
     })
 
     let fullText = ''
@@ -497,6 +497,10 @@ export type AgenticResult = {
   debugDetails?: string
 }
 
+export type StreamingAgenticOptions = AgenticConversationOptions & {
+  onTextUpdate?: (partial: string) => void
+}
+
 /**
  * Run an agentic conversation with MCP tool access.
  * The model can autonomously call MCP tools to search, read, and write vault files.
@@ -556,6 +560,7 @@ export async function runAgenticConversation(
     const result = await generateText({
       model,
       messages,
+      maxOutputTokens: 500,
       tools: Object.keys(tools).length > 0 ? tools : undefined,
       stopWhen: stepCountIs(options.maxToolCalls ?? 10),
       onStepFinish: (step) => {
@@ -611,6 +616,134 @@ export async function runAgenticConversation(
     const stack = err instanceof Error ? err.stack : undefined
 
     debugLog.error('Agentic: Failed', {
+      message,
+      stack,
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+    })
+
+    return {
+      success: false,
+      error: message,
+      debugDetails: stack ? `${message}\n${stack}` : message,
+    }
+  }
+}
+
+/**
+ * Stream an agentic conversation with MCP tool access.
+ * Like runAgenticConversation but streams text incrementally.
+ */
+export async function streamAgenticConversation(
+  config: LachesisConfig,
+  options: StreamingAgenticOptions,
+): Promise<AgenticResult> {
+  const model = openai(config.defaultModel) as unknown as LanguageModel
+
+  try {
+    // Get tools if MCP is connected and configured
+    let tools: Record<string, Tool> = {}
+
+    if (isMCPConnected() && config.mcp?.enabled) {
+      if (options.projectPath && config.mcp) {
+        tools = createScopedTools(options.projectPath, config.mcp)
+      } else {
+        debugLog.warn(
+          'Agentic stream: MCP connected but no projectPath provided, skipping tools',
+        )
+      }
+
+      const toolNames = Object.keys(tools)
+      debugLog.info('Agentic stream: Using MCP tools', {
+        toolCount: toolNames.length,
+        toolNames,
+        projectPath: options.projectPath,
+      })
+    } else {
+      debugLog.info('Agentic stream: MCP not connected or disabled, running without tools')
+    }
+
+    // Build messages
+    const messages: CoreMessage[] = [
+      { role: 'system', content: options.systemPrompt },
+      ...options.messages.map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      })),
+    ]
+
+    // Track tool calls for reporting
+    const toolCalls: AgenticToolCall[] = []
+
+    debugLog.info('Agentic stream: Starting conversation', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      messageCount: messages.length,
+      hasTools: Object.keys(tools).length > 0,
+      maxSteps: options.maxToolCalls ?? 10,
+    })
+
+    // Run streaming generation with tool-calling loop
+    const stream = streamText({
+      model,
+      messages,
+      maxOutputTokens: 500,
+      tools: Object.keys(tools).length > 0 ? tools : undefined,
+      stopWhen: stepCountIs(options.maxToolCalls ?? 10),
+      onStepFinish: (step) => {
+        // Track tool calls as they happen
+        if (step.toolCalls && step.toolCalls.length > 0) {
+          for (const call of step.toolCalls) {
+            const toolResult = step.toolResults?.find(
+              (r: { toolCallId: string }) => r.toolCallId === call.toolCallId,
+            )
+
+            const toolArgs = (call as { input?: Record<string, unknown> }).input ?? {}
+
+            options.onToolCall?.(call.toolName, toolArgs)
+
+            toolCalls.push({
+              name: call.toolName,
+              args: toolArgs,
+              result: toolResult,
+            })
+
+            if (toolResult !== undefined) {
+              options.onToolResult?.(call.toolName, toolResult)
+            }
+
+            debugLog.info('Agentic stream: Tool call completed', {
+              tool: call.toolName,
+              args: toolArgs,
+              hasResult: toolResult !== undefined,
+            })
+          }
+        }
+      },
+    })
+
+    // Stream text updates
+    let fullText = ''
+    for await (const delta of stream.textStream) {
+      fullText += delta
+      options.onTextUpdate?.(fullText)
+    }
+
+    debugLog.info('Agentic stream: Conversation complete', {
+      responseLength: fullText.length,
+      toolCallCount: toolCalls.length,
+    })
+
+    return {
+      success: true,
+      response: fullText,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    const stack = err instanceof Error ? err.stack : undefined
+
+    debugLog.error('Agentic stream: Failed', {
       message,
       stack,
       provider: config.defaultProvider,

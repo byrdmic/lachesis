@@ -12,7 +12,7 @@ import {
   extractProjectData,
   shouldContinueConversation,
   streamNextQuestion,
-  runAgenticConversation,
+  streamAgenticConversation,
 } from '../../ai/client.ts'
 import {
   buildCoachingPrompt,
@@ -281,11 +281,11 @@ export function ConversationPhase({
 
           return { ...s, messages }
         })
-        debugLog.debug('Conversation: streaming partial question', {
-          streamId,
-          length: partial.length,
-          preview: partial.slice(0, 120),
-        })
+        // debugLog.debug('Conversation: streaming partial question', {
+        //   streamId,
+        //   length: partial.length,
+        //   preview: partial.slice(0, 120),
+        // })
       })
 
       if (result.success && result.content !== undefined) {
@@ -324,14 +324,92 @@ export function ConversationPhase({
   )
 
   const generateFirstQuestion = async () => {
-    debugLog.info('Conversation: starting first question')
-    await streamQuestion({
-      planningLevel,
-      projectName: effectiveProjectName,
-      oneLiner: effectiveOneLiner,
-      messages: [],
-      coveredTopics: [],
+    debugLog.info('Conversation: starting first question', {
+      sessionKind,
+      mcpEnabled,
+      projectPath,
     })
+
+    // For existing projects with MCP, use the agentic path with tools
+    // so the AI can read files and provide a substantive opening
+    if (sessionKind === 'existing' && mcpEnabled && projectPath) {
+      debugLog.info('Conversation: using agentic mode for first message')
+
+      const toolNames = getMCPToolNames()
+      const qaPrompt = buildProjectQAPrompt(
+        projectContext ?? '',
+        toolNames,
+        new Date().getHours(),
+      )
+
+      const streamId = `${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)}`
+      setState((s) => ({ ...s, step: 'generating_question' }))
+
+      const result = await streamAgenticConversation(config, {
+        systemPrompt: qaPrompt,
+        messages: [], // No messages yet - this is the first one
+        projectPath,
+        maxToolCalls: 10,
+        onToolCall: (toolName, args) => {
+          debugLog.info('Conversation: MCP tool called (first message)', { toolName, args })
+        },
+        onToolResult: (toolName, resultData) => {
+          debugLog.info('Conversation: MCP tool result (first message)', { toolName, result: resultData })
+        },
+        onTextUpdate: (partial) => {
+          setState((s) => {
+            const messages = [...s.messages]
+            const last = messages[messages.length - 1]
+
+            if (last && last.role === 'assistant' && last.timestamp === streamId) {
+              messages[messages.length - 1] = { ...last, content: partial }
+            } else {
+              messages.push({
+                role: 'assistant',
+                content: partial,
+                timestamp: streamId,
+              })
+            }
+
+            return { ...s, messages }
+          })
+        },
+      })
+
+      if (result.success && result.response) {
+        setState((s) => ({
+          ...s,
+          step: 'waiting_for_answer',
+          messages: s.messages.map((m) =>
+            m.timestamp === streamId ? { ...m, content: result.response! } : m,
+          ),
+        }))
+
+        debugLog.info('Conversation: first agentic message complete', {
+          responseLength: result.response.length,
+          toolCallCount: result.toolCalls?.length ?? 0,
+        })
+      } else {
+        debugLog.error('Conversation: first agentic message failed', {
+          error: result.error,
+        })
+        setState((s) => ({
+          ...s,
+          step: 'error',
+          error: result.error || 'Failed to generate opening message',
+          errorDetails: debug ? result.debugDetails || null : null,
+        }))
+      }
+    } else {
+      // For new projects or non-MCP mode, use the coaching prompt
+      await streamQuestion({
+        planningLevel,
+        projectName: effectiveProjectName,
+        oneLiner: effectiveOneLiner,
+        messages: [],
+        coveredTopics: [],
+      })
+    }
   }
 
   const handleUserAnswer = useCallback(
@@ -410,8 +488,8 @@ export function ConversationPhase({
 
       // Generate next response - use agentic mode with MCP tools if enabled
       if (mcpEnabled && projectPath) {
-        // Use agentic conversation with MCP tools
-        debugLog.info('Conversation: using agentic mode with MCP tools', {
+        // Use streaming agentic conversation with MCP tools
+        debugLog.info('Conversation: using streaming agentic mode with MCP tools', {
           projectPath,
         })
 
@@ -422,7 +500,10 @@ export function ConversationPhase({
           new Date().getHours(),
         )
 
-        const result = await runAgenticConversation(config, {
+        // Use timestamp + random suffix to avoid collision
+        const streamId = `${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)}`
+
+        const result = await streamAgenticConversation(config, {
           systemPrompt: qaPrompt,
           messages: newMessages,
           projectPath,
@@ -430,22 +511,42 @@ export function ConversationPhase({
           onToolCall: (toolName, args) => {
             debugLog.info('Conversation: MCP tool called', { toolName, args })
           },
-          onToolResult: (toolName, result) => {
-            debugLog.info('Conversation: MCP tool result', { toolName, result })
+          onToolResult: (toolName, resultData) => {
+            debugLog.info('Conversation: MCP tool result', { toolName, result: resultData })
+          },
+          onTextUpdate: (partial) => {
+            // Update messages with streaming content
+            setState((s) => {
+              const messages = [...s.messages]
+              const last = messages[messages.length - 1]
+
+              if (
+                last &&
+                last.role === 'assistant' &&
+                last.timestamp === streamId
+              ) {
+                messages[messages.length - 1] = { ...last, content: partial }
+              } else {
+                messages.push({
+                  role: 'assistant',
+                  content: partial,
+                  timestamp: streamId,
+                })
+              }
+
+              return { ...s, messages }
+            })
           },
         })
 
         if (result.success && result.response) {
-          const assistantMessage: ConversationMessage = {
-            role: 'assistant',
-            content: result.response,
-            timestamp: new Date().toISOString(),
-          }
-
+          // Finalize the message with complete content
           setState((s) => ({
             ...s,
             step: 'waiting_for_answer',
-            messages: [...s.messages, assistantMessage],
+            messages: s.messages.map((m) =>
+              m.timestamp === streamId ? { ...m, content: result.response! } : m,
+            ),
           }))
 
           debugLog.info('Conversation: agentic response received', {
