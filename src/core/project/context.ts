@@ -7,7 +7,7 @@ export type FileCategory =
   | 'overview'
   | 'roadmap'
   | 'log'
-  | 'idea'
+  | 'ideas'
   | 'archive'
   | 'advisors'
   | 'advisor_chat'

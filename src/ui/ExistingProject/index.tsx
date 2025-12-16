@@ -7,10 +7,8 @@ import { loadProjectSettings, saveProjectSettings } from '../../config/project-s
 import { updateConfig } from '../../config/config.ts'
 import { StatusBar, SettingsPanel } from '../components/index.ts'
 import type { AIStatusDescriptor, MCPStatusDescriptor } from '../components/StatusBar.tsx'
-import {
-  buildProjectContext,
-  serializeContextForPrompt,
-} from '../../core/project/context-builder.ts'
+import { buildProjectSnapshotViaMCP } from '../../core/project/snapshot-builder.ts'
+import { formatProjectSnapshotForModel } from '../../ai/prompts.ts'
 import {
   getConversationState,
   saveConversationState,
@@ -26,16 +24,17 @@ import {
   closeMCPClient,
   isMCPConnected,
   getMCPToolNames,
+  getMCPTools,
 } from '../../mcp/index.ts'
 
 /**
  * Loading progress steps for project context building
  */
-type LoadingStep = 'scanning' | 'analyzing'
+type LoadingStep = 'connecting_mcp' | 'building_snapshot'
 
 const LOADING_STEP_MESSAGES: Record<LoadingStep, string> = {
-  scanning: 'Scanning project files...',
-  analyzing: 'Analyzing project health...',
+  connecting_mcp: 'Connecting to MCP...',
+  building_snapshot: 'Building project snapshot...',
 }
 
 type ProjectSummary = {
@@ -93,7 +92,7 @@ export function ExistingProjectFlow({
 
   // Context loading state
   const [serializedContext, setSerializedContext] = useState<string | null>(null)
-  const [loadingStep, setLoadingStep] = useState<LoadingStep>('scanning')
+  const [loadingStep, setLoadingStep] = useState<LoadingStep>('connecting_mcp')
 
   const notifyDebugHotkeys = useCallback(
     (enabled: boolean) => onDebugHotkeysChange?.(enabled),
@@ -195,7 +194,7 @@ export function ExistingProjectFlow({
     setProjectOverrides({})
   }, [config, loadedProject?.path])
 
-  // Effect to build project context when entering loading_context
+  // Effect to build project snapshot when entering loading_context
   useEffect(() => {
     if (view !== 'loading_context' || !loadedProject) return
 
@@ -204,45 +203,40 @@ export function ExistingProjectFlow({
 
     async function loadContext() {
       try {
-        debugLog.info('Starting project context load', {
+        debugLog.info('Starting project snapshot build (MCP)', {
           projectName: project.name,
           projectPath: project.path,
         })
 
-        // Step 1: Scanning
-        setLoadingStep('scanning')
-        setAIStatus({ state: 'processing', message: 'Scanning project files...' })
-        debugLog.info('Scanning project files', { path: project.path })
+        if (!projectConfig.mcp?.enabled) {
+          throw new Error('MCP is required for existing projects. Enable MCP in settings.')
+        }
 
-        const context = await buildProjectContext(project.path)
+        // Step 1: Connect MCP
+        setLoadingStep('connecting_mcp')
+        setAIStatus({ state: 'processing', message: 'Connecting to MCP...' })
+        const mcpState = await initializeMCPClient(projectConfig.mcp!)
+        if (cancelled) return
+        if (!mcpState.connected) {
+          throw new Error(mcpState.error || 'Failed to connect to MCP')
+        }
+
+        // Step 2: Build snapshot via MCP
+        setLoadingStep('building_snapshot')
+        setAIStatus({ state: 'processing', message: 'Building project snapshot...' })
+
+        const tools = getMCPTools()
+        // Use the configured project path (normalized) for MCP calls
+        const mcpProjectPath = project.path.replace(/\\/g, '/')
+        const snapshot = await buildProjectSnapshotViaMCP(mcpProjectPath, projectConfig.vaultPath, tools)
+        debugLog.info('snapshot', {...snapshot})
         if (cancelled) return
 
-        debugLog.info('Project files scanned', {
-          fileCount: context.files.length,
-          files: context.files.map((f) => ({
-            path: f.relativePath,
-            exists: f.exists,
-            health: f.health,
-          })),
+        const serialized = formatProjectSnapshotForModel(snapshot)
+        debugLog.debug('Snapshot serialized for AI', {
+          length: serialized.length,
+          preview: serialized.slice(0, 300),
         })
-
-        // Step 2: Analyzing
-        setLoadingStep('analyzing')
-        setAIStatus({ state: 'processing', message: 'Analyzing project health...' })
-        debugLog.info('Analyzing project health', {
-          overallHealth: context.health.overallHealth,
-          missingCategories: context.health.missingCategories,
-          weakFiles: context.health.weakFiles,
-        })
-
-        // Serialize context for the conversation
-        const serialized = serializeContextForPrompt(context)
-        debugLog.debug('Serialized context for AI', {
-          contextLength: serialized.length,
-          contextPreview: serialized.slice(0, 500),
-        })
-
-        if (cancelled) return
 
         setSerializedContext(serialized)
         setView('conversation')
@@ -264,7 +258,7 @@ export function ExistingProjectFlow({
     return () => {
       cancelled = true
     }
-  }, [view, loadedProject?.path])
+  }, [view, loadedProject?.path, projectConfig])
 
   // Effect to set active existing project when entering conversation
   useEffect(() => {
@@ -559,7 +553,7 @@ export function ExistingProjectFlow({
   }
 
   if (view === 'loading_context' && loadedProject) {
-    const steps: LoadingStep[] = ['scanning', 'analyzing']
+    const steps: LoadingStep[] = ['connecting_mcp', 'building_snapshot']
     const currentStepIndex = steps.indexOf(loadingStep)
 
     return (

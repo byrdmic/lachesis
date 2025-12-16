@@ -87,7 +87,7 @@ ${nonGoals}
 
 - [Roadmap](./Roadmap.md)
 - [Log](./Log.md)
-- [Idea](./Idea.md)
+- [Ideas](./Ideas.md)
 - [Archive](./Archive.md)
 - [Advisor Chat](./AdvisorChat.md)
 - [Prompts](./Prompts/)

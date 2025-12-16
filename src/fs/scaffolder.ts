@@ -6,7 +6,7 @@ import {
   generateOverview,
   generateRoadmap,
   generateLog,
-  generateIdea,
+  generateIdeas,
   generateArchive,
   generateAdvisorsJson,
   generateAdvisorChat,
@@ -70,8 +70,8 @@ export async function scaffoldProject(
         content: generateLog(project),
       },
       {
-        path: join(projectPath, 'Idea.md'),
-        content: generateIdea(project),
+        path: join(projectPath, 'Ideas.md'),
+        content: generateIdeas(project),
       },
       {
         path: join(projectPath, 'Archive.md'),

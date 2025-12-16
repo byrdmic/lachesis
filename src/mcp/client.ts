@@ -68,32 +68,34 @@ function createTransport(config: MCPConfig, apiKey: string) {
       })
     }
 
-    case 'docker':
+    case 'docker': {
       // docker run spawns a fresh container with stdio connected
+      // Wrap in shell to suppress stderr (Python SSL warnings clutter the terminal)
+      const isWSL = process.platform === 'linux' && process.env.WSL_DISTRO_NAME
+      const dockerCmd = isWSL ? 'docker.exe' : 'docker'
+      const imageName = config.docker?.imageName ?? 'mcp/obsidian'
+      const dockerRunCmd = `${dockerCmd} run -i --rm -e OBSIDIAN_API_KEY=${apiKey} -e OBSIDIAN_HOST=${config.obsidian.host} -e OBSIDIAN_PORT=${config.obsidian.port} ${imageName}`
       return new Experimental_StdioMCPTransport({
-        command: 'docker',
-        args: [
-          'run',
-          '-i',
-          '--rm',
-          '-e',
-          `OBSIDIAN_API_KEY=${apiKey}`,
-          '-e',
-          `OBSIDIAN_HOST=${config.obsidian.host}`,
-          '-e',
-          `OBSIDIAN_PORT=${config.obsidian.port}`,
-          config.docker?.imageName ?? 'mcp/obsidian',
-        ],
+        command: isWSL ? 'bash' : process.platform === 'win32' ? 'cmd' : 'bash',
+        args: isWSL || process.platform !== 'win32'
+          ? ['-c', `${dockerRunCmd} 2>/dev/null`]
+          : ['/c', `${dockerRunCmd} 2>NUL`],
         env: safeEnv,
       })
+    }
 
     case 'uvx':
-    default:
+    default: {
+      // Wrap in shell to suppress stderr (Python SSL warnings clutter the terminal)
+      const isWSL = process.platform === 'linux' && process.env.WSL_DISTRO_NAME
       return new Experimental_StdioMCPTransport({
-        command: 'uvx',
-        args: ['mcp-obsidian'],
+        command: isWSL ? 'bash' : process.platform === 'win32' ? 'cmd' : 'bash',
+        args: isWSL || process.platform !== 'win32'
+          ? ['-c', 'uvx mcp-obsidian 2>/dev/null']
+          : ['/c', 'uvx mcp-obsidian 2>NUL'],
         env: { ...safeEnv, ...baseEnv },
       })
+    }
   }
 }
 

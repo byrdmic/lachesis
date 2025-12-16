@@ -65,10 +65,7 @@ export const DEFAULT_CONFIG: LachesisConfig = {
 
 export const OPENAI_MODELS = [
   'gpt-5.2-pro',
-  'gpt-5.2-chat-latest',
   'gpt-5.2',
-  'gpt-5.1-codex-mini',
-  'gpt-5.1-codex',
   'gpt-5.1',
   'gpt-5-mini',
   'gpt-5-nano',

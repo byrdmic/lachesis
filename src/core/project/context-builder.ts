@@ -17,7 +17,7 @@ const CATEGORY_FILES: Record<FileCategory, string[]> = {
   overview: ['Overview.md'],
   roadmap: ['Roadmap.md'],
   log: ['Log.md'],
-  idea: ['Idea.md'],
+  ideas: ['Ideas.md'],
   archive: ['Archive.md'],
   advisors: ['Advisors.json'],
   advisor_chat: ['AdvisorChat.md'],
@@ -62,7 +62,7 @@ export function categorizeFile(relativePath: string): FileCategory | 'other' {
   if (lower === 'overview.md') return 'overview'
   if (lower === 'roadmap.md') return 'roadmap'
   if (lower === 'log.md') return 'log'
-  if (lower === 'idea.md') return 'idea'
+  if (lower === 'ideas.md') return 'ideas'
   if (lower === 'archive.md') return 'archive'
   if (lower === 'advisors.json') return 'advisors'
   if (lower === 'advisorchat.md') return 'advisor_chat'
@@ -177,7 +177,7 @@ export function assessProjectHealth(
     'overview',
     'roadmap',
     'log',
-    'idea',
+    'ideas',
     'archive',
     'advisors',
     'advisor_chat',
@@ -228,7 +228,7 @@ function scanProjectFiles(projectPath: string): ProjectFileInfo[] {
     'Overview.md',
     'Roadmap.md',
     'Log.md',
-    'Idea.md',
+    'Ideas.md',
     'Archive.md',
     'Advisors.json',
     'AdvisorChat.md',

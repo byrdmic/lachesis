@@ -2,7 +2,7 @@
 import type { ProjectDefinition } from '../../core/project/types.ts'
 import { generateBaseFrontmatter } from './frontmatter.ts'
 
-export function generateIdea(project: ProjectDefinition): string {
+export function generateIdeas(project: ProjectDefinition): string {
   const frontmatter = generateBaseFrontmatter(project, {
     extraFields: {
       idea_version: 1,
