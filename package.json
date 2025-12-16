@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "bun run src/cli/index.tsx",
     "start": "bun run src/cli/index.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
   },
   "dependencies": {
     "@ai-sdk/mcp": "^0.0.12",

@@ -22,7 +22,9 @@
       "Bash(timeout 30 bun run:*)",
       "Bash(curl:*)",
       "Bash(timeout 45 bun run:*)",
-      "Bash(docker.exe run:*)"
+      "Bash(docker.exe run:*)",
+      "Bash(find:*)",
+      "Bash(bun test:*)"
     ],
     "deny": [],
     "ask": []
