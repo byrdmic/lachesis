@@ -373,6 +373,97 @@ const DEFAULT_DISCOVERY_TOPICS = [
 // Export schema for use elsewhere
 export { ExtractedProjectDataSchema }
 
+// Schema for project name suggestions
+const ProjectNameSuggestionsSchema = z.object({
+  suggestions: z
+    .array(
+      z.object({
+        name: z.string().describe('Project name (2-4 words, catchy and memorable)'),
+        reasoning: z.string().describe('Brief explanation of why this name fits'),
+      }),
+    )
+    .min(3)
+    .max(5)
+    .describe('3-5 creative project name suggestions'),
+})
+
+export type ProjectNameSuggestion = {
+  name: string
+  reasoning: string
+}
+
+/**
+ * Generate creative project name suggestions based on the conversation
+ */
+export async function generateProjectNameSuggestions(
+  context: ConversationContext,
+  config: LachesisConfig,
+): Promise<{
+  success: boolean
+  suggestions?: ProjectNameSuggestion[]
+  error?: string
+  debugDetails?: string
+}> {
+  const model = openai(config.defaultModel) as unknown as LanguageModel
+
+  try {
+    const conversationText = context.messages
+      .map((m) => `${m.role === 'assistant' ? 'Q' : 'A'}: ${m.content}`)
+      .join('\n\n')
+
+    debugLog.info('Generating project name suggestions: sending request', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      messageCount: context.messages.length,
+      projectName: context.projectName,
+    })
+
+    const result = await generateObject({
+      model,
+      schema: ProjectNameSuggestionsSchema,
+      prompt: `Based on this planning conversation, suggest 3-5 creative, memorable project names.
+
+Current working name: ${context.projectName || 'Not yet named'}
+One-liner: ${context.oneLiner || 'Not provided'}
+
+Conversation transcript:
+${conversationText}
+
+Guidelines for names:
+- Short and memorable (2-4 words max)
+- Could be: descriptive, metaphorical, playful, or acronym-based
+- Avoid generic names like "Project X" or "My App"
+- Consider the project's purpose, audience, and vibe
+- Mix styles: some serious, some creative, some punny if appropriate`,
+    })
+
+    debugLog.info('Generating project name suggestions: received response', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      suggestionCount: result.object.suggestions.length,
+    })
+
+    return {
+      success: true,
+      suggestions: result.object.suggestions,
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    const stack = err instanceof Error ? err.stack : undefined
+    debugLog.error('Failed to generate project name suggestions', {
+      message,
+      stack,
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+    })
+    return {
+      success: false,
+      error: `Failed to generate name suggestions: ${message}`,
+      debugDetails: stack ? `${message}\n${stack}` : message,
+    }
+  }
+}
+
 // Schema for AI briefing response when loading existing projects
 const AIBriefingResponseSchema = z.object({
   greeting: z.string().describe('Time-appropriate Lachesis greeting'),

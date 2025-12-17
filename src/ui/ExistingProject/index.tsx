@@ -26,6 +26,7 @@ import {
   getMCPToolNames,
   getMCPTools,
 } from '../../mcp/index.ts'
+import { assertNever } from '../../utils/type-guards.ts'
 
 /**
  * Loading progress steps for project context building
@@ -508,7 +509,7 @@ export function ExistingProjectFlow({
     0,
   )
 
-  // Show settings panel overlay - only with project context if a project is loaded
+  // Overlay: Settings panel (early return before switch)
   if (showSettings) {
     return (
       <SettingsPanel
@@ -531,182 +532,177 @@ export function ExistingProjectFlow({
     )
   }
 
+  // Initial loading state (early return before view switch)
   if (loading) {
-    return (
-      renderWithStatusBar(
-        <Box padding={1}>
-          <Text color="cyan">Scanning your vault for projects...</Text>
-        </Box>,
-      )
+    return renderWithStatusBar(
+      <Box padding={1}>
+        <Text color="cyan">Scanning your vault for projects...</Text>
+      </Box>,
     )
   }
 
-  if (view === 'empty') {
-    const vaultLabel = config.vaultPath || 'your configured vault'
-    return (
-      renderWithStatusBar(
-        <Box padding={1} flexDirection="column">
-          <Text bold>No projects found in {vaultLabel}</Text>
-          {error && <Text color="red">{error}</Text>}
-          <Text>{'\n'}</Text>
-          <Text dimColor>
-            Create a project first, or press [B] to go back / [Q] to quit.
-          </Text>
-        </Box>,
-      )
-    )
-  }
+  // View renderer with switch for exhaustive handling
+  const renderViewStep = (): React.ReactNode => {
+    switch (view) {
+      case 'empty': {
+        const vaultLabel = config.vaultPath || 'your configured vault'
+        return (
+          <Box padding={1} flexDirection="column">
+            <Text bold>No projects found in {vaultLabel}</Text>
+            {error && <Text color="red">{error}</Text>}
+            <Text>{'\n'}</Text>
+            <Text dimColor>
+              Create a project first, or press [B] to go back / [Q] to quit.
+            </Text>
+          </Box>
+        )
+      }
 
-  if (view === 'loading_context' && loadedProject) {
-    const steps: LoadingStep[] = ['connecting_mcp', 'building_snapshot']
-    const currentStepIndex = steps.indexOf(loadingStep)
+      case 'loading_context': {
+        if (!loadedProject) return null
+        const steps: LoadingStep[] = ['connecting_mcp', 'building_snapshot']
+        const currentStepIndex = steps.indexOf(loadingStep)
 
-    return (
-      renderWithStatusBar(
-        <Box padding={1} flexDirection="column">
-          <Text color="cyan" bold>
-            Loading project context...
-          </Text>
-          <Text>{'\n'}</Text>
+        return (
+          <Box padding={1} flexDirection="column">
+            <Text color="cyan" bold>
+              Loading project context...
+            </Text>
+            <Text>{'\n'}</Text>
 
-          {/* Progress steps */}
-          <Box flexDirection="column" marginLeft={1}>
-            {steps.map((step, idx) => {
-              const isComplete = idx < currentStepIndex
-              const isCurrent = idx === currentStepIndex
+            <Box flexDirection="column" marginLeft={1}>
+              {steps.map((step, idx) => {
+                const isComplete = idx < currentStepIndex
+                const isCurrent = idx === currentStepIndex
 
-              let icon = '○'
-              let color: string | undefined = 'gray'
-              if (isComplete) {
-                icon = '✓'
-                color = 'green'
-              } else if (isCurrent) {
-                icon = '●'
-                color = 'cyan'
-              }
+                let icon = '○'
+                let color: string | undefined = 'gray'
+                if (isComplete) {
+                  icon = '✓'
+                  color = 'green'
+                } else if (isCurrent) {
+                  icon = '●'
+                  color = 'cyan'
+                }
+
+                return (
+                  <Box key={step}>
+                    <Text color={color}>
+                      {icon} {LOADING_STEP_MESSAGES[step]}
+                    </Text>
+                  </Box>
+                )
+              })}
+            </Box>
+
+            <Text>{'\n'}</Text>
+            <Text dimColor>Press Esc to cancel.</Text>
+          </Box>
+        )
+      }
+
+      case 'conversation': {
+        if (!loadedProject || !serializedContext) return null
+        const storedState = getConversationState(loadedProject.path)
+        const mcpEnabled = mcpStatus.state === 'connected'
+
+        return (
+          <ConversationPhase
+            config={projectConfig}
+            planningLevel="Existing project"
+            projectName={loadedProject.name}
+            oneLiner={loadedProject.overview?.split('\n')[0] || 'Existing project'}
+            debug={debug}
+            sessionKind="existing"
+            projectContext={serializedContext}
+            initialState={storedState ?? undefined}
+            mcpEnabled={mcpEnabled}
+            projectPath={loadedProject.path}
+            onInputModeChange={setInputLocked}
+            onAIStatusChange={setAIStatus}
+            onDebugHotkeysChange={notifyDebugHotkeys}
+            onShowSettings={() => setShowSettings(true)}
+            onStateChange={(state: StoredConversationState) => {
+              saveConversationState(loadedProject.path, state)
+            }}
+            onClearConversation={() => {
+              clearConversationState(loadedProject.path)
+              clearActiveExistingProject()
+            }}
+            onComplete={handleConversationComplete}
+            onCancel={handleCancel}
+          />
+        )
+      }
+
+      case 'complete': {
+        if (!loadedProject) return null
+        return (
+          <Box padding={1} flexDirection="column">
+            <Text color="green" bold>
+              Session complete
+            </Text>
+            <Text>{loadedProject.name}</Text>
+            <Text color="cyan">{loadedProject.path}</Text>
+            <Text>{'\n'}</Text>
+            <Text dimColor>
+              Press [S] settings, [B] to go back to project list, or [Q] to quit.
+            </Text>
+          </Box>
+        )
+      }
+
+      case 'list':
+        return (
+          <Box padding={1} flexDirection="column" flexGrow={1}>
+            <Text bold>Select an existing project</Text>
+            <Text dimColor>
+              Use ↑/↓ to navigate, Enter to load, [B] back, [Q] quit.
+            </Text>
+            <Text dimColor>
+              Vault: {config.vaultPath || 'Not set - update in settings'}
+            </Text>
+            <Text>{'\n'}</Text>
+
+            {formattedProjects.map((project, idx) => {
+              const isSelected = idx === selectedIndex
+              const prefix = isSelected ? '❯ ' : '  '
+              const paddedName = project.name.padEnd(nameWidth)
+              const paddedUpdated =
+                updatedWidth > 0 ? project.updatedLabel.padEnd(updatedWidth) : ''
+              const paddedOverview =
+                overviewWidth > 0
+                  ? project.overviewSnippet.padEnd(overviewWidth)
+                  : project.overviewSnippet
 
               return (
-                <Box key={step}>
-                  <Text color={color}>
-                    {icon} {LOADING_STEP_MESSAGES[step]}
-                  </Text>
-                </Box>
+                <Text key={project.path} color={isSelected ? 'cyan' : undefined}>
+                  {prefix}
+                  {paddedName}
+                  {updatedWidth > 0 && (
+                    <>
+                      {'  '}
+                      <Text dimColor>{paddedUpdated}</Text>
+                    </>
+                  )}
+                  {overviewWidth > 0 && (
+                    <>
+                      {'  '}
+                      <Text dimColor>{paddedOverview}</Text>
+                    </>
+                  )}
+                </Text>
               )
             })}
           </Box>
+        )
 
-          <Text>{'\n'}</Text>
-          <Text dimColor>Press Esc to cancel.</Text>
-        </Box>,
-      )
-    )
+      default:
+        return assertNever(view)
+    }
   }
 
-  if (view === 'conversation' && loadedProject && serializedContext) {
-    // Get any stored conversation state for this project
-    const storedState = getConversationState(loadedProject.path)
-
-    // Check if MCP is enabled and connected
-    const mcpEnabled = mcpStatus.state === 'connected'
-
-    return (
-      renderWithStatusBar(
-        <ConversationPhase
-          config={projectConfig}
-          planningLevel="Existing project"
-          projectName={loadedProject.name}
-          oneLiner={loadedProject.overview?.split('\n')[0] || 'Existing project'}
-          debug={debug}
-          sessionKind="existing"
-          projectContext={serializedContext}
-          initialState={storedState ?? undefined}
-          mcpEnabled={mcpEnabled}
-          projectPath={loadedProject.path}
-          onInputModeChange={setInputLocked}
-          onAIStatusChange={setAIStatus}
-          onDebugHotkeysChange={notifyDebugHotkeys}
-          onShowSettings={() => setShowSettings(true)}
-          onStateChange={(state: StoredConversationState) => {
-            // Save conversation state for persistence across settings/menu
-            saveConversationState(loadedProject.path, state)
-          }}
-          onClearConversation={() => {
-            // Clear stored state when user requests restart
-            clearConversationState(loadedProject.path)
-            // Clear active existing project since conversation is being reset
-            clearActiveExistingProject()
-          }}
-          onComplete={handleConversationComplete}
-          onCancel={handleCancel}
-        />,
-      )
-    )
-  }
-
-  if (view === 'complete' && loadedProject) {
-    return (
-      renderWithStatusBar(
-        <Box padding={1} flexDirection="column">
-          <Text color="green" bold>
-            Session complete
-          </Text>
-          <Text>{loadedProject.name}</Text>
-          <Text color="cyan">{loadedProject.path}</Text>
-          <Text>{'\n'}</Text>
-          <Text dimColor>
-            Press [S] settings, [B] to go back to project list, or [Q] to quit.
-          </Text>
-        </Box>,
-      )
-    )
-  }
-
-  // Default: list view
-  return (
-    renderWithStatusBar(
-      <Box padding={1} flexDirection="column" flexGrow={1}>
-        <Text bold>Select an existing project</Text>
-        <Text dimColor>
-          Use ↑/↓ to navigate, Enter to load, [B] back, [Q] quit.
-        </Text>
-        <Text dimColor>
-          Vault: {config.vaultPath || 'Not set - update in settings'}
-        </Text>
-        <Text>{'\n'}</Text>
-
-        {formattedProjects.map((project, idx) => {
-          const isSelected = idx === selectedIndex
-          const prefix = isSelected ? '❯ ' : '  '
-          const paddedName = project.name.padEnd(nameWidth)
-          const paddedUpdated =
-            updatedWidth > 0 ? project.updatedLabel.padEnd(updatedWidth) : ''
-          const paddedOverview =
-            overviewWidth > 0
-              ? project.overviewSnippet.padEnd(overviewWidth)
-              : project.overviewSnippet
-
-          return (
-            <Text key={project.path} color={isSelected ? 'cyan' : undefined}>
-              {prefix}
-              {paddedName}
-              {updatedWidth > 0 && (
-                <>
-                  {'  '}
-                  <Text dimColor>{paddedUpdated}</Text>
-                </>
-              )}
-              {overviewWidth > 0 && (
-                <>
-                  {'  '}
-                  <Text dimColor>{paddedOverview}</Text>
-                </>
-              )}
-            </Text>
-          )
-        })}
-      </Box>,
-    )
-  )
+  return renderWithStatusBar(renderViewStep())
 }
 
 function buildOverviewPreview(content: string): string {

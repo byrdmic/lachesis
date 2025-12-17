@@ -14,6 +14,7 @@ import {
   getNewProjectInProgress,
   getActiveExistingProject,
 } from '../core/conversation-store.ts'
+import { assertNever } from '../utils/type-guards.ts'
 import type { ActiveChatInfo } from './components/StatusBar.tsx'
 import { testMCPConnection, type MCPTestResult } from '../mcp/index.ts'
 
@@ -88,62 +89,68 @@ export function App({ command, debug = false }: AppProps) {
     )
   }
 
-  if (state.phase === 'loading') {
-    return withDebugPanel(
-      <Box flexDirection="column" padding={1}>
-        <Text color="cyan">Loading Lachesis...</Text>
-      </Box>,
-    )
+  // Step renderer with switch for exhaustive handling
+  const renderAppPhase = (): React.ReactNode => {
+    switch (state.phase) {
+      case 'loading':
+        return (
+          <Box flexDirection="column" padding={1}>
+            <Text color="cyan">Loading Lachesis...</Text>
+          </Box>
+        )
+
+      case 'error':
+        return (
+          <Box flexDirection="column" padding={1}>
+            <Text color="red">Error: {state.error}</Text>
+          </Box>
+        )
+
+      case 'config_created':
+        return (
+          <Box flexDirection="column" padding={1}>
+            <Text color="green" bold>
+              First-time setup complete!
+            </Text>
+            <Text>{'\n'}</Text>
+            <Text dimColor>{state.message}</Text>
+            <Text>{'\n'}</Text>
+            <Text color="cyan">Starting planning session...</Text>
+          </Box>
+        )
+
+      case 'ready':
+        // Route based on command
+        if (command === 'start') {
+          return (
+            <ProjectLauncher
+              config={state.config}
+              debug={debug}
+              onDebugHotkeysChange={setDebugHotkeysEnabled}
+            />
+          )
+        }
+        if (command === 'new') {
+          return (
+            <NewProjectFlow
+              config={state.config}
+              debug={debug}
+              onDebugHotkeysChange={setDebugHotkeysEnabled}
+            />
+          )
+        }
+        return (
+          <Box>
+            <Text color="red">Unknown command: {command}</Text>
+          </Box>
+        )
+
+      default:
+        return assertNever(state)
+    }
   }
 
-  if (state.phase === 'error') {
-    return withDebugPanel(
-      <Box flexDirection="column" padding={1}>
-        <Text color="red">Error: {state.error}</Text>
-      </Box>,
-    )
-  }
-
-  if (state.phase === 'config_created') {
-    return withDebugPanel(
-      <Box flexDirection="column" padding={1}>
-        <Text color="green" bold>
-          First-time setup complete!
-        </Text>
-        <Text>{'\n'}</Text>
-        <Text dimColor>{state.message}</Text>
-        <Text>{'\n'}</Text>
-        <Text color="cyan">Starting planning session...</Text>
-      </Box>,
-    )
-  }
-
-  // Ready state
-  if (command === 'start') {
-    return withDebugPanel(
-      <ProjectLauncher
-        config={state.config}
-        debug={debug}
-        onDebugHotkeysChange={setDebugHotkeysEnabled}
-      />,
-    )
-  }
-
-  if (command === 'new') {
-    return withDebugPanel(
-      <NewProjectFlow
-        config={state.config}
-        debug={debug}
-        onDebugHotkeysChange={setDebugHotkeysEnabled}
-      />,
-    )
-  }
-
-  return withDebugPanel(
-    <Box>
-      <Text color="red">Unknown command: {command}</Text>
-    </Box>,
-  )
+  return withDebugPanel(renderAppPhase())
 }
 
 // ============================================================================
@@ -289,6 +296,7 @@ function ProjectLauncher({
     }
   }, [hasWIP])
 
+  // Overlay: Settings panel (early return before switch)
   if (showSettings) {
     return (
       <SettingsPanel
@@ -299,106 +307,63 @@ function ProjectLauncher({
     )
   }
 
-  if (state.step === 'menu') {
-    // Build menu options dynamically based on WIP status
-    const menuOptions = []
-
-    if (hasWIP) {
-      menuOptions.push({
-        label: '⟳ Resume Project (Work in Progress)',
-        value: 'resume',
-      })
-    }
-
-    menuOptions.push(
-      { label: 'Start a new project planning session', value: 'new' },
-      { label: 'Load an existing project', value: 'existing' },
-    )
-
-    // Compute active chat info for status bar
-    let activeChat: ActiveChatInfo | undefined
-    const newProjectWIP = getNewProjectInProgress()
-    const activeExisting = getActiveExistingProject()
-
-    if (newProjectWIP?.projectName) {
-      activeChat = {
-        projectName: newProjectWIP.projectName,
-        type: 'new',
-      }
-    } else if (activeExisting) {
-      activeChat = {
-        projectName: activeExisting.name,
-        type: 'existing',
-      }
-    }
-
-    return (
-      <Box flexDirection="column" width="100%">
-        {/* Menu content */}
-        <Box padding={1} flexDirection="column">
-          <Box marginBottom={1}>
-            <Text bold>Lachesis Project Foundations Studio</Text>
-          </Box>
-          <Select
-            label="What would you like to do?"
-            options={menuOptions}
-            onSelect={handleMenuSelect}
+  // Step renderer with switch for exhaustive handling
+  const renderLauncherStep = (): React.ReactNode => {
+    switch (state.step) {
+      case 'menu':
+        return (
+          <LauncherMenuView
+            config={config}
+            hasWIP={hasWIP}
+            debug={debug}
+            aiStatus={aiStatus}
+            mcpStatus={mcpStatus}
+            settingsHotkeyEnabled={settingsHotkeyEnabled}
+            onMenuSelect={handleMenuSelect}
           />
-          <Box marginTop={1}>
-            <Text dimColor>
-              Use ↑/↓ to choose, Enter to confirm. [s] settings{debug ? ' [m] test MCP' : ''}. [ESC]/[Q] quit.
-            </Text>
-          </Box>
-        </Box>
-        {/* Status bar at bottom */}
-        <StatusBar
-          config={config}
-          aiStatus={aiStatus}
-          mcpStatus={debug ? mcpStatus : undefined}
-          showSettingsHint={settingsHotkeyEnabled}
-          activeChat={activeChat}
-        />
-      </Box>
-    )
-  }
-  
-  // Confirmation dialog for starting new project when WIP exists
-  if (state.step === 'confirm_new_project') {
-    return (
-      <ConfirmNewProjectDialog
-        onConfirm={() => {
-          clearNewProjectInProgress()
-          setHasWIP(false)
-          setState({ step: 'new', resuming: false })
-        }}
-        onCancel={() => setState({ step: 'menu' })}
-        config={config}
-        aiStatus={aiStatus}
-      />
-    )
+        )
+
+      case 'confirm_new_project':
+        return (
+          <ConfirmNewProjectDialog
+            onConfirm={() => {
+              clearNewProjectInProgress()
+              setHasWIP(false)
+              setState({ step: 'new', resuming: false })
+            }}
+            onCancel={() => setState({ step: 'menu' })}
+            config={config}
+            aiStatus={aiStatus}
+          />
+        )
+
+      case 'existing':
+        return (
+          <ExistingProjectFlow
+            config={config}
+            debug={debug}
+            onBack={() => setState({ step: 'menu' })}
+            onDebugHotkeysChange={onDebugHotkeysChange}
+          />
+        )
+
+      case 'new':
+        return (
+          <NewProjectFlow
+            config={config}
+            debug={debug}
+            resuming={state.resuming}
+            onExit={() => setState({ step: 'menu' })}
+            onDebugHotkeysChange={onDebugHotkeysChange}
+          />
+        )
+
+      default:
+        return assertNever(state)
+    }
   }
 
-  if (state.step === 'existing') {
-    return (
-      <ExistingProjectFlow
-        config={config}
-        debug={debug}
-        onBack={() => setState({ step: 'menu' })}
-        onDebugHotkeysChange={onDebugHotkeysChange}
-      />
-    )
-  }
-
-  // state.step === 'new'
-  return (
-    <NewProjectFlow
-      config={config}
-      debug={debug}
-      resuming={state.resuming}
-      onExit={() => setState({ step: 'menu' })}
-      onDebugHotkeysChange={onDebugHotkeysChange}
-    />
-  )
+  return renderLauncherStep()
 }
 
 // ============================================================================
@@ -474,6 +439,87 @@ function ConfirmNewProjectDialog({
       </Box>
       
       <StatusBar config={config} aiStatus={aiStatus} showSettingsHint={false} />
+    </Box>
+  )
+}
+
+// ============================================================================
+// Launcher Menu View
+// ============================================================================
+
+function LauncherMenuView({
+  config,
+  hasWIP,
+  debug,
+  aiStatus,
+  mcpStatus,
+  settingsHotkeyEnabled,
+  onMenuSelect,
+}: {
+  config: LachesisConfig
+  hasWIP: boolean
+  debug: boolean
+  aiStatus: AIStatusDescriptor
+  mcpStatus: MCPStatusDescriptor
+  settingsHotkeyEnabled: boolean
+  onMenuSelect: (value: string) => void
+}) {
+  // Build menu options dynamically based on WIP status
+  const menuOptions = []
+
+  if (hasWIP) {
+    menuOptions.push({
+      label: '⟳ Resume Project (Work in Progress)',
+      value: 'resume',
+    })
+  }
+
+  menuOptions.push(
+    { label: 'Start a new project planning session', value: 'new' },
+    { label: 'Load an existing project', value: 'existing' },
+  )
+
+  // Compute active chat info for status bar
+  let activeChat: ActiveChatInfo | undefined
+  const newProjectWIP = getNewProjectInProgress()
+  const activeExisting = getActiveExistingProject()
+
+  if (newProjectWIP?.projectName) {
+    activeChat = {
+      projectName: newProjectWIP.projectName,
+      type: 'new',
+    }
+  } else if (activeExisting) {
+    activeChat = {
+      projectName: activeExisting.name,
+      type: 'existing',
+    }
+  }
+
+  return (
+    <Box flexDirection="column" width="100%">
+      <Box padding={1} flexDirection="column">
+        <Box marginBottom={1}>
+          <Text bold>Lachesis Project Foundations Studio</Text>
+        </Box>
+        <Select
+          label="What would you like to do?"
+          options={menuOptions}
+          onSelect={onMenuSelect}
+        />
+        <Box marginTop={1}>
+          <Text dimColor>
+            Use ↑/↓ to choose, Enter to confirm. [s] settings{debug ? ' [m] test MCP' : ''}. [ESC]/[Q] quit.
+          </Text>
+        </Box>
+      </Box>
+      <StatusBar
+        config={config}
+        aiStatus={aiStatus}
+        mcpStatus={debug ? mcpStatus : undefined}
+        showSettingsHint={settingsHotkeyEnabled}
+        activeChat={activeChat}
+      />
     </Box>
   )
 }

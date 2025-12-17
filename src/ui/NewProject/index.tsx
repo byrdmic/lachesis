@@ -20,6 +20,7 @@ import {
   saveNewProjectInProgress,
   clearNewProjectInProgress,
 } from '../../core/conversation-store.ts'
+import { assertNever } from '../../utils/type-guards.ts'
 
 type NewProjectFlowProps = {
   config: LachesisConfig
@@ -227,13 +228,14 @@ export function NewProjectFlow({
     (
       extractedData: ExtractedProjectData,
       conversationLog: ConversationMessage[],
-      projectName: string,
+      selectedProjectName: string,
       oneLiner: string,
       planningLevel: PlanningLevel,
     ) => {
       const extractedOneLiner = extractedData?.vision?.oneLinePitch?.trim() ?? ''
+      // Use the selected name from naming phase, fall back to extracted data
       const nextProjectName =
-        projectName.trim() || extractedOneLiner || 'Untitled Project'
+        selectedProjectName.trim() || extractedOneLiner || 'Untitled Project'
       const nextOneLiner =
         oneLiner.trim() || extractedOneLiner || 'Not provided yet'
       const nextPlanningLevel =
@@ -307,7 +309,7 @@ export function NewProjectFlow({
     [state],
   )
 
-  // Show settings panel overlay
+  // Overlay: Settings panel (early return before switch)
   if (showSettings) {
     return (
       <SettingsPanel
@@ -318,119 +320,111 @@ export function NewProjectFlow({
     )
   }
 
-  // Render based on state
-  if (state.step === 'welcome') {
-    return (
-      <WelcomeScreen onStart={handleStart} config={config} aiStatus={aiStatus} />
-    )
+  // Step renderer with switch for exhaustive handling
+  const renderFlowStep = (): React.ReactNode => {
+    switch (state.step) {
+      case 'welcome':
+        return (
+          <WelcomeScreen onStart={handleStart} config={config} aiStatus={aiStatus} />
+        )
+
+      case 'conversation_choice':
+        return renderWithStatusBar(
+          <ConversationChoiceScreen
+            projectName={state.projectName}
+            onChoice={(choice) => handleConversationChoice(choice, state)}
+          />,
+        )
+
+      case 'conversation':
+        return renderWithStatusBar(
+          <ConversationPhase
+            config={config}
+            planningLevel={state.planningLevel}
+            projectName={state.projectName}
+            oneLiner={state.oneLiner}
+            debug={debug}
+            sessionKind="new"
+            initialState={savedConversationState ?? undefined}
+            onInputModeChange={setInputLocked}
+            onAIStatusChange={setAIStatus}
+            onDebugHotkeysChange={notifyDebugHotkeys}
+            onShowSettings={() => setShowSettings(true)}
+            onStateChange={handleConversationStateChange}
+            onComplete={(extractedData, conversationLog, selectedProjectName) =>
+              handleConversationComplete(
+                extractedData,
+                conversationLog,
+                selectedProjectName,
+                state.oneLiner,
+                state.planningLevel,
+              )
+            }
+            onCancel={handleCancel}
+          />,
+        )
+
+      case 'quick_capture':
+        return renderWithStatusBar(
+          <QuickCapturePhase
+            config={config}
+            projectName={state.projectName}
+            oneLiner={state.oneLiner}
+            onComplete={(extractedData) =>
+              handleQuickCaptureComplete(
+                extractedData,
+                state.projectName,
+                state.oneLiner,
+                state.planningLevel,
+              )
+            }
+            onCancel={handleCancel}
+          />,
+        )
+
+      case 'finalize':
+        return renderWithStatusBar(
+          <FinalizePhase
+            config={config}
+            planningLevel={state.planningLevel}
+            projectName={state.projectName}
+            oneLiner={state.oneLiner}
+            extractedData={state.extractedData}
+            conversationLog={state.conversationLog}
+            answers={state.answers}
+            sessionLog={state.sessionLog}
+            onComplete={handleFinalizeComplete}
+            onCancel={handleCancel}
+          />,
+        )
+
+      case 'complete':
+        return (
+          <Box flexDirection="column" padding={1} height="100%" width="100%">
+            <Text color="green" bold>
+              Project created successfully!
+            </Text>
+            <Text>{'\n'}</Text>
+            <Text>Your project has been scaffolded at:</Text>
+            <Text color="cyan">{state.projectPath}</Text>
+            <Text>{'\n'}</Text>
+            <Text dimColor>Open it in Obsidian to continue.</Text>
+          </Box>
+        )
+
+      case 'cancelled':
+        return (
+          <Box padding={1} height="100%" width="100%">
+            <Text dimColor>Session cancelled.</Text>
+          </Box>
+        )
+
+      default:
+        return assertNever(state)
+    }
   }
 
-  if (state.step === 'conversation_choice') {
-    return (
-      renderWithStatusBar(
-        <ConversationChoiceScreen
-          projectName={state.projectName}
-          onChoice={(choice) => handleConversationChoice(choice, state)}
-        />,
-      )
-    )
-  }
-
-  if (state.step === 'conversation') {
-    return (
-      renderWithStatusBar(
-        <ConversationPhase
-          config={config}
-          planningLevel={state.planningLevel}
-          projectName={state.projectName}
-          oneLiner={state.oneLiner}
-          debug={debug}
-          sessionKind="new"
-          initialState={savedConversationState ?? undefined}
-          onInputModeChange={setInputLocked}
-          onAIStatusChange={setAIStatus}
-          onDebugHotkeysChange={notifyDebugHotkeys}
-          onShowSettings={() => setShowSettings(true)}
-          onStateChange={handleConversationStateChange}
-          onComplete={(extractedData, conversationLog) =>
-            handleConversationComplete(
-              extractedData,
-              conversationLog,
-              state.projectName,
-              state.oneLiner,
-              state.planningLevel,
-            )
-          }
-          onCancel={handleCancel}
-        />,
-      )
-    )
-  }
-
-  if (state.step === 'quick_capture') {
-    return (
-      renderWithStatusBar(
-        <QuickCapturePhase
-          config={config}
-          projectName={state.projectName}
-          oneLiner={state.oneLiner}
-          onComplete={(extractedData) =>
-            handleQuickCaptureComplete(
-              extractedData,
-              state.projectName,
-              state.oneLiner,
-              state.planningLevel,
-            )
-          }
-          onCancel={handleCancel}
-        />,
-      )
-    )
-  }
-
-  if (state.step === 'finalize') {
-    return (
-      renderWithStatusBar(
-        <FinalizePhase
-          config={config}
-          planningLevel={state.planningLevel}
-          projectName={state.projectName}
-          oneLiner={state.oneLiner}
-          extractedData={state.extractedData}
-          conversationLog={state.conversationLog}
-          answers={state.answers}
-          sessionLog={state.sessionLog}
-          onComplete={handleFinalizeComplete}
-          onCancel={handleCancel}
-        />,
-      )
-    )
-  }
-
-  if (state.step === 'complete') {
-    return (
-      <Box flexDirection="column" padding={1} height="100%" width="100%">
-        <Text color="green" bold>
-          Project created successfully!
-        </Text>
-        <Text>{'\n'}</Text>
-        <Text>Your project has been scaffolded at:</Text>
-        <Text color="cyan">{state.projectPath}</Text>
-        <Text>{'\n'}</Text>
-        <Text dimColor>Open it in Obsidian to continue.</Text>
-      </Box>
-    )
-  }
-
-  if (state.step === 'cancelled') {
-    return (
-      <Box padding={1} height="100%" width="100%">
-        <Text dimColor>Session cancelled.</Text>
-      </Box>
-    )
-  }
-
-  return null
+  return renderFlowStep()
 }
 
 // ============================================================================

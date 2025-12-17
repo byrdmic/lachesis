@@ -26,7 +26,6 @@ function createMockConversationState(
     ],
     coveredTopics: ['core_purpose'],
     step: 'waiting_for_answer',
-    summary: null,
     ...overrides,
   }
 }
@@ -181,8 +180,8 @@ describe('conversation-store', () => {
         const states: StoredConversationState[] = [
           createMockConversationState({ step: 'generating_question' }),
           createMockConversationState({ step: 'waiting_for_answer' }),
-          createMockConversationState({ step: 'generating_summary' }),
-          createMockConversationState({ step: 'showing_summary' }),
+          createMockConversationState({ step: 'generating_names' }),
+          createMockConversationState({ step: 'naming_project' }),
           createMockConversationState({ step: 'extracting_data' }),
           createMockConversationState({ step: 'error' }),
         ]
@@ -192,17 +191,6 @@ describe('conversation-store', () => {
           const retrieved = getConversationState('/path/to/project')
           expect(retrieved?.step).toBe(state.step)
         }
-      })
-
-      it('preserves summary content', () => {
-        const mockState = createMockConversationState({
-          summary: 'This is a comprehensive summary of the project discussion.',
-        })
-
-        saveConversationState('/path/to/project', mockState)
-        const retrieved = getConversationState('/path/to/project')
-
-        expect(retrieved?.summary).toBe('This is a comprehensive summary of the project discussion.')
       })
 
       it('preserves empty arrays', () => {

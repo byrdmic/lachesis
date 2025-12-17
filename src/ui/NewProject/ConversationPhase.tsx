@@ -6,13 +6,14 @@ import type { PlanningLevel } from '../../core/project/types.ts'
 import type {
   ConversationMessage,
   ExtractedProjectData,
+  ProjectNameSuggestion,
 } from '../../ai/client.ts'
 import {
-  generateSummary,
   extractProjectData,
   shouldContinueConversation,
   streamNextQuestion,
   streamAgenticConversation,
+  generateProjectNameSuggestions,
 } from '../../ai/client.ts'
 import {
   buildCoachingPrompt,
@@ -27,8 +28,8 @@ import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 export type ConversationStep =
   | 'generating_question'
   | 'waiting_for_answer'
-  | 'generating_summary'
-  | 'showing_summary'
+  | 'generating_names'
+  | 'naming_project'
   | 'extracting_data'
   | 'error'
 
@@ -36,12 +37,13 @@ export type StoredConversationState = {
   messages: ConversationMessage[]
   coveredTopics: string[]
   step: ConversationStep
-  summary: string | null
 }
 
 type ConversationState = StoredConversationState & {
   error: string | null
   errorDetails: string | null
+  nameSuggestions: ProjectNameSuggestion[] | null
+  selectedName: string | null
 }
 
 type ConversationPhaseProps = {
@@ -86,6 +88,7 @@ type ConversationPhaseProps = {
   onComplete: (
     extractedData: ExtractedProjectData,
     conversationLog: ConversationMessage[],
+    selectedProjectName: string,
   ) => void
   onCancel: () => void
 }
@@ -117,15 +120,18 @@ export function ConversationPhase({
         ...initialState,
         error: null,
         errorDetails: null,
+        nameSuggestions: null,
+        selectedName: null,
       }
     }
     return {
       step: 'generating_question',
       messages: [],
       coveredTopics: [],
-      summary: null,
       error: null,
       errorDetails: null,
+      nameSuggestions: null,
+      selectedName: null,
     }
   })
 
@@ -142,21 +148,19 @@ export function ConversationPhase({
         messages: state.messages,
         coveredTopics: state.coveredTopics,
         step: state.step,
-        summary: state.summary,
       })
     }
-  }, [state.messages, state.coveredTopics, state.step, state.summary, onStateChange])
+  }, [state.messages, state.coveredTopics, state.step, onStateChange])
 
   const effectiveProjectName = projectName.trim() || 'Untitled Project'
   const effectiveOneLiner = oneLiner.trim() || 'Not provided yet'
 
-  // Notify parent about input mode (locked = text input is active OR menu mode is active)
-  // We lock input in menu mode to prevent parent's Esc handler from firing
-  const inputLocked = (state.step === 'waiting_for_answer' && !menuMode) || menuMode
+  // Always lock parent input - ConversationPhase handles its own ESC for menu mode
+  // This prevents the parent from catching ESC and cancelling during the conversation
   useEffect(() => {
-    onInputModeChange?.(inputLocked)
+    onInputModeChange?.(true)
     return () => onInputModeChange?.(false)
-  }, [inputLocked, onInputModeChange])
+  }, [onInputModeChange])
 
   // Enable debug hotkeys when not actively typing
   useEffect(() => {
@@ -181,22 +185,22 @@ export function ConversationPhase({
           message: 'Waiting for your reply',
         })
         break
-      case 'generating_summary':
-        onAIStatusChange({
-          state: 'processing',
-          message: 'Summarizing the conversation',
-        })
-        break
-      case 'showing_summary':
-        onAIStatusChange({
-          state: 'idle',
-          message: 'Review the summary',
-        })
-        break
       case 'extracting_data':
         onAIStatusChange({
           state: 'processing',
           message: 'Structuring your project notes',
+        })
+        break
+      case 'generating_names':
+        onAIStatusChange({
+          state: 'processing',
+          message: 'Generating name suggestions',
+        })
+        break
+      case 'naming_project':
+        onAIStatusChange({
+          state: 'idle',
+          message: 'Choose a project name',
         })
         break
       case 'error':
@@ -412,23 +416,25 @@ export function ConversationPhase({
     }
   }
 
+  // Phrase that signals the AI is ready to transition to naming phase
+  const TRANSITION_PHRASE = 'very well, sir. let us proceed'
+
+  // Check if AI response contains the transition phrase
+  const checkForTransition = useCallback((responseText: string, messages: ConversationMessage[]) => {
+    if (responseText.toLowerCase().includes(TRANSITION_PHRASE)) {
+      debugLog.info('Conversation: transition phrase detected, moving to naming')
+      generateNamesAndProceed(messages)
+      return true
+    }
+    return false
+  }, [])
+
   const handleUserAnswer = useCallback(
     async (answer: string) => {
       debugLog.info('Conversation: user answer received', {
         length: answer.length,
         preview: answer.slice(0, 200),
       })
-
-      // Check for "take the wheel" trigger
-      const takeWheelTriggers = [
-        'take the wheel',
-        'write it for me',
-        'you decide',
-        'summarize',
-      ]
-      const isWrapUp = takeWheelTriggers.some((t) =>
-        answer.toLowerCase().includes(t),
-      )
 
       // Add user message
       const userMessage: ConversationMessage = {
@@ -445,45 +451,12 @@ export function ConversationPhase({
         step: 'generating_question',
       }))
 
-      // Check if we should wrap up
       const context = {
         planningLevel,
         projectName,
         oneLiner,
         messages: newMessages,
         coveredTopics: state.coveredTopics,
-      }
-
-      const shouldContinue = await shouldContinueConversation(context, config)
-      debugLog.info('Conversation: should continue result', {
-        isWrapUp,
-        continue: shouldContinue.continue,
-        reason: shouldContinue.reason,
-      })
-
-      if (isWrapUp || !shouldContinue.continue) {
-        // Generate summary
-        setState((s) => ({ ...s, step: 'generating_summary' }))
-
-        const summaryResult = await generateSummary(context, config)
-        debugLog.info('Conversation: summary result', {
-          success: summaryResult.success,
-          length: summaryResult.content?.length,
-          preview: summaryResult.content?.slice(0, 200),
-          error: summaryResult.error,
-        })
-
-        if (summaryResult.success && summaryResult.content) {
-          setState((s) => ({
-            ...s,
-            step: 'showing_summary',
-            summary: summaryResult.content ?? null,
-          }))
-        } else {
-          // Proceed without summary
-          await finishConversation(newMessages)
-        }
-        return
       }
 
       // Generate next response - use agentic mode with MCP tools if enabled
@@ -541,6 +514,22 @@ export function ConversationPhase({
 
         if (result.success && result.response) {
           // Finalize the message with complete content
+          const updatedMessages = newMessages.concat({
+            role: 'assistant' as const,
+            content: result.response,
+            timestamp: streamId,
+          })
+
+          // Check if the AI wants to transition to naming
+          if (checkForTransition(result.response, updatedMessages)) {
+            // Update state with final message before transitioning
+            setState((s) => ({
+              ...s,
+              messages: updatedMessages,
+            }))
+            return
+          }
+
           setState((s) => ({
             ...s,
             step: 'waiting_for_answer',
@@ -568,10 +557,20 @@ export function ConversationPhase({
         // Use streaming mode (non-MCP)
         await streamQuestion(context)
 
-        // Try to detect topic from question (simple heuristic) using latest assistant message
+        // After streaming completes, check current state for transition and topics
         setState((s) => {
           const lastAssistant = [...s.messages].reverse().find((m) => m.role === 'assistant')
           const finalContent = lastAssistant?.content ?? ''
+
+          // Check for transition phrase - if found, generateNamesAndProceed will be called
+          if (finalContent.toLowerCase().includes(TRANSITION_PHRASE)) {
+            debugLog.info('Conversation: transition phrase detected in streaming response')
+            // We need to trigger naming after state update, use setTimeout
+            setTimeout(() => generateNamesAndProceed(s.messages), 0)
+            return s // Don't update topics, we're transitioning
+          }
+
+          // Otherwise, detect topics and continue
           const newTopics = detectTopics(finalContent, s.coveredTopics)
           return {
             ...s,
@@ -591,35 +590,16 @@ export function ConversationPhase({
       projectPath,
       projectContext,
       debug,
+      checkForTransition,
     ],
   )
 
-  const handleSummaryConfirm = useCallback(async () => {
-    await finishConversation(state.messages)
-  }, [state.messages])
-
-  const handleSummaryRevise = useCallback(async () => {
-    // Add a message asking for clarification and continue
-    const assistantMessage: ConversationMessage = {
-      role: 'assistant',
-      content: 'What would you like to clarify or add?',
-      timestamp: new Date().toISOString(),
-    }
-
-    setState((s) => ({
-      ...s,
-      step: 'waiting_for_answer',
-      messages: [...s.messages, assistantMessage],
-      summary: null,
-    }))
-  }, [])
-
-  const finishConversation = async (messages: ConversationMessage[]) => {
+  const finishConversation = async (messages: ConversationMessage[], selectedName: string) => {
     setState((s) => ({ ...s, step: 'extracting_data' }))
 
     const context = {
       planningLevel,
-      projectName: effectiveProjectName,
+      projectName: selectedName,
       oneLiner: effectiveOneLiner,
       messages,
       coveredTopics: state.coveredTopics,
@@ -630,10 +610,11 @@ export function ConversationPhase({
       success: result.success,
       error: result.error,
       keys: result.data ? Object.keys(result.data) : undefined,
+      selectedName,
     })
 
     if (result.success && result.data) {
-      onComplete(result.data, messages)
+      onComplete(result.data, messages, selectedName)
     } else {
       // Create minimal data if extraction fails
       const fallbackData: ExtractedProjectData = {
@@ -652,7 +633,47 @@ export function ConversationPhase({
         },
         execution: {},
       }
-      onComplete(fallbackData, messages)
+      onComplete(fallbackData, messages, selectedName)
+    }
+  }
+
+  // Handle name selection and proceed to finish
+  const handleNameSelected = useCallback(async (name: string) => {
+    debugLog.info('Project name selected', { name })
+    setState((s) => ({ ...s, selectedName: name }))
+    await finishConversation(state.messages, name)
+  }, [state.messages])
+
+  // Helper to generate names and show selection (used when skipping summary)
+  const generateNamesAndProceed = async (messages: ConversationMessage[]) => {
+    setState((s) => ({ ...s, step: 'generating_names' }))
+
+    const context = {
+      planningLevel,
+      projectName: effectiveProjectName,
+      oneLiner: effectiveOneLiner,
+      messages,
+      coveredTopics: state.coveredTopics,
+    }
+
+    const result = await generateProjectNameSuggestions(context, config)
+    debugLog.info('Name suggestions result (no summary path)', {
+      success: result.success,
+      count: result.suggestions?.length,
+      error: result.error,
+    })
+
+    if (result.success && result.suggestions && result.suggestions.length > 0) {
+      setState((s) => ({
+        ...s,
+        step: 'naming_project',
+        nameSuggestions: result.suggestions ?? null,
+        messages, // Update messages in state
+      }))
+    } else {
+      // If name generation fails, proceed with default name
+      debugLog.warn('Name generation failed (no summary path), proceeding with default name')
+      await finishConversation(messages, effectiveProjectName)
     }
   }
 
@@ -676,9 +697,10 @@ export function ConversationPhase({
       step: 'generating_question',
       messages: [],
       coveredTopics: [],
-      summary: null,
       error: null,
       errorDetails: null,
+      nameSuggestions: null,
+      selectedName: null,
     })
     setMenuMode(false)
     // Trigger new first question
@@ -762,7 +784,7 @@ export function ConversationPhase({
     )
   }
 
-  if (state.step === 'generating_summary') {
+  if (state.step === 'generating_names') {
     return (
       <Box flexDirection="column" paddingX={1}>
         <ConversationView messages={state.messages} />
@@ -770,20 +792,26 @@ export function ConversationPhase({
           <Text color="cyan">
             <Spinner type="dots" />
           </Text>
-          <Text> Generating summary...</Text>
+          <Text> Generating name suggestions...</Text>
         </Box>
       </Box>
     )
   }
 
-  if (state.step === 'showing_summary' && state.summary) {
+  if (state.step === 'naming_project' && state.nameSuggestions) {
     return (
       <Box flexDirection="column" paddingX={1}>
-        <SummaryConfirmation
-          summary={state.summary}
-          onConfirm={handleSummaryConfirm}
-          onRevise={handleSummaryRevise}
-        />
+        <ConversationView messages={state.messages} />
+        <Box flexDirection="column" marginTop={1}>
+          <ProjectNamingView
+            suggestions={state.nameSuggestions}
+            onSelect={handleNameSelected}
+            menuMode={menuMode}
+            onToggleMenu={() => setMenuMode((m) => !m)}
+            onShowSettings={onShowSettings}
+            onCancel={onCancel}
+          />
+        </Box>
       </Box>
     )
   }
@@ -846,45 +874,179 @@ function ChatInput({
   )
 }
 
-function SummaryConfirmation({
-  summary,
-  onConfirm,
-  onRevise,
+function ProjectNamingView({
+  suggestions,
+  onSelect,
+  menuMode,
+  onToggleMenu,
+  onShowSettings,
+  onCancel,
 }: {
-  summary: string
-  onConfirm: () => void
-  onRevise: () => void
+  suggestions: ProjectNameSuggestion[]
+  onSelect: (name: string) => void
+  menuMode: boolean
+  onToggleMenu: () => void
+  onShowSettings?: () => void
+  onCancel: () => void
 }) {
+  // Options: all suggestions + custom option
   const [selected, setSelected] = useState(0)
+  const [customMode, setCustomMode] = useState(false)
+  const [customName, setCustomName] = useState('')
 
-  useInput((input, key) => {
-    if (key.upArrow || key.downArrow) {
-      setSelected((s) => (s === 0 ? 1 : 0))
+  const totalOptions = suggestions.length + 1 // +1 for custom option
+
+  // Handle menu mode hotkeys
+  useInput(
+    (input, key) => {
+      const lower = input.toLowerCase()
+      if (key.escape || key.return) {
+        onToggleMenu()
+        return
+      }
+      if (lower === 's' && onShowSettings) {
+        onShowSettings()
+        return
+      }
+      if (lower === 'b') {
+        onCancel()
+        return
+      }
+    },
+    { isActive: menuMode },
+  )
+
+  // Handle selection mode
+  useInput(
+    (input, key) => {
+      if (customMode) {
+        // In custom mode, Escape goes back to selection
+        if (key.escape) {
+          setCustomMode(false)
+          setCustomName('')
+        }
+        return
+      }
+
+      if (key.upArrow) {
+        setSelected((s) => (s > 0 ? s - 1 : s))
+      }
+      if (key.downArrow) {
+        setSelected((s) => (s < totalOptions - 1 ? s + 1 : s))
+      }
+      if (key.return) {
+        if (selected === suggestions.length) {
+          // Custom option selected
+          setCustomMode(true)
+        } else {
+          // Select a suggestion
+          const suggestion = suggestions[selected]
+          if (suggestion) {
+            onSelect(suggestion.name)
+          }
+        }
+      }
+      if (key.escape) {
+        onToggleMenu()
+      }
+    },
+    { isActive: !menuMode && !customMode },
+  )
+
+  const handleCustomSubmit = (value: string) => {
+    if (value.trim()) {
+      onSelect(value.trim())
     }
-    if (key.return) {
-      if (selected === 0) onConfirm()
-      else onRevise()
-    }
-  })
+  }
+
+  // Show menu overlay
+  if (menuMode) {
+    return (
+      <Box flexDirection="column">
+        {/* Assistant-style prompt (dimmed in menu mode) */}
+        <Box marginBottom={1}>
+          <Text color="cyan" dimColor>Lachesis: </Text>
+          <Text dimColor>Now then, sir—what shall we call this endeavor? I've prepared a few suggestions:</Text>
+        </Box>
+
+        {/* Name options (dimmed) */}
+        {suggestions.map((suggestion, i) => (
+          <Box key={i} flexDirection="row" marginLeft={2}>
+            <Text dimColor>  </Text>
+            <Box flexDirection="column">
+              <Text dimColor>{suggestion.name}</Text>
+              <Text dimColor>  {suggestion.reasoning}</Text>
+            </Box>
+          </Box>
+        ))}
+
+        <Box flexDirection="row" marginLeft={2} marginTop={1}>
+          <Text dimColor>  Or type your own...</Text>
+        </Box>
+
+        {/* Menu */}
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="cyan" bold>Menu</Text>
+          <Text dimColor>
+            {onShowSettings ? '[S] Settings  ' : ''}[B] Back  [ESC/Enter] Resume
+          </Text>
+        </Box>
+      </Box>
+    )
+  }
 
   return (
     <Box flexDirection="column">
-      <Text bold color="cyan">
-        Summary of what we discussed:
-      </Text>
-      <Box marginY={1} paddingLeft={2} flexDirection="column">
-        {summary.split('\n').map((line, i) => (
-          <Text key={i}>{line}</Text>
-        ))}
+      {/* Assistant-style prompt */}
+      <Box marginBottom={1}>
+        <Text color="cyan">Lachesis: </Text>
+        <Text>Now then, sir—what shall we call this endeavor? I've prepared a few suggestions:</Text>
       </Box>
-      <Text>{'\n'}</Text>
-      <Text>Does this capture what you're building?</Text>
-      <Box flexDirection="column" marginTop={1}>
-        <Text color={selected === 0 ? 'cyan' : undefined}>
-          {selected === 0 ? '> ' : '  '}Yes, continue
-        </Text>
-        <Text color={selected === 1 ? 'cyan' : undefined}>
-          {selected === 1 ? '> ' : '  '}No, let me clarify
+
+      {/* Name options */}
+      {suggestions.map((suggestion, i) => (
+        <Box key={i} flexDirection="row" marginLeft={2}>
+          <Text color={!customMode && i === selected ? 'cyan' : 'gray'}>
+            {!customMode && i === selected ? '> ' : '  '}
+          </Text>
+          <Box flexDirection="column">
+            <Text color={!customMode && i === selected ? 'cyan' : undefined} bold={!customMode && i === selected}>
+              {suggestion.name}
+            </Text>
+            <Text dimColor>  {suggestion.reasoning}</Text>
+          </Box>
+        </Box>
+      ))}
+
+      {/* Custom option */}
+      <Box flexDirection="row" marginLeft={2} marginTop={1}>
+        {customMode ? (
+          <Box>
+            <Text color="green">You: </Text>
+            <TextInput
+              label=""
+              value={customName}
+              onChange={setCustomName}
+              onSubmit={handleCustomSubmit}
+              placeholder="Type your project name..."
+              focus={true}
+            />
+          </Box>
+        ) : (
+          <>
+            <Text color={selected === suggestions.length ? 'cyan' : 'gray'}>
+              {selected === suggestions.length ? '> ' : '  '}
+            </Text>
+            <Text color={selected === suggestions.length ? 'cyan' : undefined} italic>
+              Or type your own...
+            </Text>
+          </>
+        )}
+      </Box>
+
+      <Box marginTop={1}>
+        <Text dimColor>
+          {customMode ? '[ESC] Back to list' : '[ESC] Menu  [↑↓] Navigate  [Enter] Select'}
         </Text>
       </Box>
     </Box>
