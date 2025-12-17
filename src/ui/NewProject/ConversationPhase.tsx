@@ -15,10 +15,7 @@ import {
   streamAgenticConversation,
   generateProjectNameSuggestions,
 } from '../../ai/client.ts'
-import {
-  buildCoachingPrompt,
-  buildProjectQAPrompt,
-} from '../../ai/prompts.ts'
+import { buildSystemPrompt } from '../../ai/prompts.ts'
 import { getMCPToolNames } from '../../mcp/index.ts'
 import { TextInput } from '../components/TextInput.tsx'
 import { ConversationView } from '../components/ConversationView.tsx'
@@ -241,20 +238,15 @@ export function ConversationPhase({
       // Determine if this is the first message (for opening greeting)
       const isFirstMessage = context.messages.length === 0
 
-      const prompt = buildCoachingPrompt(
-        effectiveProjectName,
-        effectiveOneLiner,
+      const prompt = buildSystemPrompt({
+        sessionType: sessionKind,
+        projectName: effectiveProjectName,
+        oneLiner: effectiveOneLiner,
         planningLevel,
-        context.coveredTopics,
-        {
-          collectSetupQuestions: sessionKind === 'new',
-          mode: sessionKind === 'existing' ? 'building' : 'planning',
-          projectStage: sessionKind,
-          existingContext: sessionKind === 'existing' ? projectContext : undefined,
-          currentHour: new Date().getHours(),
-          isFirstMessage,
-        },
-      )
+        coveredTopics: context.coveredTopics,
+        currentHour: new Date().getHours(),
+        isFirstMessage,
+      })
 
       debugLog.debug('Conversation: coaching prompt built', {
         promptPreview: prompt.slice(0, 200),
@@ -340,11 +332,14 @@ export function ConversationPhase({
       debugLog.info('Conversation: using agentic mode for first message')
 
       const toolNames = getMCPToolNames()
-      const qaPrompt = buildProjectQAPrompt(
-        projectContext ?? '',
-        toolNames,
-        new Date().getHours(),
-      )
+      const qaPrompt = buildSystemPrompt({
+        sessionType: 'existing',
+        projectName: effectiveProjectName,
+        snapshotSummary: projectContext ?? '',
+        toolsAvailable: toolNames,
+        currentHour: new Date().getHours(),
+        isFirstMessage: true,
+      })
 
       const streamId = `${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)}`
       setState((s) => ({ ...s, step: 'generating_question' }))
@@ -467,11 +462,14 @@ export function ConversationPhase({
         })
 
         const toolNames = getMCPToolNames()
-        const qaPrompt = buildProjectQAPrompt(
-          projectContext ?? '',
-          toolNames,
-          new Date().getHours(),
-        )
+        const qaPrompt = buildSystemPrompt({
+          sessionType: 'existing',
+          projectName: effectiveProjectName,
+          snapshotSummary: projectContext ?? '',
+          toolsAvailable: toolNames,
+          currentHour: new Date().getHours(),
+          isFirstMessage: false, // This is a follow-up message
+        })
 
         // Use timestamp + random suffix to avoid collision
         const streamId = `${new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)}`

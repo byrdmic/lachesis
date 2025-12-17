@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { formatProjectSnapshotForModel, buildCoachingPrompt, buildProjectQAPrompt } from './prompts.ts'
+import { formatProjectSnapshotForModel, buildProjectQAPrompt, buildSystemPrompt } from './prompts.ts'
 import type { ProjectSnapshot, SnapshotFileEntry, ExpectedCoreFile } from '../core/project/snapshot.ts'
 import { EXPECTED_CORE_FILES } from '../core/project/snapshot.ts'
 
@@ -420,140 +420,6 @@ describe('formatProjectSnapshotForModel', () => {
 })
 
 // ============================================================================
-// Tests for buildCoachingPrompt
-// ============================================================================
-
-describe('buildCoachingPrompt', () => {
-  describe('basic structure', () => {
-    it('includes project name', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'A test project', 'Light spark', [])
-      expect(prompt).toContain('Name: TestProject')
-    })
-
-    it('includes one-liner description', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Build a CLI tool', 'Light spark', [])
-      expect(prompt).toContain('Description: Build a CLI tool')
-    })
-
-    it('includes planning level', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Well defined', [])
-      expect(prompt).toContain('Planning level: Well defined')
-    })
-
-    it('includes JARVIS voice guidance', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [])
-      expect(prompt).toContain('JARVIS')
-      expect(prompt).toContain('sir')
-    })
-  })
-
-  describe('covered topics', () => {
-    it('shows no topics covered when empty', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [])
-      expect(prompt).toContain('No topics covered yet')
-    })
-
-    it('lists covered topics', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', ['core_purpose', 'target_users'])
-      expect(prompt).toContain('Topics already discussed: core_purpose, target_users')
-    })
-  })
-
-  describe('mode options', () => {
-    it('includes planning mode context by default', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [], { mode: 'planning' })
-      expect(prompt).toContain('Mode: PLANNING')
-    })
-
-    it('includes building mode context when specified', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [], { mode: 'building' })
-      expect(prompt).toContain('Mode: BUILDING')
-    })
-  })
-
-  describe('project stage', () => {
-    it('includes new project context by default', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [], { projectStage: 'new' })
-      expect(prompt).toContain('SESSION TYPE: NEW PROJECT')
-    })
-
-    it('includes existing project context when specified', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [], { projectStage: 'existing' })
-      expect(prompt).toContain('SESSION TYPE: EXISTING PROJECT')
-    })
-
-    it('includes existing context when provided', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [], {
-        projectStage: 'existing',
-        existingContext: 'Working on milestone 2',
-      })
-      expect(prompt).toContain('Working on milestone 2')
-    })
-  })
-
-  describe('time-appropriate greetings', () => {
-    it('uses morning greeting for morning hours', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [], { currentHour: 8 })
-      expect(prompt).toContain('Good morning, sir')
-    })
-
-    it('uses afternoon greeting for afternoon hours', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [], { currentHour: 14 })
-      expect(prompt).toContain('Good afternoon, sir')
-    })
-
-    it('uses evening greeting for evening hours', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [], { currentHour: 20 })
-      expect(prompt).toContain('Good evening, sir')
-    })
-  })
-
-  describe('language rules', () => {
-    it('includes banned words list', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [])
-      expect(prompt).toContain('Do NOT use these words')
-      expect(prompt).toContain('transform')
-      expect(prompt).toContain('journey')
-      expect(prompt).toContain('crystallize')
-    })
-  })
-
-  describe('setup questions', () => {
-    it('includes setup questions guidance when collectSetupQuestions is true', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [], {
-        collectSetupQuestions: true,
-        isFirstMessage: true,
-      })
-      expect(prompt).toContain('OPENING A NEW PROJECT')
-    })
-
-    it('excludes setup questions when collectSetupQuestions is false', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light', [], {
-        collectSetupQuestions: false,
-      })
-      expect(prompt).not.toContain('OPENING A NEW PROJECT')
-    })
-  })
-
-  describe('planning context', () => {
-    it('provides light/vague guidance for light planning level', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Light spark', [])
-      expect(prompt).toContain('light/vague idea')
-    })
-
-    it('provides well-defined guidance for well-defined level', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Well defined', [])
-      expect(prompt).toContain('well defined')
-    })
-
-    it('provides notes/partial guidance for medium level', () => {
-      const prompt = buildCoachingPrompt('TestProject', 'Test', 'Some notes', [])
-      expect(prompt).toContain('notes/partial')
-    })
-  })
-})
-
-// ============================================================================
 // Tests for buildProjectQAPrompt
 // ============================================================================
 
@@ -664,6 +530,218 @@ describe('buildProjectQAPrompt', () => {
     it('uses evening greeting for evening hours', () => {
       const prompt = buildProjectQAPrompt('PROJECT: Test', [], 21)
       expect(prompt).toContain('Good evening, sir')
+    })
+  })
+})
+
+// ============================================================================
+// Tests for buildSystemPrompt (unified prompt builder)
+// ============================================================================
+
+describe('buildSystemPrompt', () => {
+  describe('new project session', () => {
+    it('includes project coaching context for new sessions', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'new',
+        projectName: 'TestProject',
+        oneLiner: 'A test project',
+        planningLevel: 'Light spark',
+      })
+      expect(prompt).toContain('new project idea')
+      expect(prompt).toContain('TOPICS TO COVER')
+      expect(prompt).toContain('PHASE TRANSITIONS')
+    })
+
+    it('includes JARVIS voice instructions', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'new',
+      })
+      expect(prompt).toContain('JARVIS')
+      expect(prompt).toContain('sir')
+      expect(prompt).toContain('polished, calm')
+    })
+
+    it('includes language rules', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'new',
+      })
+      expect(prompt).toContain('LANGUAGE RULES')
+      expect(prompt).toContain('Do NOT use these words')
+      expect(prompt).toContain('transform')
+    })
+
+    it('includes opening instructions for first message', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'new',
+        isFirstMessage: true,
+      })
+      expect(prompt).toContain('OPENING A NEW PROJECT')
+      expect(prompt).toContain('what the user wants out of this session')
+    })
+
+    it('includes continuation instructions for follow-up messages', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'new',
+        isFirstMessage: false,
+      })
+      expect(prompt).toContain('CONTINUATION')
+      expect(prompt).toContain('Do NOT greet again')
+    })
+
+    it('includes covered topics when provided', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'new',
+        coveredTopics: ['core_purpose', 'target_users'],
+      })
+      expect(prompt).toContain('Topics already discussed: core_purpose, target_users')
+    })
+
+    it('shows no topics covered for fresh conversations', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'new',
+        coveredTopics: [],
+      })
+      expect(prompt).toContain('No topics covered yet')
+    })
+
+    it('includes planning context based on planning level', () => {
+      const lightPrompt = buildSystemPrompt({
+        sessionType: 'new',
+        planningLevel: 'Light spark',
+      })
+      expect(lightPrompt).toContain('light/vague idea')
+
+      const wellDefinedPrompt = buildSystemPrompt({
+        sessionType: 'new',
+        planningLevel: 'Well defined',
+      })
+      expect(wellDefinedPrompt).toContain('well defined')
+    })
+
+    it('uses correct time greeting based on hour', () => {
+      const morningPrompt = buildSystemPrompt({
+        sessionType: 'new',
+        currentHour: 9,
+      })
+      expect(morningPrompt).toContain('Good morning, sir')
+
+      const afternoonPrompt = buildSystemPrompt({
+        sessionType: 'new',
+        currentHour: 14,
+      })
+      expect(afternoonPrompt).toContain('Good afternoon, sir')
+
+      const eveningPrompt = buildSystemPrompt({
+        sessionType: 'new',
+        currentHour: 20,
+      })
+      expect(eveningPrompt).toContain('Good evening, sir')
+    })
+  })
+
+  describe('existing project session', () => {
+    it('includes existing project context', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject\nPATH: /vault/TestProject',
+      })
+      expect(prompt).toContain('existing project')
+      expect(prompt).toContain('SNAPSHOT')
+      expect(prompt).toContain('TestProject')
+    })
+
+    it('includes tool section when tools are available', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+        toolsAvailable: ['obsidian_get_file_contents', 'obsidian_write_file'],
+      })
+      expect(prompt).toContain('AVAILABLE TOOLS')
+      expect(prompt).toContain('obsidian_get_file_contents')
+      expect(prompt).toContain('obsidian_write_file')
+    })
+
+    it('indicates no tools when none available', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+        toolsAvailable: [],
+      })
+      expect(prompt).toContain('No tools are currently available')
+    })
+
+    it('includes file path guidance', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: MyProject',
+      })
+      expect(prompt).toContain('FILE PATHS')
+      expect(prompt).toContain('./Projects/MyProject/')
+    })
+
+    it('includes canonical templates section', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+      })
+      expect(prompt).toContain('CANONICAL TEMPLATES')
+    })
+
+    it('includes template detection instructions', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+      })
+      expect(prompt).toContain('TEMPLATE DETECTION')
+      expect(prompt).toContain('placeholder')
+    })
+
+    it('includes hint format instructions', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+      })
+      expect(prompt).toContain('SYSTEM HINTS')
+      expect(prompt).toContain('{{hint}}')
+      expect(prompt).toContain('{{/hint}}')
+    })
+
+    it('includes opening message instructions for first message', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+        isFirstMessage: true,
+      })
+      expect(prompt).toContain('OPENING MESSAGE (CRITICAL)')
+      expect(prompt).toContain('SUBSTANTIVE and USEFUL')
+    })
+
+    it('includes continuation instructions for follow-up messages', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+        isFirstMessage: false,
+      })
+      expect(prompt).toContain('CONTINUATION')
+      expect(prompt).not.toContain('OPENING MESSAGE (CRITICAL)')
+    })
+
+    it('includes JARVIS voice instructions', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+      })
+      expect(prompt).toContain('JARVIS')
+      expect(prompt).toContain('sir')
+    })
+
+    it('includes language rules', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+      })
+      expect(prompt).toContain('LANGUAGE RULES')
+      expect(prompt).toContain('Do NOT use these words')
     })
   })
 })
