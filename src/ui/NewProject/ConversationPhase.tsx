@@ -640,8 +640,21 @@ export function ConversationPhase({
   // Handle name selection and proceed to finish
   const handleNameSelected = useCallback(async (name: string) => {
     debugLog.info('Project name selected', { name })
-    setState((s) => ({ ...s, selectedName: name }))
-    await finishConversation(state.messages, name)
+
+    // Add user's selection as a message in the conversation
+    const userSelectionMessage: ConversationMessage = {
+      role: 'user',
+      content: name,
+      timestamp: new Date().toISOString(),
+    }
+    const messagesWithSelection = [...state.messages, userSelectionMessage]
+
+    setState((s) => ({
+      ...s,
+      selectedName: name,
+      messages: messagesWithSelection,
+    }))
+    await finishConversation(messagesWithSelection, name)
   }, [state.messages])
 
   // Helper to generate names and show selection (used when skipping summary)
@@ -928,10 +941,10 @@ function ProjectNamingView({
         return
       }
 
-      if (key.upArrow) {
+      if (key.upArrow || input === 'k') {
         setSelected((s) => (s > 0 ? s - 1 : s))
       }
-      if (key.downArrow) {
+      if (key.downArrow || input === 'j') {
         setSelected((s) => (s < totalOptions - 1 ? s + 1 : s))
       }
       if (key.return) {
@@ -964,9 +977,11 @@ function ProjectNamingView({
     return (
       <Box flexDirection="column">
         {/* Assistant-style prompt (dimmed in menu mode) */}
-        <Box marginBottom={1}>
-          <Text color="cyan" dimColor>Lachesis: </Text>
-          <Text dimColor>Now then, sir—what shall we call this endeavor? I've prepared a few suggestions:</Text>
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color="cyan" dimColor bold>AI:</Text>
+          <Box marginLeft={2}>
+            <Text dimColor>Now then, sir—what shall we call this endeavor? I've prepared a few suggestions:</Text>
+          </Box>
         </Box>
 
         {/* Name options (dimmed) */}
@@ -998,9 +1013,11 @@ function ProjectNamingView({
   return (
     <Box flexDirection="column">
       {/* Assistant-style prompt */}
-      <Box marginBottom={1}>
-        <Text color="cyan">Lachesis: </Text>
-        <Text>Now then, sir—what shall we call this endeavor? I've prepared a few suggestions:</Text>
+      <Box flexDirection="column" marginBottom={1}>
+        <Text color="cyan" bold>AI:</Text>
+        <Box marginLeft={2}>
+          <Text wrap="wrap">Now then, sir—what shall we call this endeavor? I've prepared a few suggestions:</Text>
+        </Box>
       </Box>
 
       {/* Name options */}
@@ -1046,7 +1063,7 @@ function ProjectNamingView({
 
       <Box marginTop={1}>
         <Text dimColor>
-          {customMode ? '[ESC] Back to list' : '[ESC] Menu  [↑↓] Navigate  [Enter] Select'}
+          {customMode ? '[ESC] Back to list' : '[ESC] Menu  [↑↓/jk] Navigate  [Enter] Select'}
         </Text>
       </Box>
     </Box>

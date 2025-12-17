@@ -72,7 +72,7 @@ export type SessionLogEntry = {
   timestamp: string
 }
 
-// Helper to create a slug from a project name
+// Helper to create a slug from a project name (kebab-case)
 export function createSlug(name: string): string {
   return name
     .toLowerCase()
@@ -80,6 +80,18 @@ export function createSlug(name: string): string {
     .replace(/[^\w\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
+}
+
+// Helper to create a human-friendly folder name from a project name
+// Keeps original casing and spaces, only removes characters not allowed in folder names
+export function createFolderName(name: string): string {
+  return name
+    .trim()
+    // Remove characters not allowed in folder names (Windows: \ / : * ? " < > |)
+    .replace(/[\\/:*?"<>|]/g, '')
+    // Collapse multiple spaces into one
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 // Helper to get current ISO timestamp

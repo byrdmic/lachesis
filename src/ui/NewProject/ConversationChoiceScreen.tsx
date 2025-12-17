@@ -28,10 +28,10 @@ export function ConversationChoiceScreen({
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   useInput((input, key) => {
-    if (key.upArrow) {
+    if (key.upArrow || input === 'k') {
       setSelectedIndex((i) => Math.max(0, i - 1))
     }
-    if (key.downArrow) {
+    if (key.downArrow || input === 'j') {
       setSelectedIndex((i) => Math.min(CHOICE_OPTIONS.length - 1, i + 1))
     }
     if (key.return) {

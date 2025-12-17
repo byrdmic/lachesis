@@ -1,13 +1,14 @@
 import React, { useState, useCallback } from 'react'
 import { Box, Text } from 'ink'
 import Spinner from 'ink-spinner'
+import { join } from 'path'
 import type { LachesisConfig } from '../../config/types.ts'
 import type { Answer } from '../../core/interview/types.ts'
 import type {
   PlanningLevel,
   SessionLogEntry,
 } from '../../core/project/types.ts'
-import { createSlug } from '../../core/project/types.ts'
+import { createFolderName } from '../../core/project/types.ts'
 import type {
   ConversationMessage,
   ExtractedProjectData,
@@ -62,7 +63,7 @@ export function FinalizePhase({
           oneLiner.trim() ||
           `Untitled Project ${new Date().toISOString().slice(0, 10)}`
 
-        const projectSlug = createSlug(effectiveName)
+        const projectSlug = createFolderName(effectiveName)
 
         // Scaffold the project with static templates
         const result = await scaffoldProject(config.vaultPath, projectSlug)
@@ -125,8 +126,7 @@ export function FinalizePhase({
 
         <Box marginTop={1}>
           <Text dimColor>
-            Files will be created in: {config.vaultPath}/
-            {projectName || 'untitled-project'}
+            Files will be created in: {join(config.vaultPath, createFolderName(projectName || 'Untitled Project'))}
           </Text>
         </Box>
       </Box>

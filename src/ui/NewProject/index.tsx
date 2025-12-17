@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
+import { basename } from 'path'
 import type { LachesisConfig } from '../../config/types.ts'
 import type { PlanningLevel, SessionLogEntry } from '../../core/project/types.ts'
 import type { Answer } from '../../core/interview/types.ts'
@@ -20,6 +21,7 @@ import { assertNever } from '../../utils/type-guards.ts'
 import { WelcomeScreen } from './WelcomeScreen.tsx'
 import { ConversationChoiceScreen } from './ConversationChoiceScreen.tsx'
 import { QuickCapturePhase } from './QuickCapturePhase.tsx'
+import { ExistingProjectFlow } from '../ExistingProject/index.tsx'
 
 // ============================================================================
 // Types
@@ -39,7 +41,8 @@ type FlowState =
   | { step: 'conversation'; planningLevel: PlanningLevel; projectName: string; oneLiner: string }
   | { step: 'quick_capture'; planningLevel: PlanningLevel; projectName: string; oneLiner: string }
   | { step: 'finalize'; planningLevel: PlanningLevel; projectName: string; oneLiner: string; extractedData?: ExtractedProjectData; conversationLog: ConversationMessage[]; answers?: Map<string, Answer>; sessionLog?: SessionLogEntry[] }
-  | { step: 'complete'; projectPath: string }
+  | { step: 'complete'; projectPath: string; projectName: string }
+  | { step: 'loading_project'; projectPath: string; projectName: string }
   | { step: 'cancelled' }
 
 // ============================================================================
@@ -193,7 +196,9 @@ export function NewProjectFlow({
   const handleFinalizeComplete = useCallback((projectPath: string) => {
     clearNewProjectInProgress()
     setSavedConversationState(null)
-    setState({ step: 'complete', projectPath })
+    // Extract project name from the path (folder name)
+    const projectName = basename(projectPath)
+    setState({ step: 'complete', projectPath, projectName })
   }, [])
 
   const handleCancel = useCallback(() => {
@@ -225,11 +230,15 @@ export function NewProjectFlow({
 
   useInput(
     (input, key) => {
-      if (input.toLowerCase() === 's' && !showSettings && state.step !== 'complete' && state.step !== 'cancelled') {
+      if (input.toLowerCase() === 's' && !showSettings && state.step !== 'complete' && state.step !== 'cancelled' && state.step !== 'loading_project') {
         setShowSettings(true)
       }
-      if (key.escape) {
+      if (key.escape && state.step !== 'loading_project') {
         handleCancel()
+      }
+      // Handle Enter on complete screen to load the created project
+      if (key.return && state.step === 'complete') {
+        setState({ step: 'loading_project', projectPath: state.projectPath, projectName: state.projectName })
       }
     },
     { isActive: !inputLocked },
@@ -321,8 +330,18 @@ export function NewProjectFlow({
             <Text>Your project has been scaffolded at:</Text>
             <Text color="cyan">{state.projectPath}</Text>
             <Text>{'\n'}</Text>
-            <Text dimColor>Open it in Obsidian to continue.</Text>
+            <Text dimColor>Press Enter to continue to your project, or Esc to exit.</Text>
           </Box>
+        )
+
+      case 'loading_project':
+        return (
+          <ExistingProjectFlow
+            config={config}
+            debug={debug}
+            onBack={handleCancel}
+            onDebugHotkeysChange={onDebugHotkeysChange}
+          />
         )
 
       case 'cancelled':
