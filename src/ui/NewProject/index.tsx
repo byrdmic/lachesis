@@ -1,31 +1,33 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
-import Spinner from 'ink-spinner'
 import type { LachesisConfig } from '../../config/types.ts'
-import type { Answer } from '../../core/interview/types.ts'
 import type { PlanningLevel, SessionLogEntry } from '../../core/project/types.ts'
-import type {
-  ConversationMessage,
-  ExtractedProjectData,
-} from '../../ai/client.ts'
+import type { Answer } from '../../core/interview/types.ts'
+import type { ConversationMessage, ExtractedProjectData } from '../../ai/client.ts'
 import type { StoredConversationState } from './ConversationPhase.tsx'
+import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 import { ConversationPhase } from './ConversationPhase.tsx'
 import { FinalizePhase } from './FinalizePhase.tsx'
 import { StatusBar, SettingsPanel } from '../components/index.ts'
 import { updateConfig } from '../../config/config.ts'
 import { debugLog } from '../../debug/logger.ts'
-import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 import {
   getNewProjectInProgress,
   saveNewProjectInProgress,
   clearNewProjectInProgress,
 } from '../../core/conversation-store.ts'
 import { assertNever } from '../../utils/type-guards.ts'
+import { WelcomeScreen } from './WelcomeScreen.tsx'
+import { ConversationChoiceScreen } from './ConversationChoiceScreen.tsx'
+import { QuickCapturePhase } from './QuickCapturePhase.tsx'
+
+// ============================================================================
+// Types
+// ============================================================================
 
 type NewProjectFlowProps = {
   config: LachesisConfig
   debug?: boolean
-  /** If true, resume from saved in-progress state */
   resuming?: boolean
   onExit?: () => void
   onDebugHotkeysChange?: (enabled: boolean) => void
@@ -33,37 +35,16 @@ type NewProjectFlowProps = {
 
 type FlowState =
   | { step: 'welcome' }
-  | {
-      step: 'conversation_choice'
-      planningLevel: PlanningLevel
-      projectName: string
-      oneLiner: string
-    }
-  | {
-      step: 'conversation'
-      planningLevel: PlanningLevel
-      projectName: string
-      oneLiner: string
-    }
-  | {
-      step: 'quick_capture'
-      planningLevel: PlanningLevel
-      projectName: string
-      oneLiner: string
-    }
-  | {
-      step: 'finalize'
-      planningLevel: PlanningLevel
-      projectName: string
-      oneLiner: string
-      extractedData?: ExtractedProjectData
-      conversationLog: ConversationMessage[]
-      // Legacy support
-      answers?: Map<string, Answer>
-      sessionLog?: SessionLogEntry[]
-    }
+  | { step: 'conversation_choice'; planningLevel: PlanningLevel; projectName: string; oneLiner: string }
+  | { step: 'conversation'; planningLevel: PlanningLevel; projectName: string; oneLiner: string }
+  | { step: 'quick_capture'; planningLevel: PlanningLevel; projectName: string; oneLiner: string }
+  | { step: 'finalize'; planningLevel: PlanningLevel; projectName: string; oneLiner: string; extractedData?: ExtractedProjectData; conversationLog: ConversationMessage[]; answers?: Map<string, Answer>; sessionLog?: SessionLogEntry[] }
   | { step: 'complete'; projectPath: string }
   | { step: 'cancelled' }
+
+// ============================================================================
+// Component
+// ============================================================================
 
 export function NewProjectFlow({
   config: initialConfig,
@@ -73,132 +54,85 @@ export function NewProjectFlow({
   onDebugHotkeysChange,
 }: NewProjectFlowProps) {
   const { exit } = useApp()
-  
-  // Initialize state - restore from saved state if resuming
-  const [state, setState] = useState<FlowState>(() => {
-    if (resuming) {
-      const saved = getNewProjectInProgress()
-      if (saved && saved.conversationState.messages.length > 0) {
-        return {
-          step: 'conversation',
-          planningLevel: saved.planningLevel as PlanningLevel,
-          projectName: saved.projectName,
-          oneLiner: saved.oneLiner,
-        }
-      }
-    }
-    return { step: 'welcome' }
-  })
-  
-  // Saved conversation state for restoration after settings
-  const [savedConversationState, setSavedConversationState] = useState<StoredConversationState | null>(() => {
-    if (resuming) {
-      const saved = getNewProjectInProgress()
-      return saved?.conversationState ?? null
-    }
-    return null
-  })
-  
+
+  // ============================================================================
+  // State
+  // ============================================================================
+
+  const [state, setState] = useState<FlowState>(() => initializeState(resuming))
+  const [savedConversationState, setSavedConversationState] = useState<StoredConversationState | null>(
+    () => initializeSavedConversation(resuming)
+  )
   const [showSettings, setShowSettings] = useState(false)
   const [config, setConfig] = useState<LachesisConfig>(initialConfig)
-  const [aiStatus, setAIStatus] = useState<AIStatusDescriptor>({
-    state: 'idle',
-    message: 'Ready',
-  })
+  const [aiStatus, setAIStatus] = useState<AIStatusDescriptor>({ state: 'idle', message: 'Ready' })
   const [inputLocked, setInputLocked] = useState(false)
-  const settingsHotkeyEnabled =
-    !inputLocked && !showSettings && state.step !== 'complete' && state.step !== 'cancelled'
+
+  // Derived state
+  const settingsHotkeyEnabled = !inputLocked && !showSettings && state.step !== 'complete' && state.step !== 'cancelled'
+
+  // ============================================================================
+  // Callbacks
+  // ============================================================================
+
   const notifyDebugHotkeys = useCallback(
     (enabled: boolean) => onDebugHotkeysChange?.(enabled),
     [onDebugHotkeysChange],
   )
+
   const renderWithStatusBar = useCallback(
     (content: React.ReactNode, showSettingsHint = settingsHotkeyEnabled) => (
       <Box flexDirection="column" width="100%">
-        {/* Main content */}
-        <Box flexDirection="column">
-          {content}
-        </Box>
-        {/* Status bar at bottom */}
-        <StatusBar
-          config={config}
-          aiStatus={aiStatus}
-          showSettingsHint={showSettingsHint}
-        />
+        <Box flexDirection="column">{content}</Box>
+        <StatusBar config={config} aiStatus={aiStatus} showSettingsHint={showSettingsHint} />
       </Box>
     ),
     [aiStatus, config, settingsHotkeyEnabled],
   )
+
+  // ============================================================================
+  // Effects
+  // ============================================================================
 
   // Log state changes in debug mode
   useEffect(() => {
     if (debug) {
       debugLog.debug('Flow state changed', { step: state.step })
     }
-    // Disable debug hotkeys unless explicitly enabled by a phase (e.g., menu mode)
     notifyDebugHotkeys(false)
   }, [state.step, debug, notifyDebugHotkeys])
 
-  // Reflect high-level AI status by flow step (more detailed updates come from child phases)
+  // Update AI status based on step
   useEffect(() => {
-    switch (state.step) {
-      case 'welcome':
-        setAIStatus({ state: 'idle', message: 'Ready' })
-        break
-      case 'conversation':
-        // Let the ConversationPhase component manage its own detailed status
-        // Only set a generic status if we're still initializing
-        if (!savedConversationState) {
-          setAIStatus({ state: 'idle', message: 'Starting conversation' })
-        }
-        break
-      case 'conversation_choice':
-      case 'quick_capture':
-        setAIStatus({ state: 'idle', message: 'Ready for planning' })
-        break
-      case 'finalize':
-        setAIStatus({ state: 'idle', message: 'Ready to scaffold' })
-        break
-      case 'complete':
-        setAIStatus({ state: 'idle', message: 'Finished' })
-        break
-      case 'cancelled':
-        setAIStatus({ state: 'idle', message: 'Session ended' })
-        break
-      default:
-        break
+    const statusMap: Partial<Record<FlowState['step'], AIStatusDescriptor>> = {
+      welcome: { state: 'idle', message: 'Ready' },
+      conversation_choice: { state: 'idle', message: 'Ready for planning' },
+      quick_capture: { state: 'idle', message: 'Ready for planning' },
+      finalize: { state: 'idle', message: 'Ready to scaffold' },
+      complete: { state: 'idle', message: 'Finished' },
+      cancelled: { state: 'idle', message: 'Session ended' },
     }
-  }, [state, savedConversationState])
 
-  // Handle 's' key to open settings (except during AI check)
-  useInput(
-    (input, key) => {
-      if (
-        input.toLowerCase() === 's' &&
-        !showSettings &&
-        state.step !== 'complete' &&
-        state.step !== 'cancelled'
-      ) {
-        setShowSettings(true)
-      }
-      if (key.escape) {
-        handleCancel()
-      }
-    },
-    { isActive: !inputLocked },
-  )
+    const status = statusMap[state.step]
+    if (status) {
+      setAIStatus(status)
+    } else if (state.step === 'conversation' && !savedConversationState) {
+      setAIStatus({ state: 'idle', message: 'Starting conversation' })
+    }
+  }, [state.step, savedConversationState])
 
-  // Handle settings save
+  // ============================================================================
+  // Handlers
+  // ============================================================================
+
   const handleSettingsSave = useCallback(
     (updates: Partial<LachesisConfig>) => {
-      const newConfig = { ...config, ...updates }
-      setConfig(newConfig)
+      setConfig({ ...config, ...updates })
       updateConfig(updates)
     },
     [config],
   )
 
-  // Start AI check after welcome
   const handleStart = useCallback(() => {
     setState({
       step: 'conversation',
@@ -208,11 +142,9 @@ export function NewProjectFlow({
     })
   }, [])
 
-  // Handle conversation mode choice
   const handleConversationChoice = useCallback(
     (choice: 'conversation' | 'quick_capture', currentState: FlowState) => {
       if (currentState.step !== 'conversation_choice') return
-
       setState({
         step: choice,
         planningLevel: currentState.planningLevel,
@@ -223,7 +155,6 @@ export function NewProjectFlow({
     [],
   )
 
-  // Handle conversation completion (AI planning chat)
   const handleConversationComplete = useCallback(
     (
       extractedData: ExtractedProjectData,
@@ -233,19 +164,11 @@ export function NewProjectFlow({
       planningLevel: PlanningLevel,
     ) => {
       const extractedOneLiner = extractedData?.vision?.oneLinePitch?.trim() ?? ''
-      // Use the selected name from naming phase, fall back to extracted data
-      const nextProjectName =
-        selectedProjectName.trim() || extractedOneLiner || 'Untitled Project'
-      const nextOneLiner =
-        oneLiner.trim() || extractedOneLiner || 'Not provided yet'
-      const nextPlanningLevel =
-        planningLevel?.trim() || 'Captured during planning'
-
       setState({
         step: 'finalize',
-        planningLevel: nextPlanningLevel,
-        projectName: nextProjectName,
-        oneLiner: nextOneLiner,
+        planningLevel: planningLevel?.trim() || 'Captured during planning',
+        projectName: selectedProjectName.trim() || extractedOneLiner || 'Untitled Project',
+        oneLiner: oneLiner.trim() || extractedOneLiner || 'Not provided yet',
         extractedData,
         conversationLog,
       })
@@ -253,14 +176,8 @@ export function NewProjectFlow({
     [],
   )
 
-  // Handle quick capture completion
   const handleQuickCaptureComplete = useCallback(
-    (
-      extractedData: ExtractedProjectData,
-      projectName: string,
-      oneLiner: string,
-      planningLevel: PlanningLevel,
-    ) => {
+    (extractedData: ExtractedProjectData, projectName: string, oneLiner: string, planningLevel: PlanningLevel) => {
       setState({
         step: 'finalize',
         planningLevel,
@@ -273,15 +190,12 @@ export function NewProjectFlow({
     [],
   )
 
-  // Handle finalization complete
   const handleFinalizeComplete = useCallback((projectPath: string) => {
-    // Clear the saved in-progress state since project is now complete
     clearNewProjectInProgress()
     setSavedConversationState(null)
     setState({ step: 'complete', projectPath })
   }, [])
 
-  // Handle cancellation
   const handleCancel = useCallback(() => {
     if (onExit) {
       onExit()
@@ -291,14 +205,10 @@ export function NewProjectFlow({
     setTimeout(() => exit(), 500)
   }, [exit, onExit])
 
-  // Callback to save conversation state for persistence
   const handleConversationStateChange = useCallback(
     (conversationState: StoredConversationState) => {
       if (state.step !== 'conversation') return
-      
       setSavedConversationState(conversationState)
-      
-      // Save to persistent store for resuming later
       saveNewProjectInProgress({
         conversationState,
         planningLevel: state.planningLevel,
@@ -309,7 +219,27 @@ export function NewProjectFlow({
     [state],
   )
 
-  // Overlay: Settings panel (early return before switch)
+  // ============================================================================
+  // Input Handling
+  // ============================================================================
+
+  useInput(
+    (input, key) => {
+      if (input.toLowerCase() === 's' && !showSettings && state.step !== 'complete' && state.step !== 'cancelled') {
+        setShowSettings(true)
+      }
+      if (key.escape) {
+        handleCancel()
+      }
+    },
+    { isActive: !inputLocked },
+  )
+
+  // ============================================================================
+  // Render
+  // ============================================================================
+
+  // Overlay: Settings panel
   if (showSettings) {
     return (
       <SettingsPanel
@@ -320,13 +250,11 @@ export function NewProjectFlow({
     )
   }
 
-  // Step renderer with switch for exhaustive handling
-  const renderFlowStep = (): React.ReactNode => {
+  // Step renderer
+  const renderStep = (): React.ReactNode => {
     switch (state.step) {
       case 'welcome':
-        return (
-          <WelcomeScreen onStart={handleStart} config={config} aiStatus={aiStatus} />
-        )
+        return <WelcomeScreen config={config} aiStatus={aiStatus} onStart={handleStart} />
 
       case 'conversation_choice':
         return renderWithStatusBar(
@@ -352,13 +280,7 @@ export function NewProjectFlow({
             onShowSettings={() => setShowSettings(true)}
             onStateChange={handleConversationStateChange}
             onComplete={(extractedData, conversationLog, selectedProjectName) =>
-              handleConversationComplete(
-                extractedData,
-                conversationLog,
-                selectedProjectName,
-                state.oneLiner,
-                state.planningLevel,
-              )
+              handleConversationComplete(extractedData, conversationLog, selectedProjectName, state.oneLiner, state.planningLevel)
             }
             onCancel={handleCancel}
           />,
@@ -367,18 +289,11 @@ export function NewProjectFlow({
       case 'quick_capture':
         return renderWithStatusBar(
           <QuickCapturePhase
-            config={config}
             projectName={state.projectName}
             oneLiner={state.oneLiner}
             onComplete={(extractedData) =>
-              handleQuickCaptureComplete(
-                extractedData,
-                state.projectName,
-                state.oneLiner,
-                state.planningLevel,
-              )
+              handleQuickCaptureComplete(extractedData, state.projectName, state.oneLiner, state.planningLevel)
             }
-            onCancel={handleCancel}
           />,
         )
 
@@ -401,9 +316,7 @@ export function NewProjectFlow({
       case 'complete':
         return (
           <Box flexDirection="column" padding={1} height="100%" width="100%">
-            <Text color="green" bold>
-              Project created successfully!
-            </Text>
+            <Text color="green" bold>Project created successfully!</Text>
             <Text>{'\n'}</Text>
             <Text>Your project has been scaffolded at:</Text>
             <Text color="cyan">{state.projectPath}</Text>
@@ -424,206 +337,32 @@ export function NewProjectFlow({
     }
   }
 
-  return renderFlowStep()
+  return renderStep()
 }
 
 // ============================================================================
-// Sub-components
+// Helper Functions
 // ============================================================================
 
-function WelcomeScreen({
-  onStart,
-  config,
-  aiStatus,
-}: {
-  onStart: () => void
-  config: LachesisConfig
-  aiStatus: AIStatusDescriptor
-}) {
-  useEffect(() => {
-    const timer = setTimeout(onStart, 100)
-    return () => clearTimeout(timer)
-  }, [onStart])
-
-  return (
-    <Box flexDirection="column" width="100%">
-      {/* Main content */}
-      <Box flexDirection="column" padding={1}>
-        <Box
-          borderStyle="double"
-          borderColor="cyan"
-          paddingX={3}
-          paddingY={1}
-          marginBottom={1}
-        >
-          <Text color="cyan" bold>
-            Lachesis Project Foundations Studio
-          </Text>
-        </Box>
-        <Text>Welcome. Let's shape your idea into a structured project.</Text>
-      </Box>
-      {/* Status bar at bottom */}
-      <StatusBar config={config} aiStatus={aiStatus} />
-    </Box>
-  )
-}
-
-export function AIConnectionCheck({
-  config,
-  checking,
-  error,
-  showSettingsHint = true,
-  aiStatus,
-  onConnected,
-  onError,
-}: {
-  config: LachesisConfig
-  checking: boolean
-  error?: string
-  showSettingsHint?: boolean
-  aiStatus?: AIStatusDescriptor
-  onConnected: () => void
-  onError: (error: string) => void
-}) {
-  return (
-    <Box flexDirection="column" width="100%">
-      {/* Main content */}
-      <Box flexDirection="column" padding={1}>
-        <Box
-          borderStyle="double"
-          borderColor="cyan"
-          paddingX={3}
-          paddingY={1}
-          marginBottom={1}
-        >
-          <Text color="cyan" bold>
-            Lachesis Project Foundations Studio
-          </Text>
-        </Box>
-
-        {checking ? (
-          <Box>
-            <Text color="cyan">
-              <Spinner type="dots" />
-            </Text>
-            <Text> Connecting to AI...</Text>
-          </Box>
-        ) : error ? (
-          <Box flexDirection="column">
-            <Text color="red">AI connection failed:</Text>
-            <Text color="red">{error}</Text>
-            <Text>{'\n'}</Text>
-            <Text dimColor>
-              Press [S] for settings, [R] to retry, or [Q] to quit
-            </Text>
-          </Box>
-        ) : null}
-      </Box>
-      {/* Status bar at bottom */}
-      <StatusBar
-        config={config}
-        aiStatus={aiStatus}
-        showSettingsHint={showSettingsHint}
-      />
-    </Box>
-  )
-}
-
-function ConversationChoiceScreen({
-  projectName,
-  onChoice,
-}: {
-  projectName: string
-  onChoice: (choice: 'conversation' | 'quick_capture') => void
-}) {
-  const [selected, setSelected] = useState(0)
-  const options = [
-    {
-      label: 'AI-guided planning chat',
-      value: 'conversation' as const,
-      desc: 'Have a conversation to explore and plan your idea',
-    },
-    {
-      label: 'Quick capture',
-      value: 'quick_capture' as const,
-      desc: 'Fill in key fields directly',
-    },
-  ]
-
-  useInput((input, key) => {
-    if (key.upArrow) {
-      setSelected((s) => (s > 0 ? s - 1 : s))
-    }
-    if (key.downArrow) {
-      setSelected((s) => (s < options.length - 1 ? s + 1 : s))
-    }
-    if (key.return) {
-      const opt = options[selected]
-      if (opt) {
-        onChoice(opt.value)
+function initializeState(resuming: boolean): FlowState {
+  if (resuming) {
+    const saved = getNewProjectInProgress()
+    if (saved && saved.conversationState.messages.length > 0) {
+      return {
+        step: 'conversation',
+        planningLevel: saved.planningLevel as PlanningLevel,
+        projectName: saved.projectName,
+        oneLiner: saved.oneLiner,
       }
     }
-  })
-
-  return (
-    <Box flexDirection="column" padding={1}>
-      <Text bold>You have a well-defined idea for "{projectName}"</Text>
-      <Text dimColor>How would you like to proceed?</Text>
-      <Text>{'\n'}</Text>
-
-      {options.map((opt, i) => (
-        <Box key={opt.value} flexDirection="column" marginBottom={1}>
-          <Text color={i === selected ? 'cyan' : undefined}>
-            {i === selected ? '❯ ' : '  '}
-            {opt.label}
-          </Text>
-          <Text dimColor> {opt.desc}</Text>
-        </Box>
-      ))}
-    </Box>
-  )
+  }
+  return { step: 'welcome' }
 }
 
-// Placeholder for QuickCapturePhase - will implement if needed
-function QuickCapturePhase({
-  config,
-  projectName,
-  oneLiner,
-  onComplete,
-  onCancel,
-}: {
-  config: LachesisConfig
-  projectName: string
-  oneLiner: string
-  onComplete: (data: ExtractedProjectData) => void
-  onCancel: () => void
-}) {
-  // TODO: Implement quick capture form
-  // For now, create minimal data and proceed
-  useEffect(() => {
-    const minimalData: ExtractedProjectData = {
-      vision: {
-        oneLinePitch: oneLiner,
-        description: oneLiner,
-        primaryAudience: 'To be defined',
-        problemSolved: 'To be defined',
-        successCriteria: 'To be defined',
-      },
-      constraints: {
-        known: [],
-        assumptions: [],
-        risks: [],
-        antiGoals: [],
-      },
-      execution: {},
-    }
-    // Auto-complete for now - can enhance later
-    setTimeout(() => onComplete(minimalData), 100)
-  }, [oneLiner, onComplete])
-
-  return (
-    <Box flexDirection="column" padding={1}>
-      <Text>Quick capture for {projectName}...</Text>
-    </Box>
-  )
+function initializeSavedConversation(resuming: boolean): StoredConversationState | null {
+  if (resuming) {
+    const saved = getNewProjectInProgress()
+    return saved?.conversationState ?? null
+  }
+  return null
 }
