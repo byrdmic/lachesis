@@ -547,8 +547,8 @@ describe('buildSystemPrompt', () => {
         oneLiner: 'A test project',
         planningLevel: 'Light spark',
       })
-      expect(prompt).toContain('new project idea')
-      expect(prompt).toContain('TOPICS TO COVER')
+      expect(prompt).toContain('capture a project idea')
+      expect(prompt).toContain('TEMPLATE-DRIVEN DISCOVERY')
       expect(prompt).toContain('PHASE TRANSITIONS')
     })
 
@@ -575,8 +575,8 @@ describe('buildSystemPrompt', () => {
         sessionType: 'new',
         isFirstMessage: true,
       })
-      expect(prompt).toContain('OPENING A NEW PROJECT')
-      expect(prompt).toContain('what the user wants out of this session')
+      expect(prompt).toContain('OPENING MESSAGE')
+      expect(prompt).toContain('What are we building today')
     })
 
     it('includes continuation instructions for follow-up messages', () => {
@@ -591,9 +591,9 @@ describe('buildSystemPrompt', () => {
     it('includes covered topics when provided', () => {
       const prompt = buildSystemPrompt({
         sessionType: 'new',
-        coveredTopics: ['core_purpose', 'target_users'],
+        coveredTopics: ['elevator_pitch', 'target_users'],
       })
-      expect(prompt).toContain('Topics already discussed: core_purpose, target_users')
+      expect(prompt).toContain('Topics already discussed: elevator_pitch, target_users')
     })
 
     it('shows no topics covered for fresh conversations', () => {
@@ -742,6 +742,80 @@ describe('buildSystemPrompt', () => {
       })
       expect(prompt).toContain('LANGUAGE RULES')
       expect(prompt).toContain('Do NOT use these words')
+    })
+  })
+
+  describe('workflow integration', () => {
+    it('includes workflow overview for existing projects', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+      })
+      expect(prompt).toContain('NAMED WORKFLOWS')
+      expect(prompt).toContain('Synthesize')
+      expect(prompt).toContain('Harvest Tasks')
+      expect(prompt).toContain('Log Digest')
+    })
+
+    it('includes workflow execution contract', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+      })
+      expect(prompt).toContain('WORKFLOW EXECUTION CONTRACT')
+      expect(prompt).toContain('Stay inside the workflow')
+      expect(prompt).toContain('Respect read/write boundaries')
+    })
+
+    it('includes log format standards', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+      })
+      expect(prompt).toContain('LOG FORMAT STANDARD')
+      expect(prompt).toContain('## YYYY-MM-DD')
+      expect(prompt).toContain('### HH:MM — <Title>')
+    })
+
+    it('includes active workflow context when specified', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+        activeWorkflow: 'log-digest',
+      })
+      expect(prompt).toContain('ACTIVE WORKFLOW: Log Digest')
+      expect(prompt).toContain('Log.md')
+      expect(prompt).toContain('Stay strictly within this workflow')
+    })
+
+    it('does not include active workflow section when not specified', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+      })
+      expect(prompt).not.toContain('ACTIVE WORKFLOW:')
+    })
+
+    it('includes specific rules for harvest-tasks workflow', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+        activeWorkflow: 'harvest-tasks',
+      })
+      expect(prompt).toContain('ACTIVE WORKFLOW: Harvest Tasks')
+      expect(prompt).toContain('source reference')
+      expect(prompt).toContain('Tasks.md')
+    })
+
+    it('includes specific rules for align-templates workflow', () => {
+      const prompt = buildSystemPrompt({
+        sessionType: 'existing',
+        snapshotSummary: 'PROJECT: TestProject',
+        activeWorkflow: 'align-templates',
+      })
+      expect(prompt).toContain('ACTIVE WORKFLOW: Align Templates')
+      expect(prompt).toContain('**Cross-file moves:** Allowed')
+      expect(prompt).toContain('**Risk level:** high')
     })
   })
 })

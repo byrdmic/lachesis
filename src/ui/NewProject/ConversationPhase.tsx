@@ -14,6 +14,7 @@ import {
   streamNextQuestion,
   streamAgenticConversation,
   generateProjectNameSuggestions,
+  extractProjectName,
 } from '../../ai/client.ts'
 import { buildSystemPrompt } from '../../ai/prompts.ts'
 import { getMCPToolNames } from '../../mcp/index.ts'
@@ -636,24 +637,47 @@ export function ConversationPhase({
   }
 
   // Handle name selection and proceed to finish
-  const handleNameSelected = useCallback(async (name: string) => {
-    debugLog.info('Project name selected', { name })
+  const handleNameSelected = useCallback(async (name: string, isCustomInput: boolean = false) => {
+    debugLog.info('Project name selected', { name, isCustomInput })
+
+    let finalName = name
+
+    // For custom input, use AI to extract the actual project name
+    // (e.g., "let's go with Kerbal Capcom" → "Kerbal Capcom")
+    if (isCustomInput) {
+      setState((s) => ({ ...s, step: 'extracting_data' })) // Show processing state
+
+      const result = await extractProjectName(name, config)
+      if (result.success && result.name) {
+        finalName = result.name
+        debugLog.info('Extracted project name from custom input', {
+          original: name,
+          extracted: finalName,
+        })
+      } else {
+        // If extraction fails, fall back to the raw input
+        debugLog.warn('Failed to extract project name, using raw input', {
+          original: name,
+          error: result.error,
+        })
+      }
+    }
 
     // Add user's selection as a message in the conversation
     const userSelectionMessage: ConversationMessage = {
       role: 'user',
-      content: name,
+      content: name, // Keep original input in the log
       timestamp: new Date().toISOString(),
     }
     const messagesWithSelection = [...state.messages, userSelectionMessage]
 
     setState((s) => ({
       ...s,
-      selectedName: name,
+      selectedName: finalName,
       messages: messagesWithSelection,
     }))
-    await finishConversation(messagesWithSelection, name)
-  }, [state.messages])
+    await finishConversation(messagesWithSelection, finalName)
+  }, [state.messages, config])
 
   // Helper to generate names and show selection (used when skipping summary)
   const generateNamesAndProceed = async (messages: ConversationMessage[]) => {
@@ -894,7 +918,7 @@ function ProjectNamingView({
   onCancel,
 }: {
   suggestions: ProjectNameSuggestion[]
-  onSelect: (name: string) => void
+  onSelect: (name: string, isCustomInput?: boolean) => void
   menuMode: boolean
   onToggleMenu: () => void
   onShowSettings?: () => void
@@ -966,7 +990,7 @@ function ProjectNamingView({
 
   const handleCustomSubmit = (value: string) => {
     if (value.trim()) {
-      onSelect(value.trim())
+      onSelect(value.trim(), true) // Mark as custom input for AI extraction
     }
   }
 
@@ -1082,21 +1106,20 @@ function RetryHandler({ onRetry }: { onRetry: () => void }) {
 // ============================================================================
 
 /**
- * Simple topic detection from question text
+ * Topic detection from question text.
+ * Topics map to Overview.md template sections.
  */
 function detectTopics(
   questionText: string,
   existingTopics: string[],
 ): string[] {
   const topicKeywords: Record<string, string[]> = {
-    core_purpose: ['what does', 'what will', 'main purpose', 'core function'],
-    target_users: ['who will', 'who is', 'target', 'audience', 'users'],
-    problem_solved: ['problem', 'pain point', 'solve', 'address', 'issue'],
-    constraints: ['constraint', 'limitation', 'budget', 'time', 'resource'],
-    success_criteria: ['success', 'measure', 'know if', 'goal', 'achieve'],
-    anti_goals: ['not', 'avoid', "shouldn't", 'anti-goal', 'scope creep'],
-    first_move: ['first step', 'start', 'begin', 'initial'],
-    tech_considerations: ['technology', 'stack', 'platform', 'framework'],
+    elevator_pitch: ['what are you building', 'what is this', 'describe', 'one sentence', 'elevator'],
+    problem_statement: ['problem', 'pain', 'hurts', 'solve', 'why build', 'consequence'],
+    target_users: ['who will', 'who is', 'target', 'audience', 'users', 'customer', 'context'],
+    value_proposition: ['benefit', 'value', 'alternative', 'different', 'why this'],
+    scope_and_antigoals: ['scope', 'in scope', 'out of scope', 'anti-goal', 'avoid', "shouldn't", 'not become'],
+    constraints: ['constraint', 'limitation', 'budget', 'time', 'deadline', 'tech stack', 'money'],
   }
 
   const lowerQuestion = questionText.toLowerCase()

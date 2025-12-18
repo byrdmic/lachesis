@@ -31,17 +31,15 @@ export function getPhaseById(id: string): PhaseDefinition | undefined {
   return allPhases.find((p) => p.id === id)
 }
 
-// Topics for AI guidance (not rigid questions)
-// The AI uses these as a checklist of areas to cover
+// Topics for AI guidance - derived from Overview.md template sections.
+// The AI uses these as a checklist of areas to cover.
 export const DISCOVERY_TOPICS = [
-  'core_purpose',
-  'target_users',
-  'problem_solved',
-  'constraints',
-  'success_criteria',
-  'anti_goals',
-  'first_move',
-  'tech_considerations',
+  'elevator_pitch',      // What are you building, for whom, why?
+  'problem_statement',   // What hurts, why, consequence?
+  'target_users',        // Who, context, non-users?
+  'value_proposition',   // Benefit, differentiator?
+  'scope_and_antigoals', // In-scope, out-of-scope?
+  'constraints',         // Time, tech, money, operational?
 ] as const
 
 export type DiscoveryTopic = (typeof DISCOVERY_TOPICS)[number]

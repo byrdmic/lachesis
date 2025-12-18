@@ -14,7 +14,7 @@ import type {
   ExtractedProjectData,
 } from '../../ai/client.ts'
 import { Select } from '../components/index.ts'
-import { scaffoldProject } from '../../fs/scaffolder.ts'
+import { scaffoldProject, type ScaffoldProjectData } from '../../fs/scaffolder.ts'
 
 type FinalizePhaseProps = {
   config: LachesisConfig
@@ -65,8 +65,16 @@ export function FinalizePhase({
 
         const projectSlug = createFolderName(effectiveName)
 
-        // Scaffold the project with static templates
-        const result = await scaffoldProject(config.vaultPath, projectSlug)
+        // Build project data for scaffolding
+        const projectData: ScaffoldProjectData = {
+          projectName: effectiveName,
+          projectSlug,
+          oneLiner: oneLiner.trim() || undefined,
+          extracted: extractedData,
+        }
+
+        // Scaffold the project with extracted data (fills templates, strips placeholders)
+        const result = await scaffoldProject(config.vaultPath, projectSlug, projectData)
 
         if (result.success) {
           setStep('done')
@@ -84,6 +92,7 @@ export function FinalizePhase({
       config,
       projectName,
       oneLiner,
+      extractedData,
       onComplete,
       onCancel,
     ],

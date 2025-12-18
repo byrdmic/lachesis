@@ -24,7 +24,7 @@ function createMockConversationState(
       { role: 'assistant', content: 'Hello, how can I help?', timestamp: '2024-01-15T10:00:00.000Z' },
       { role: 'user', content: 'I want to build a CLI tool', timestamp: '2024-01-15T10:01:00.000Z' },
     ],
-    coveredTopics: ['core_purpose'],
+    coveredTopics: ['elevator_pitch'],
     step: 'waiting_for_answer',
     ...overrides,
   }
@@ -249,7 +249,7 @@ describe('conversation-store', () => {
       it('returns saved state when new project is in progress', () => {
         const state: NewProjectInProgressState = {
           conversationState: createMockConversationState({
-            coveredTopics: ['core_purpose', 'target_users'],
+            coveredTopics: ['elevator_pitch', 'target_users'],
           }),
           planningLevel: 'Some notes',
           projectName: 'My CLI Tool',
@@ -263,7 +263,7 @@ describe('conversation-store', () => {
         expect(retrieved?.projectName).toBe('My CLI Tool')
         expect(retrieved?.planningLevel).toBe('Some notes')
         expect(retrieved?.oneLiner).toBe('A command-line interface for productivity')
-        expect(retrieved?.conversationState.coveredTopics).toEqual(['core_purpose', 'target_users'])
+        expect(retrieved?.conversationState.coveredTopics).toEqual(['elevator_pitch', 'target_users'])
       })
     })
 

@@ -139,7 +139,7 @@ export async function streamNextQuestion(
     const stream = await streamText({
       model,
       messages,
-      maxOutputTokens: 500,
+      maxOutputTokens: 5000,
     })
 
     let fullText = ''
@@ -227,7 +227,7 @@ Summarize what we learned in a clear, bulleted format covering:
 Keep bullets crisp and Jarvis-voiced; HUD/status flavor is welcome where it helps. Address the reader as "sir".`,
         },
       ],
-      maxOutputTokens: 500,
+      maxOutputTokens: 5000,
       temperature: 0.5,
     })
 
@@ -357,17 +357,16 @@ export async function shouldContinueConversation(
 }
 
 /**
- * Topics to cover during the planning conversation
+ * Topics to cover during the planning conversation.
+ * These map to Overview.md template sections.
  */
 const DEFAULT_DISCOVERY_TOPICS = [
-  'core_purpose',
-  'target_users',
-  'problem_solved',
-  'constraints',
-  'success_criteria',
-  'anti_goals',
-  'first_move',
-  'tech_considerations',
+  'elevator_pitch',      // What are you building, for whom, why?
+  'problem_statement',   // What hurts, why, consequence?
+  'target_users',        // Who, context, non-users?
+  'value_proposition',   // Benefit, differentiator?
+  'scope_and_antigoals', // In-scope, out-of-scope?
+  'constraints',         // Time, tech, money, operational?
 ] as const
 
 // Export schema for use elsewhere
@@ -390,6 +389,87 @@ const ProjectNameSuggestionsSchema = z.object({
 export type ProjectNameSuggestion = {
   name: string
   reasoning: string
+}
+
+// Schema for extracting the actual project name from conversational input
+const ExtractedProjectNameSchema = z.object({
+  name: z
+    .string()
+    .describe(
+      'The actual project name extracted from the user input (e.g., "Kerbal Capcom" from "let\'s go with Kerbal Capcom")',
+    ),
+})
+
+/**
+ * Extract the actual project name from conversational user input.
+ * e.g., "let's go with Kerbal Capcom" → "Kerbal Capcom"
+ */
+export async function extractProjectName(
+  userInput: string,
+  config: LachesisConfig,
+): Promise<{
+  success: boolean
+  name?: string
+  error?: string
+  debugDetails?: string
+}> {
+  const model = openai(config.defaultModel) as unknown as LanguageModel
+
+  try {
+    debugLog.info('Extracting project name: sending request', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      userInput,
+    })
+
+    const result = await generateObject({
+      model,
+      schema: ExtractedProjectNameSchema,
+      prompt: `The user was asked to provide a project name and responded with:
+"${userInput}"
+
+Extract ONLY the actual project name from this response. Remove any conversational phrasing like:
+- "let's go with..."
+- "I'll call it..."
+- "how about..."
+- "I think..."
+- "maybe..."
+
+Just return the clean project name. If the entire input IS the project name (no conversational fluff), return it as-is.
+
+Examples:
+- "let's go with Kerbal Capcom" → "Kerbal Capcom"
+- "I'll call it Project Nova" → "Project Nova"
+- "SkyNet" → "SkyNet"
+- "how about 'The Hive'?" → "The Hive"`,
+    })
+
+    debugLog.info('Extracting project name: received response', {
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      extractedName: result.object.name,
+    })
+
+    return {
+      success: true,
+      name: result.object.name,
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    const stack = err instanceof Error ? err.stack : undefined
+    debugLog.error('Failed to extract project name', {
+      message,
+      stack,
+      provider: config.defaultProvider,
+      model: config.defaultModel,
+      userInput,
+    })
+    return {
+      success: false,
+      error: `Failed to extract project name: ${message}`,
+      debugDetails: stack ? `${message}\n${stack}` : message,
+    }
+  }
 }
 
 /**
@@ -651,7 +731,7 @@ export async function runAgenticConversation(
     const result = await generateText({
       model,
       messages,
-      maxOutputTokens: 500,
+      maxOutputTokens: 5000,
       tools: Object.keys(tools).length > 0 ? tools : undefined,
       stopWhen: stepCountIs(options.maxToolCalls ?? 10),
       onStepFinish: (step) => {
@@ -778,7 +858,7 @@ export async function streamAgenticConversation(
     const stream = streamText({
       model,
       messages,
-      maxOutputTokens: 500,
+      maxOutputTokens: 5000,
       tools: Object.keys(tools).length > 0 ? tools : undefined,
       stopWhen: stepCountIs(options.maxToolCalls ?? 10),
       onStepFinish: (step) => {

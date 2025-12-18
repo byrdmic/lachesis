@@ -9,21 +9,20 @@ import type { StoredConversationState, ConversationStep } from './ConversationPh
 // ============================================================================
 
 /**
- * Topic detection from question text - mirrors the detectTopics function in ConversationPhase
+ * Topic detection from question text - mirrors the detectTopics function in ConversationPhase.
+ * Topics map to Overview.md template sections.
  */
 function detectTopics(
   questionText: string,
   existingTopics: string[],
 ): string[] {
   const topicKeywords: Record<string, string[]> = {
-    core_purpose: ['what does', 'what will', 'main purpose', 'core function'],
-    target_users: ['who will', 'who is', 'target', 'audience', 'users'],
-    problem_solved: ['problem', 'pain point', 'solve', 'address', 'issue'],
-    constraints: ['constraint', 'limitation', 'budget', 'time', 'resource'],
-    success_criteria: ['success', 'measure', 'know if', 'goal', 'achieve'],
-    anti_goals: ['not', 'avoid', "shouldn't", 'anti-goal', 'scope creep'],
-    first_move: ['first step', 'start', 'begin', 'initial'],
-    tech_considerations: ['technology', 'stack', 'platform', 'framework'],
+    elevator_pitch: ['what are you building', 'what is this', 'describe', 'one sentence', 'elevator'],
+    problem_statement: ['problem', 'pain', 'hurts', 'solve', 'why build', 'consequence'],
+    target_users: ['who will', 'who is', 'target', 'audience', 'users', 'customer', 'context'],
+    value_proposition: ['benefit', 'value', 'alternative', 'different', 'why this'],
+    scope_and_antigoals: ['scope', 'in scope', 'out of scope', 'anti-goal', 'avoid', "shouldn't", 'not become'],
+    constraints: ['constraint', 'limitation', 'budget', 'time', 'deadline', 'tech stack', 'money'],
   }
 
   const lowerQuestion = questionText.toLowerCase()
@@ -49,7 +48,7 @@ function createMockConversationState(
       { role: 'assistant', content: 'Hello, how can I help?', timestamp: '2024-01-15T10:00:00.000Z' },
       { role: 'user', content: 'I want to build a CLI tool', timestamp: '2024-01-15T10:01:00.000Z' },
     ],
-    coveredTopics: ['core_purpose'],
+    coveredTopics: ['elevator_pitch'],
     step: 'waiting_for_answer',
     ...overrides,
   }
@@ -76,8 +75,8 @@ function createMockExtractedData(
       antiGoals: ['No GUI, keep it simple'],
     },
     execution: {
-      firstMove: 'Set up project structure',
-      secondMove: 'Implement core commands',
+      suggestedFirstMove: 'Set up project structure',
+      techStack: 'TypeScript, Bun, Ink',
     },
     ...overrides,
   }
@@ -123,10 +122,10 @@ type FlowState =
 // ============================================================================
 
 describe('detectTopics', () => {
-  describe('topic detection from question text', () => {
-    it('detects core_purpose topic', () => {
-      const topics = detectTopics('What does your project do?', [])
-      expect(topics).toContain('core_purpose')
+  describe('topic detection from question text (maps to Overview.md sections)', () => {
+    it('detects elevator_pitch topic', () => {
+      const topics = detectTopics('What are you building?', [])
+      expect(topics).toContain('elevator_pitch')
     })
 
     it('detects target_users topic', () => {
@@ -134,9 +133,9 @@ describe('detectTopics', () => {
       expect(topics).toContain('target_users')
     })
 
-    it('detects problem_solved topic', () => {
+    it('detects problem_statement topic', () => {
       const topics = detectTopics('What problem are you trying to solve?', [])
-      expect(topics).toContain('problem_solved')
+      expect(topics).toContain('problem_statement')
     })
 
     it('detects constraints topic', () => {
@@ -144,24 +143,14 @@ describe('detectTopics', () => {
       expect(topics).toContain('constraints')
     })
 
-    it('detects success_criteria topic', () => {
-      const topics = detectTopics('How will you measure success?', [])
-      expect(topics).toContain('success_criteria')
+    it('detects value_proposition topic', () => {
+      const topics = detectTopics('What is the main benefit of this?', [])
+      expect(topics).toContain('value_proposition')
     })
 
-    it('detects anti_goals topic', () => {
+    it('detects scope_and_antigoals topic', () => {
       const topics = detectTopics("What should we avoid or shouldn't be included?", [])
-      expect(topics).toContain('anti_goals')
-    })
-
-    it('detects first_move topic', () => {
-      const topics = detectTopics('What is your first step?', [])
-      expect(topics).toContain('first_move')
-    })
-
-    it('detects tech_considerations topic', () => {
-      const topics = detectTopics('What technology stack are you considering?', [])
-      expect(topics).toContain('tech_considerations')
+      expect(topics).toContain('scope_and_antigoals')
     })
 
     it('detects multiple topics in a single question', () => {
@@ -170,30 +159,30 @@ describe('detectTopics', () => {
         [],
       )
       expect(topics).toContain('target_users')
-      expect(topics).toContain('problem_solved')
+      expect(topics).toContain('problem_statement')
     })
   })
 
   describe('preserving existing topics', () => {
     it('preserves existing topics when adding new ones', () => {
-      const existing = ['core_purpose', 'target_users']
+      const existing = ['elevator_pitch', 'target_users']
       const topics = detectTopics('What constraints do you have?', existing)
 
-      expect(topics).toContain('core_purpose')
+      expect(topics).toContain('elevator_pitch')
       expect(topics).toContain('target_users')
       expect(topics).toContain('constraints')
     })
 
     it('does not duplicate existing topics', () => {
-      const existing = ['core_purpose']
-      const topics = detectTopics('What does it do and what will it become?', existing)
+      const existing = ['elevator_pitch']
+      const topics = detectTopics('What are you building and what is this?', existing)
 
-      const coreCount = topics.filter((t) => t === 'core_purpose').length
-      expect(coreCount).toBe(1)
+      const count = topics.filter((t) => t === 'elevator_pitch').length
+      expect(count).toBe(1)
     })
 
     it('returns unchanged array when no new topics detected', () => {
-      const existing = ['core_purpose', 'target_users']
+      const existing = ['elevator_pitch', 'target_users']
       const topics = detectTopics('Tell me more about that.', existing)
 
       expect(topics).toEqual(existing)
@@ -202,8 +191,8 @@ describe('detectTopics', () => {
 
   describe('case insensitivity', () => {
     it('detects topics regardless of case', () => {
-      const topics = detectTopics('WHAT DOES YOUR PROJECT DO?', [])
-      expect(topics).toContain('core_purpose')
+      const topics = detectTopics('WHAT ARE YOU BUILDING?', [])
+      expect(topics).toContain('elevator_pitch')
     })
 
     it('handles mixed case questions', () => {
@@ -219,8 +208,8 @@ describe('detectTopics', () => {
     })
 
     it('handles empty existing topics', () => {
-      const topics = detectTopics('What does it do?', [])
-      expect(topics).toContain('core_purpose')
+      const topics = detectTopics('What are you building?', [])
+      expect(topics).toContain('elevator_pitch')
     })
 
     it('handles questions with no relevant keywords', () => {
@@ -295,7 +284,7 @@ describe('conversation state management', () => {
 
   describe('topic coverage tracking', () => {
     it('tracks covered topics correctly', () => {
-      const topics = ['core_purpose', 'target_users', 'constraints']
+      const topics = ['elevator_pitch', 'target_users', 'constraints']
       const state = createMockConversationState({ coveredTopics: topics })
 
       expect(state.coveredTopics).toEqual(topics)
@@ -433,12 +422,12 @@ describe('extracted project data', () => {
     it('can have optional execution fields', () => {
       const data = createMockExtractedData({
         execution: {
-          firstMove: 'Start here',
+          suggestedFirstMove: 'Start here',
         },
       })
 
-      expect(data.execution.firstMove).toBe('Start here')
-      expect(data.execution.secondMove).toBeUndefined()
+      expect(data.execution.suggestedFirstMove).toBe('Start here')
+      expect(data.execution.techStack).toBeUndefined()
     })
   })
 
@@ -566,7 +555,7 @@ describe('setup phase logic', () => {
     })
 
     it('transitions to name when preset selected', () => {
-      const selected = 'Light - Just a spark'
+      const selected: string = 'Light - Just a spark'
       const nextStep: SetupStep = selected === 'Enter your own' ? 'planning_custom' : 'name'
       expect(nextStep).toBe('name')
     })
@@ -681,7 +670,7 @@ describe('finalize phase logic', () => {
     })
 
     it('remains at confirm on decline', () => {
-      const confirmed = 'no'
+      const confirmed: string = 'no'
       // Actually it would cancel, but the step wouldn't change to scaffolding
       const shouldProceed = confirmed === 'yes'
       expect(shouldProceed).toBe(false)
@@ -934,7 +923,9 @@ describe('resuming from saved state', () => {
     })
 
     it('does not restore when no saved state', () => {
-      const savedState = null
+      // Function that might return null (to simulate runtime behavior)
+      const getSavedState = (): StoredConversationState | null => null
+      const savedState = getSavedState()
       const shouldRestore = savedState !== null && savedState.messages.length > 0
       expect(shouldRestore).toBe(false)
     })
@@ -961,7 +952,7 @@ describe('resuming from saved state', () => {
     })
 
     it('restores covered topics from saved state', () => {
-      const savedTopics = ['core_purpose', 'target_users', 'constraints']
+      const savedTopics = ['elevator_pitch', 'target_users', 'constraints']
       const savedState = createMockConversationState({ coveredTopics: savedTopics })
 
       const restoredTopics = savedState.coveredTopics
