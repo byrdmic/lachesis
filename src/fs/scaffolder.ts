@@ -19,6 +19,35 @@ export type ScaffoldProjectData = {
 }
 
 /**
+ * Checks if the extracted project data is minimal/sparse.
+ * Returns true if the user provided very little information during discovery.
+ */
+function hasMinimalExtractedData(data: ScaffoldProjectData): boolean {
+  if (!data.extracted) return true
+
+  const { vision, constraints } = data.extracted
+
+  // Count filled fields in vision (required for a well-defined project)
+  let filledCount = 0
+  if (vision.oneLinePitch && vision.oneLinePitch.length > 10) filledCount++
+  if (vision.description && vision.description.length > 20) filledCount++
+  if (vision.primaryAudience && vision.primaryAudience.length > 5) filledCount++
+  if (vision.problemSolved && vision.problemSolved.length > 10) filledCount++
+
+  // If we have 2 or fewer filled vision fields, it's minimal
+  if (filledCount <= 2) return true
+
+  // Also check if constraints are empty
+  const hasConstraints = constraints.known && constraints.known.length > 0
+  const hasAntiGoals = constraints.antiGoals && constraints.antiGoals.length > 0
+
+  // If no constraints and no anti-goals, still somewhat minimal
+  if (!hasConstraints && !hasAntiGoals && filledCount <= 3) return true
+
+  return false
+}
+
+/**
  * Process a template: fill in known values, strip placeholder markers for unknown values.
  * NEVER leave raw <placeholder> markers in the output.
  */
@@ -97,28 +126,6 @@ function processTemplate(
       content = content.replace(/<stack constraints, hosting constraints>/g, e.techStack)
     }
 
-    // Risks
-    if (c.risks && c.risks.length > 0) {
-      const riskRows = c.risks
-        .map((r) => `| ${r} | Medium | Medium | TBD | TBD |`)
-        .join('\n')
-      content = content.replace(
-        /\| <Risk> \| High \| Medium \| <Plan> \| <Signal> \|/,
-        riskRows,
-      )
-    }
-
-    // Assumptions
-    if (c.assumptions && c.assumptions.length > 0) {
-      const assumptionRows = c.assumptions
-        .map((a) => `| ${a} | TBD | TBD | TBD | unvalidated |`)
-        .join('\n')
-      content = content.replace(
-        /\| <Assumption> \| <Reason> \| <Test> \| <Name> \| unvalidated \|/,
-        assumptionRows,
-      )
-    }
-
     // First move / suggested first move
     if (e.suggestedFirstMove) {
       // Could add to roadmap or tasks - for now, add to Log.md if we're processing that
@@ -127,8 +134,41 @@ function processTemplate(
 
   // === ROADMAP SPECIFIC ===
   if (templateName === 'roadmap') {
-    content = content.replace(/M1 — <Milestone title>/g, 'M1 — Initial Setup')
-    content = content.replace(/M2 — <Milestone title>/g, 'M2 — Core Features')
+    const isMinimal = hasMinimalExtractedData(data)
+
+    if (isMinimal) {
+      // For minimal scaffolds, add "Define the project" as M1
+      content = content.replace(/M1 — <Milestone title>/g, 'M1 — Define the Project')
+      content = content.replace(/M2 — <Milestone title>/g, 'M2 — Initial Setup')
+
+      // Update the M1 milestone section with definition-focused content
+      content = content.replace(
+        /### M1 — <Milestone Title>\n\*\*Status:\*\* planned.*?(?=---|\n###|\n## |$)/s,
+        `### M1 — Define the Project
+**Status:** active
+**Why it matters:** Without a clear project definition, execution will drift.
+**Outcome:** Overview.md, Roadmap.md, and Tasks.md have enough content for Lachesis to operate.
+
+**Definition of Done (observable)**
+- Overview.md: Elevator pitch filled in with real content
+- Overview.md: Problem statement describes actual pain point
+- Overview.md: Target users identified
+- Roadmap.md: At least one concrete milestone beyond this one
+- Tasks.md: At least 3 actionable next steps
+
+**Links**
+- Tasks slice: [[Tasks#VS1 — Project Definition]]
+
+---
+
+`,
+      )
+    } else {
+      // Normal scaffold with sufficient data
+      content = content.replace(/M1 — <Milestone title>/g, 'M1 — Initial Setup')
+      content = content.replace(/M2 — <Milestone title>/g, 'M2 — Core Features')
+    }
+
     content = content.replace(/<Milestone Title>/g, 'TBD')
     content = content.replace(/<Slice name>/g, 'Initial slice')
     content = content.replace(/<One sentence. "We're trying to…">/g, '')
@@ -140,9 +180,42 @@ function processTemplate(
 
   // === TASKS SPECIFIC ===
   if (templateName === 'tasks') {
-    content = content.replace(/<Slice Name>/g, 'Initial Tasks')
-    content = content.replace(/<End-to-end capability you can demo>/g, '')
-    content = content.replace(/<Value \/ milestone alignment>/g, '')
+    const isMinimal = hasMinimalExtractedData(data)
+
+    if (isMinimal) {
+      // For minimal scaffolds, add project definition tasks
+      content = content.replace(/<Slice Name>/g, 'Project Definition')
+      content = content.replace(
+        /<End-to-end capability you can demo>/g,
+        'Project has enough definition for Lachesis to assist',
+      )
+      content = content.replace(
+        /<Value \/ milestone alignment>/g,
+        'Aligns with M1 — Define the Project',
+      )
+
+      // Replace the placeholder tasks with project definition tasks
+      content = content.replace(
+        /\*\*Tasks\*\*\n- \[ \] VS1-T1 <Verb \+ object>.*?(?=---|\n## |$)/s,
+        `**Tasks**
+- [ ] VS1-T1 Write elevator pitch in Overview.md
+  - Acceptance: One clear sentence describing what this is and who it's for
+- [ ] VS1-T2 Define the problem being solved
+  - Acceptance: Problem statement in Overview.md explains what hurts today
+- [ ] VS1-T3 Identify target users
+  - Acceptance: Primary users section in Overview.md has real people/roles
+- [ ] VS1-T4 Add first concrete milestone to Roadmap.md
+  - Acceptance: M2 has a clear outcome and definition of done
+- [ ] VS1-T5 Update Next 1-3 Actions with real tasks
+  - Acceptance: Actions section has specific, timeboxed work items
+
+`,
+      )
+    } else {
+      content = content.replace(/<Slice Name>/g, 'Initial Tasks')
+      content = content.replace(/<End-to-end capability you can demo>/g, '')
+      content = content.replace(/<Value \/ milestone alignment>/g, '')
+    }
   }
 
   // === LOG SPECIFIC ===

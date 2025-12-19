@@ -39,6 +39,21 @@ export type SnapshotHealth = {
   }[]
 }
 
+/**
+ * Project readiness assessment for workflow gating.
+ * Determines if a project has enough basis for advanced workflows.
+ */
+export type ProjectReadinessAssessment = {
+  /** Whether the project is ready for advanced workflows */
+  isReady: boolean
+  /** Missing basics that must be addressed first */
+  missingBasics: string[]
+  /** Files in priority order that need attention */
+  prioritizedFiles: ExpectedCoreFile[]
+  /** Human-readable summary for the AI/user */
+  gatingSummary: string
+}
+
 export type ProjectSnapshot = {
   projectName: string
   projectPath: string
@@ -47,6 +62,8 @@ export type ProjectSnapshot = {
   files: Record<ExpectedCoreFile, SnapshotFileEntry>
   githubRepos: string[]
   health: SnapshotHealth
+  /** Readiness assessment for workflow gating */
+  readiness: ProjectReadinessAssessment
 }
 
 

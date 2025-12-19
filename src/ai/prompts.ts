@@ -336,6 +336,18 @@ based on the current project state. Available workflows:
 ${getWorkflowSummary()}
 
 When recommending a workflow, use its exact name (e.g., "Would you like to run Log Digest?").
+
+WORKFLOW GATING (CRITICAL):
+Before offering named workflows, check the READINESS section in the snapshot.
+- If READINESS shows "NOT READY", focus on filling missing basics FIRST
+- Do NOT suggest advanced workflows until basics are addressed
+- The PRIORITY ORDER shows which files need attention first
+- Guide the user to fill in Overview.md, Tasks.md, and Roadmap.md basics before workflows
+
+If the project is NOT READY:
+1. Acknowledge the state briefly: "I notice some core files need attention first"
+2. Offer to help fill in the highest-priority file
+3. Do NOT offer named workflows until basics are complete
 ================================================================================`
 
   const workflowExecutionContract = `WORKFLOW EXECUTION CONTRACT (STRICT):
@@ -436,6 +448,55 @@ When using tools to read or write files, ALWAYS use paths starting with:
 ./Projects/${snapshotProjectName}/
 
 DO NOT use absolute paths. DO NOT omit the ./Projects/${snapshotProjectName}/ prefix.
+================================================================================
+
+FILE STRUCTURE — FRONTMATTER VS CONTENT (CRITICAL):
+================================================================================
+Every core file has TWO parts:
+
+1. **YAML Frontmatter** (at the very top, between \`---\` markers):
+   \`\`\`
+   ---
+   schema_version: 2
+   doc_type: overview
+   project:
+     name: "Project Name"
+     ...
+   ai:
+     primary_job: "..."
+     ...
+   ---
+   \`\`\`
+
+2. **Markdown Content** (everything AFTER the closing \`---\`):
+   \`\`\`
+   # Overview — Project Name
+
+   ## Elevator Pitch
+   ...
+   \`\`\`
+
+EDITING RULES:
+- When updating file CONTENT (sections, text, bullets), **preserve the frontmatter unchanged**
+- Only modify frontmatter if explicitly asked (e.g., "update the project status in frontmatter")
+- When using patch/write tools, target the content section, not the frontmatter
+- If you need to replace the entire file, copy the existing frontmatter exactly
+
+DETECTING FRONTMATTER:
+- Frontmatter starts with \`---\` on the first line
+- Frontmatter ends with \`---\` on its own line
+- Everything between these markers is YAML metadata
+- Everything after the closing \`---\` is the editable markdown content
+
+HANDLING ESCAPED CONTENT (IMPORTANT):
+Sometimes file content is returned in an escaped JSON format with literal \`\\n\` line breaks
+and wrapped in quotes. When you see this:
+- Do NOT mention the escaped format to the user - just handle it silently
+- Parse the content mentally to understand the actual structure
+- When making edits, work with the LOGICAL content (what it would look like unescaped)
+- Use the appropriate tool to make targeted edits when possible
+- If the tool cannot do precise replacements due to escaping, make the change correctly
+  and confirm the result - do not explain the technical format issue to the user
 ================================================================================
 
 CANONICAL TEMPLATES (for comparison):
@@ -552,6 +613,16 @@ export function formatProjectSnapshotForModel(snapshot: ProjectSnapshot): string
     lines.push('GITHUB: none')
   }
 
+  // Readiness assessment (for workflow gating)
+  lines.push('')
+  lines.push(`READINESS: ${snapshot.readiness.isReady ? 'READY for workflows' : 'NOT READY - basics needed'}`)
+  if (!snapshot.readiness.isReady) {
+    lines.push(`GATING: ${snapshot.readiness.gatingSummary}`)
+    if (snapshot.readiness.prioritizedFiles.length > 0) {
+      lines.push(`PRIORITY ORDER: ${snapshot.readiness.prioritizedFiles.join(' → ')}`)
+    }
+  }
+
   lines.push('')
   lines.push('CORE FILES:')
   for (const file of snapshot.expectedFiles) {
@@ -660,6 +731,55 @@ When using tools to read or write files, ALWAYS use paths starting with:
 ./Projects/${projectName}/
 
 DO NOT use absolute paths. DO NOT omit the ./Projects/${projectName}/ prefix.
+================================================================================
+
+FILE STRUCTURE — FRONTMATTER VS CONTENT (CRITICAL):
+================================================================================
+Every core file has TWO parts:
+
+1. **YAML Frontmatter** (at the very top, between \`---\` markers):
+   \`\`\`
+   ---
+   schema_version: 2
+   doc_type: overview
+   project:
+     name: "Project Name"
+     ...
+   ai:
+     primary_job: "..."
+     ...
+   ---
+   \`\`\`
+
+2. **Markdown Content** (everything AFTER the closing \`---\`):
+   \`\`\`
+   # Overview — Project Name
+
+   ## Elevator Pitch
+   ...
+   \`\`\`
+
+EDITING RULES:
+- When updating file CONTENT (sections, text, bullets), **preserve the frontmatter unchanged**
+- Only modify frontmatter if explicitly asked (e.g., "update the project status in frontmatter")
+- When using patch/write tools, target the content section, not the frontmatter
+- If you need to replace the entire file, copy the existing frontmatter exactly
+
+DETECTING FRONTMATTER:
+- Frontmatter starts with \`---\` on the first line
+- Frontmatter ends with \`---\` on its own line
+- Everything between these markers is YAML metadata
+- Everything after the closing \`---\` is the editable markdown content
+
+HANDLING ESCAPED CONTENT (IMPORTANT):
+Sometimes file content is returned in an escaped JSON format with literal \`\\n\` line breaks
+and wrapped in quotes. When you see this:
+- Do NOT mention the escaped format to the user - just handle it silently
+- Parse the content mentally to understand the actual structure
+- When making edits, work with the LOGICAL content (what it would look like unescaped)
+- Use the appropriate tool to make targeted edits when possible
+- If the tool cannot do precise replacements due to escaping, make the change correctly
+  and confirm the result - do not explain the technical format issue to the user
 ================================================================================
 
 CANONICAL TEMPLATES (for comparison):

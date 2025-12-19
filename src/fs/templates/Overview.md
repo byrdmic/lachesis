@@ -87,16 +87,6 @@ tags: ["project/overview"]
 - **Money:** <budget or "as close to $0 as possible">
 - **Operational:** <privacy, local-first, offline, etc.>
 
-## Assumptions & Validation Plan
-| Assumption | Why we think it's true | How to validate | Owner | Status |
-|---|---|---|---|---|
-| <Assumption> | <Reason> | <Test> | <Name> | unvalidated |
-
-## Risks (and Mitigations)
-| Risk | Impact | Likelihood | Mitigation | Trigger |
-|---|---:|---:|---|---|
-| <Risk> | High | Medium | <Plan> | <Signal> |
-
 ## Reference Links
 - Repo: <...>
 - Docs: <...>

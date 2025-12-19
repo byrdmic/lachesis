@@ -18,17 +18,18 @@ current_focus:
   intent: "What we are trying to accomplish right now in plain English."
 
 ai:
-  primary_job: "Keep a clean milestone sequence and maintain current focus + next actions."
+  primary_job: "Keep a clean milestone sequence and maintain current focus."
   update_policy:
     allowed_to_change:
       - "reorder milestones based on value/constraints"
       - "clarify definitions of done"
       - "update current_focus"
-      - "update Next 1–3 Actions"
     avoid:
       - "dumping granular chores here (belongs in Tasks.md)"
+      - "putting Next 1-3 Actions here (belongs in Tasks.md)"
   extraction_rules: |
     Milestone work items -> Tasks.md vertical slice.
+    Next actions -> Tasks.md.
     Current focus should always point to a milestone + slice when possible.
 
 tags: ["project/roadmap"]
@@ -40,11 +41,6 @@ tags: ["project/roadmap"]
 - **Milestone:** M1 — <Milestone title>
 - **Vertical Slice:** VS1 — <Slice name>
 - **Intent:** <One sentence. "We're trying to…">
-
-## Next 1–3 Actions (execution ignition)
-- [ ] <VS?-T?> <Small concrete step (~15–60 mins)>
-- [ ] <VS?-T?> <Next step>
-- [ ] <VS?-T?> <Next step>
 
 ---
 

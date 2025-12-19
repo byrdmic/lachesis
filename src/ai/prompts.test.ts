@@ -42,6 +42,12 @@ function createMockSnapshot(overrides: Partial<ProjectSnapshot> = {}): ProjectSn
       missingFiles: [],
       thinOrTemplateFiles: [],
     },
+    readiness: {
+      isReady: true,
+      missingBasics: [],
+      prioritizedFiles: [],
+      gatingSummary: 'Project has sufficient basis for workflows.',
+    },
     ...overrides,
   }
 }

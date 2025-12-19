@@ -4,6 +4,7 @@ import {
   EXPECTED_CORE_FILES,
   type ExpectedCoreFile,
   type ProjectSnapshot,
+  type ProjectReadinessAssessment,
   type SnapshotFileEntry,
   type SnapshotHealth,
   type TemplateStatus,
@@ -350,6 +351,92 @@ function deriveHealth(
   return { missingFiles, thinOrTemplateFiles }
 }
 
+/**
+ * Core file priority order for inspection/remediation.
+ * Higher priority files should be addressed first when loading a project.
+ */
+const CORE_FILE_PRIORITY: ExpectedCoreFile[] = [
+  'Overview.md',  // Project basis - what is this?
+  'Ideas.md',     // Project potential - what could it be?
+  'Tasks.md',     // Action planning - what do we do next?
+  'Roadmap.md',   // Milestones - where are we going?
+  'Log.md',       // Reference/history - what happened?
+  'Archive.md',   // Optional storage - what's done/cut?
+]
+
+/**
+ * Assess project readiness for workflows.
+ * Determines if the project has enough basis for advanced workflows.
+ */
+function assessReadiness(
+  files: Record<ExpectedCoreFile, SnapshotFileEntry>,
+  health: SnapshotHealth,
+): ProjectReadinessAssessment {
+  const missingBasics: string[] = []
+  const prioritizedFiles: ExpectedCoreFile[] = []
+
+  // Check Overview.md (required for project basis)
+  const overview = files['Overview.md']
+  if (!overview?.exists) {
+    missingBasics.push('Overview.md is missing')
+    prioritizedFiles.push('Overview.md')
+  } else if (overview.templateStatus === 'template_only') {
+    missingBasics.push('Overview.md has not been filled in')
+    prioritizedFiles.push('Overview.md')
+  } else if (overview.templateStatus === 'thin') {
+    missingBasics.push('Overview.md needs more content')
+    prioritizedFiles.push('Overview.md')
+  }
+
+  // Check Tasks.md (required for action planning)
+  const tasks = files['Tasks.md']
+  if (!tasks?.exists) {
+    missingBasics.push('Tasks.md is missing')
+    prioritizedFiles.push('Tasks.md')
+  } else if (tasks.templateStatus === 'template_only') {
+    missingBasics.push('Tasks.md has no actionable items')
+    prioritizedFiles.push('Tasks.md')
+  }
+
+  // Check Roadmap.md (required for direction)
+  const roadmap = files['Roadmap.md']
+  if (!roadmap?.exists) {
+    missingBasics.push('Roadmap.md is missing')
+    prioritizedFiles.push('Roadmap.md')
+  } else if (roadmap.templateStatus === 'template_only') {
+    missingBasics.push('Roadmap.md has no milestones defined')
+    prioritizedFiles.push('Roadmap.md')
+  }
+
+  // Add other files that need attention (in priority order)
+  for (const file of CORE_FILE_PRIORITY) {
+    if (prioritizedFiles.includes(file)) continue
+    const entry = files[file]
+    if (!entry?.exists || entry.templateStatus !== 'filled') {
+      prioritizedFiles.push(file)
+    }
+  }
+
+  const isReady = missingBasics.length === 0
+
+  // Build gating summary
+  let gatingSummary: string
+  if (isReady) {
+    gatingSummary = 'Project has sufficient basis for workflows.'
+  } else if (missingBasics.length === 1) {
+    gatingSummary = `Before workflows: ${missingBasics[0]}`
+  } else {
+    gatingSummary = `Before workflows, address: ${missingBasics.slice(0, 2).join('; ')}${missingBasics.length > 2 ? '...' : ''}`
+  }
+
+  return {
+    isReady,
+    missingBasics,
+    prioritizedFiles,
+    gatingSummary,
+  }
+}
+
 function parseGithubRepos(frontmatter: Record<string, unknown>): string[] {
   const raw = frontmatter['github']
   if (raw === undefined || raw === null) return []
@@ -531,11 +618,19 @@ export async function buildProjectSnapshotViaMCP(
   const githubRepos = parseGithubRepos(overviewFrontmatter)
 
   const health = deriveHealth(files)
+  const readiness = assessReadiness(files, health)
 
   debugLog.info('MCP snapshot: health summary', {
     missing: health.missingFiles,
     thinOrTemplate: health.thinOrTemplateFiles,
     githubRepos,
+  })
+
+  debugLog.info('MCP snapshot: readiness assessment', {
+    isReady: readiness.isReady,
+    missingBasics: readiness.missingBasics,
+    prioritizedFiles: readiness.prioritizedFiles,
+    gatingSummary: readiness.gatingSummary,
   })
 
   return {
@@ -546,6 +641,7 @@ export async function buildProjectSnapshotViaMCP(
     files,
     githubRepos,
     health,
+    readiness,
   }
 }
 
