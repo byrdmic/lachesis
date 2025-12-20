@@ -7,6 +7,7 @@ import { debugLog } from '../debug/logger.ts'
 import { assertNever } from '../utils/type-guards.ts'
 import { ProjectLauncher } from './ProjectLauncher/index.tsx'
 import { NewProjectFlow } from './NewProject/index.tsx'
+import { SessionManagerProvider } from './contexts/SessionManagerContext.tsx'
 
 // ============================================================================
 // Types
@@ -130,30 +131,39 @@ export function App({ command, debug = false }: AppProps) {
   }
 
   const renderReadyState = (config: LachesisConfig): React.ReactNode => {
-    switch (command) {
-      case 'start':
-        return (
-          <ProjectLauncher
-            config={config}
-            debug={debug}
-            onDebugHotkeysChange={setDebugHotkeysEnabled}
-          />
-        )
-      case 'new':
-        return (
-          <NewProjectFlow
-            config={config}
-            debug={debug}
-            onDebugHotkeysChange={setDebugHotkeysEnabled}
-          />
-        )
-      default:
-        return (
-          <Box>
-            <Text color="red">Unknown command: {command}</Text>
-          </Box>
-        )
-    }
+    const content = (() => {
+      switch (command) {
+        case 'start':
+          return (
+            <ProjectLauncher
+              config={config}
+              debug={debug}
+              onDebugHotkeysChange={setDebugHotkeysEnabled}
+            />
+          )
+        case 'new':
+          return (
+            <NewProjectFlow
+              config={config}
+              debug={debug}
+              onDebugHotkeysChange={setDebugHotkeysEnabled}
+            />
+          )
+        default:
+          return (
+            <Box>
+              <Text color="red">Unknown command: {command}</Text>
+            </Box>
+          )
+      }
+    })()
+
+    // Wrap with SessionManagerProvider for session-based operations
+    return (
+      <SessionManagerProvider config={config}>
+        {content}
+      </SessionManagerProvider>
+    )
   }
 
   // ============================================================================

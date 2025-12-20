@@ -1,13 +1,11 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
-import type { AIProvider, LachesisConfig, MCPConfig, MCPWriteMode } from './types.ts'
-import { DEFAULT_MCP_CONFIG } from './types.ts'
+import type { AIProvider, LachesisConfig } from './types.ts'
 import { applyConfigUpgrades } from './config.ts'
 
 const SETTINGS_FILE_NAME = 'Settings.json'
-const ALLOWED_PROVIDERS: AIProvider[] = ['anthropic', 'openai', 'vertex', 'other']
-const ALLOWED_WRITE_MODES: MCPWriteMode[] = ['confirm', 'auto', 'disabled']
-const PROJECT_SETTING_KEYS = new Set(['defaultProvider', 'defaultModel', 'apiKeyEnvVar', 'mcp'])
+const ALLOWED_PROVIDERS: AIProvider[] = ['anthropic-sdk', 'claude-code', 'openai']
+const PROJECT_SETTING_KEYS = new Set(['defaultProvider', 'defaultModel', 'apiKeyEnvVar'])
 
 export type ProjectSettingsResult = {
   config: LachesisConfig
@@ -61,9 +59,7 @@ export function loadProjectSettings(
       if (typeof provider === 'string' && ALLOWED_PROVIDERS.includes(provider as AIProvider)) {
         overrides.defaultProvider = provider as AIProvider
       } else {
-        warnings.push(
-          'defaultProvider must be one of anthropic | openai | vertex | other.',
-        )
+        warnings.push(`defaultProvider must be one of: ${ALLOWED_PROVIDERS.join(', ')}.`)
       }
     }
 
@@ -82,60 +78,6 @@ export function loadProjectSettings(
         overrides.apiKeyEnvVar = apiKeyEnvVar
       } else {
         warnings.push('apiKeyEnvVar must be a non-empty string.')
-      }
-    }
-
-    // Handle MCP config overrides
-    if ('mcp' in raw) {
-      const mcpRaw = raw.mcp
-      if (mcpRaw && typeof mcpRaw === 'object' && !Array.isArray(mcpRaw)) {
-        const mcpObj = mcpRaw as Record<string, unknown>
-        const mcpOverride: Partial<MCPConfig> = {}
-
-        if ('enabled' in mcpObj && typeof mcpObj.enabled === 'boolean') {
-          mcpOverride.enabled = mcpObj.enabled
-        }
-        if ('writeMode' in mcpObj) {
-          const wm = mcpObj.writeMode
-          if (typeof wm === 'string' && ALLOWED_WRITE_MODES.includes(wm as MCPWriteMode)) {
-            mcpOverride.writeMode = wm as MCPWriteMode
-          } else {
-            warnings.push('mcp.writeMode must be one of confirm | auto | disabled.')
-          }
-        }
-        if ('scopeWritesToProject' in mcpObj && typeof mcpObj.scopeWritesToProject === 'boolean') {
-          mcpOverride.scopeWritesToProject = mcpObj.scopeWritesToProject
-        }
-        if ('obsidian' in mcpObj && mcpObj.obsidian && typeof mcpObj.obsidian === 'object') {
-          const obsRaw = mcpObj.obsidian as Record<string, unknown>
-          const obsOverride: Partial<MCPConfig['obsidian']> = {}
-
-          if ('apiKeyEnvVar' in obsRaw && typeof obsRaw.apiKeyEnvVar === 'string') {
-            obsOverride.apiKeyEnvVar = obsRaw.apiKeyEnvVar
-          }
-          if ('host' in obsRaw && typeof obsRaw.host === 'string') {
-            obsOverride.host = obsRaw.host
-          }
-          if ('port' in obsRaw && typeof obsRaw.port === 'number') {
-            obsOverride.port = obsRaw.port
-          }
-
-          if (Object.keys(obsOverride).length > 0) {
-            mcpOverride.obsidian = {
-              ...(baseConfig.mcp?.obsidian ?? DEFAULT_MCP_CONFIG.obsidian),
-              ...obsOverride,
-            }
-          }
-        }
-
-        if (Object.keys(mcpOverride).length > 0) {
-          overrides.mcp = {
-            ...(baseConfig.mcp ?? DEFAULT_MCP_CONFIG),
-            ...mcpOverride,
-          }
-        }
-      } else {
-        warnings.push('mcp must be an object.')
       }
     }
 
@@ -193,9 +135,6 @@ export function saveProjectSettings(
   if (settings.apiKeyEnvVar !== undefined) {
     projectSettings.apiKeyEnvVar = settings.apiKeyEnvVar
   }
-  if (settings.mcp !== undefined) {
-    projectSettings.mcp = settings.mcp
-  }
 
   try {
     // Ensure directory exists
@@ -219,4 +158,3 @@ export function saveProjectSettings(
     }
   }
 }
-

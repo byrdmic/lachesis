@@ -1,50 +1,111 @@
 // Configuration types for Lachesis
 
-export type AIProvider = 'anthropic' | 'openai' | 'vertex' | 'other'
+// ============================================================================
+// Provider Types
+// ============================================================================
 
-// MCP (Model Context Protocol) configuration
-export type MCPWriteMode = 'confirm' | 'auto' | 'disabled'
-export type MCPTransportMode = 'uvx' | 'docker' | 'gateway'
+export type AIProvider = 'anthropic-sdk' | 'claude-code' | 'openai'
 
-export type MCPDockerConfig = {
-  imageName: string // Docker image name (e.g., 'mcp/obsidian')
-}
+// ============================================================================
+// Model Lists
+// ============================================================================
 
-export type MCPGatewayConfig = {
-  url: string // Gateway URL (e.g., 'http://localhost:8811/sse')
-}
+export const ANTHROPIC_MODELS = [
+  'claude-opus-4-5-20251101',
+  'claude-sonnet-4-5-20250929',
+  'claude-sonnet-4-20250514',
+  'claude-haiku-3-5-20241022',
+] as const
 
-export type MCPConfig = {
-  enabled: boolean
-  transportMode: MCPTransportMode // Transport: uvx (default), docker, or gateway
-  docker?: MCPDockerConfig // Docker-specific configuration
-  gateway?: MCPGatewayConfig // Gateway-specific configuration (SSE transport)
-  obsidian: {
-    apiKeyEnvVar: string // Env var name for Obsidian REST API key
-    host: string // Obsidian REST API host (Windows IP from WSL)
-    port: number // Default: 27124
+export const CLAUDE_CODE_MODELS = [
+  'sonnet',
+  'opus',
+  'haiku',
+] as const
+
+export const OPENAI_MODELS = [
+  'gpt-4o',
+  'gpt-4o-mini',
+  'gpt-4-turbo',
+  'o1',
+  'o1-mini',
+] as const
+
+export type AnthropicModelId = (typeof ANTHROPIC_MODELS)[number]
+export type ClaudeCodeModelId = (typeof CLAUDE_CODE_MODELS)[number]
+export type OpenAIModelId = (typeof OPENAI_MODELS)[number]
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Get available models for a given provider
+ */
+export function getModelsForProvider(provider: AIProvider): readonly string[] {
+  switch (provider) {
+    case 'anthropic-sdk':
+      return ANTHROPIC_MODELS
+    case 'claude-code':
+      return CLAUDE_CODE_MODELS
+    case 'openai':
+      return OPENAI_MODELS
+    default:
+      return ANTHROPIC_MODELS
   }
-  writeMode: MCPWriteMode
-  scopeWritesToProject: boolean // Restrict writes to active project folder
 }
 
-export const DEFAULT_MCP_CONFIG: MCPConfig = {
-  enabled: false,
-  transportMode: 'uvx',
-  docker: {
-    imageName: 'mcp/obsidian',
-  },
-  gateway: {
-    url: 'http://localhost:8811/sse', // Docker MCP Gateway default
-  },
-  obsidian: {
-    apiKeyEnvVar: 'OBSIDIAN_API_KEY',
-    host: 'host.docker.internal', // Works for Docker on Windows/Mac
-    port: 27124,
-  },
-  writeMode: 'auto',
-  scopeWritesToProject: true,
+/**
+ * Get the default API key environment variable for a provider
+ */
+export function getDefaultApiKeyEnvVar(provider: AIProvider): string {
+  switch (provider) {
+    case 'anthropic-sdk':
+      return 'ANTHROPIC_API_KEY'
+    case 'claude-code':
+      return '' // Claude Code uses MAX subscription, no API key needed
+    case 'openai':
+      return 'OPENAI_API_KEY'
+    default:
+      return 'ANTHROPIC_API_KEY'
+  }
 }
+
+/**
+ * Get the default model for a provider
+ */
+export function getDefaultModel(provider: AIProvider): string {
+  switch (provider) {
+    case 'anthropic-sdk':
+      return 'claude-sonnet-4-5-20250929'
+    case 'claude-code':
+      return 'sonnet'
+    case 'openai':
+      return 'gpt-4o'
+    default:
+      return 'claude-sonnet-4-5-20250929'
+  }
+}
+
+/**
+ * Get human-readable provider name
+ */
+export function getProviderDisplayName(provider: AIProvider): string {
+  switch (provider) {
+    case 'anthropic-sdk':
+      return 'Anthropic SDK'
+    case 'claude-code':
+      return 'Claude Code (MAX)'
+    case 'openai':
+      return 'OpenAI (Vercel AI SDK)'
+    default:
+      return provider
+  }
+}
+
+// ============================================================================
+// Config Types
+// ============================================================================
 
 export type LachesisConfig = {
   vaultPath: string // Base Obsidian projects path
@@ -52,23 +113,11 @@ export type LachesisConfig = {
   defaultProvider: AIProvider
   defaultModel: string
   apiKeyEnvVar: string
-  // MCP configuration (optional, disabled by default)
-  mcp?: MCPConfig
 }
 
 export const DEFAULT_CONFIG: LachesisConfig = {
   vaultPath: '', // Will be set based on OS detection
-  defaultProvider: 'openai',
-  defaultModel: 'gpt-5.2',
-  apiKeyEnvVar: 'OPENAI_API_KEY',
+  defaultProvider: 'anthropic-sdk',
+  defaultModel: 'claude-sonnet-4-5-20250929',
+  apiKeyEnvVar: 'ANTHROPIC_API_KEY',
 }
-
-export const OPENAI_MODELS = [
-  'gpt-5.2-pro',
-  'gpt-5.2',
-  'gpt-5.1',
-  'gpt-5-mini',
-  'gpt-5-nano',
-] as const
-
-export type OpenAIModelId = (typeof OPENAI_MODELS)[number]

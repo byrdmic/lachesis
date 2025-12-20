@@ -2,9 +2,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import {
   type LachesisConfig,
+  type AIProvider,
   DEFAULT_CONFIG,
-  DEFAULT_MCP_CONFIG,
-  OPENAI_MODELS,
+  ANTHROPIC_MODELS,
+  getModelsForProvider,
 } from './types.ts'
 import {
   getConfigDir,
@@ -13,65 +14,54 @@ import {
   getPlatformDisplayName,
 } from './paths.ts'
 
+// Valid provider types
+const VALID_PROVIDERS: AIProvider[] = ['anthropic-sdk', 'claude-code', 'openai']
+
 export function applyConfigUpgrades(config: LachesisConfig): {
   config: LachesisConfig
   updated: boolean
 } {
   let updated = false
   let next = { ...config }
-  const openaiModelSet = new Set<string>(OPENAI_MODELS)
 
-  // Normalize and validate OpenAI model identifiers
-  if (next.defaultProvider === 'openai') {
-    if (!openaiModelSet.has(next.defaultModel)) {
-      next = { ...next, defaultModel: DEFAULT_CONFIG.defaultModel }
-      updated = true
-    }
+  // Migrate from legacy config if needed
+  const oldConfig = config as LachesisConfig & {
+    defaultProvider?: string
+    mcp?: unknown
   }
 
-  // Add MCP config if missing (for existing users upgrading)
-  if (next.mcp === undefined) {
-    // Don't auto-enable MCP for existing users - just add the config structure
-    next = { ...next, mcp: DEFAULT_MCP_CONFIG }
+  // Migrate legacy 'anthropic' provider name to 'anthropic-sdk'
+  if ((oldConfig.defaultProvider as string) === 'anthropic') {
+    next = {
+      ...next,
+      defaultProvider: 'anthropic-sdk',
+    }
     updated = true
   }
 
-  // Validate MCP config structure if present
-  if (next.mcp) {
-    let mcpUpdated = false
-    const mcp = { ...next.mcp }
+  // Remove legacy MCP config if present
+  if ('mcp' in next) {
+    const { mcp: _, ...rest } = next as LachesisConfig & { mcp: unknown }
+    next = rest as LachesisConfig
+    updated = true
+  }
 
-    // Ensure all required fields exist
-    if (!mcp.obsidian) {
-      mcp.obsidian = DEFAULT_MCP_CONFIG.obsidian
-      mcpUpdated = true
+  // Validate provider is one of the supported types
+  if (!VALID_PROVIDERS.includes(next.defaultProvider)) {
+    next = {
+      ...next,
+      defaultProvider: DEFAULT_CONFIG.defaultProvider,
+      apiKeyEnvVar: DEFAULT_CONFIG.apiKeyEnvVar,
     }
-    if (mcp.writeMode === undefined) {
-      mcp.writeMode = DEFAULT_MCP_CONFIG.writeMode
-      mcpUpdated = true
-    }
-    if (mcp.scopeWritesToProject === undefined) {
-      mcp.scopeWritesToProject = DEFAULT_MCP_CONFIG.scopeWritesToProject
-      mcpUpdated = true
-    }
-    // Add transportMode if missing (defaults to 'uvx' for backward compatibility)
-    if (mcp.transportMode === undefined) {
-      mcp.transportMode = DEFAULT_MCP_CONFIG.transportMode
-      mcpUpdated = true
-    }
-    // Add docker config if missing
-    if (mcp.docker === undefined) {
-      mcp.docker = DEFAULT_MCP_CONFIG.docker
-      mcpUpdated = true
-    }
-    // Add gateway config if missing
-    if (mcp.gateway === undefined) {
-      mcp.gateway = DEFAULT_MCP_CONFIG.gateway
-      mcpUpdated = true
-    }
+    updated = true
+  }
 
-    if (mcpUpdated) {
-      next = { ...next, mcp }
+  // Validate model is valid for the selected provider
+  const validModels = getModelsForProvider(next.defaultProvider)
+  if (!validModels.includes(next.defaultModel)) {
+    const firstModel = validModels[0]
+    if (firstModel) {
+      next = { ...next, defaultModel: firstModel }
       updated = true
     }
   }

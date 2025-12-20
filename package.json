@@ -14,9 +14,10 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@ai-sdk/mcp": "^0.0.12",
-    "@ai-sdk/openai": "^2.0.85",
-    "ai": "^5.0.112",
+    "@ai-sdk/openai": "^2.0.88",
+    "@anthropic-ai/claude-agent-sdk": "^0.1.73",
+    "@anthropic-ai/sdk": "^0.71.2",
+    "ai": "^5.0.115",
     "ink": "^6.0.0",
     "ink-select-input": "^6.0.0",
     "ink-spinner": "^5.0.0",

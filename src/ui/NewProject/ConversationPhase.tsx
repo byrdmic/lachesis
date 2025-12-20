@@ -17,7 +17,6 @@ import {
   extractProjectName,
 } from '../../ai/client.ts'
 import { buildSystemPrompt } from '../../ai/prompts.ts'
-import { getMCPToolNames } from '../../mcp/index.ts'
 import { TextInput } from '../components/TextInput.tsx'
 import { ConversationView } from '../components/ConversationView.tsx'
 import { debugLog } from '../../debug/logger.ts'
@@ -64,11 +63,11 @@ type ConversationPhaseProps = {
    */
   initialState?: StoredConversationState
   /**
-   * Whether MCP is enabled and connected (enables agentic mode with tool-calling)
+   * Whether agentic mode is enabled (enables Agent SDK with tool-calling)
    */
-  mcpEnabled?: boolean
+  agenticEnabled?: boolean
   /**
-   * Project path for MCP scoped operations (required when mcpEnabled is true)
+   * Project path for scoped file operations (required when agenticEnabled is true)
    */
   projectPath?: string
   onInputModeChange?: (typing: boolean) => void
@@ -100,7 +99,7 @@ export function ConversationPhase({
   sessionKind = 'new',
   projectContext,
   initialState,
-  mcpEnabled = false,
+  agenticEnabled = false,
   projectPath,
   onInputModeChange,
   onAIStatusChange,
@@ -323,21 +322,20 @@ export function ConversationPhase({
   const generateFirstQuestion = async () => {
     debugLog.info('Conversation: starting first question', {
       sessionKind,
-      mcpEnabled,
+      agenticEnabled,
       projectPath,
     })
 
-    // For existing projects with MCP, use the agentic path with tools
+    // For existing projects with agentic mode, use the agentic path with tools
     // so the AI can read files and provide a substantive opening
-    if (sessionKind === 'existing' && mcpEnabled && projectPath) {
+    if (sessionKind === 'existing' && agenticEnabled && projectPath) {
       debugLog.info('Conversation: using agentic mode for first message')
 
-      const toolNames = getMCPToolNames()
       const qaPrompt = buildSystemPrompt({
         sessionType: 'existing',
         projectName: effectiveProjectName,
         snapshotSummary: projectContext ?? '',
-        toolsAvailable: toolNames,
+        toolsAvailable: ['Read', 'Write', 'Edit', 'Glob', 'Grep'],
         currentHour: new Date().getHours(),
         isFirstMessage: true,
       })
@@ -351,10 +349,10 @@ export function ConversationPhase({
         projectPath,
         maxToolCalls: 10,
         onToolCall: (toolName, args) => {
-          debugLog.info('Conversation: MCP tool called (first message)', { toolName, args })
+          debugLog.info('Conversation: Agent SDK tool called (first message)', { toolName, args })
         },
         onToolResult: (toolName, resultData) => {
-          debugLog.info('Conversation: MCP tool result (first message)', { toolName, result: resultData })
+          debugLog.info('Conversation: Agent SDK tool result (first message)', { toolName, result: resultData })
         },
         onTextUpdate: (partial) => {
           setState((s) => {
@@ -401,7 +399,7 @@ export function ConversationPhase({
         }))
       }
     } else {
-      // For new projects or non-MCP mode, use the coaching prompt
+      // For new projects or non-agentic mode, use the coaching prompt
       await streamQuestion({
         planningLevel,
         projectName: effectiveProjectName,
@@ -455,19 +453,18 @@ export function ConversationPhase({
         coveredTopics: state.coveredTopics,
       }
 
-      // Generate next response - use agentic mode with MCP tools if enabled
-      if (mcpEnabled && projectPath) {
-        // Use streaming agentic conversation with MCP tools
-        debugLog.info('Conversation: using streaming agentic mode with MCP tools', {
+      // Generate next response - use agentic mode with Agent SDK tools if enabled
+      if (agenticEnabled && projectPath) {
+        // Use streaming agentic conversation with Agent SDK tools
+        debugLog.info('Conversation: using streaming agentic mode with Agent SDK tools', {
           projectPath,
         })
 
-        const toolNames = getMCPToolNames()
         const qaPrompt = buildSystemPrompt({
           sessionType: 'existing',
           projectName: effectiveProjectName,
           snapshotSummary: projectContext ?? '',
-          toolsAvailable: toolNames,
+          toolsAvailable: ['Read', 'Write', 'Edit', 'Glob', 'Grep'],
           currentHour: new Date().getHours(),
           isFirstMessage: false, // This is a follow-up message
         })
@@ -481,10 +478,10 @@ export function ConversationPhase({
           projectPath,
           maxToolCalls: 10,
           onToolCall: (toolName, args) => {
-            debugLog.info('Conversation: MCP tool called', { toolName, args })
+            debugLog.info('Conversation: Agent SDK tool called', { toolName, args })
           },
           onToolResult: (toolName, resultData) => {
-            debugLog.info('Conversation: MCP tool result', { toolName, result: resultData })
+            debugLog.info('Conversation: Agent SDK tool result', { toolName, result: resultData })
           },
           onTextUpdate: (partial) => {
             // Update messages with streaming content
@@ -553,7 +550,7 @@ export function ConversationPhase({
           }))
         }
       } else {
-        // Use streaming mode (non-MCP)
+        // Use streaming mode (non-agentic)
         await streamQuestion(context)
 
         // After streaming completes, check current state for transition and topics
@@ -585,7 +582,7 @@ export function ConversationPhase({
       planningLevel,
       projectName,
       oneLiner,
-      mcpEnabled,
+      agenticEnabled,
       projectPath,
       projectContext,
       debug,

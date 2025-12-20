@@ -3,17 +3,15 @@ import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { loadProjectSettings, saveProjectSettings } from './project-settings.ts'
-import type { LachesisConfig, MCPConfig } from './types.ts'
-import { DEFAULT_MCP_CONFIG } from './types.ts'
+import type { LachesisConfig } from './types.ts'
 
 // Create a base config for testing
 function createBaseConfig(overrides: Partial<LachesisConfig> = {}): LachesisConfig {
   return {
     vaultPath: '/vault/projects',
-    defaultProvider: 'openai',
-    defaultModel: 'gpt-5.2',
-    apiKeyEnvVar: 'OPENAI_API_KEY',
-    mcp: { ...DEFAULT_MCP_CONFIG },
+    defaultProvider: 'anthropic-sdk',
+    defaultModel: 'claude-sonnet-4-5-20250929',
+    apiKeyEnvVar: 'ANTHROPIC_API_KEY',
     ...overrides,
   }
 }
@@ -59,26 +57,26 @@ describe('project-settings', () => {
 
     describe('when Settings.json exists', () => {
       it('loads and merges defaultProvider override', () => {
-        const settings = { defaultProvider: 'anthropic' }
+        const settings = { defaultProvider: 'anthropic-sdk' }
         writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
 
         const baseConfig = createBaseConfig()
         const result = loadProjectSettings(baseConfig, projectPath)
 
         expect(result.found).toBe(true)
-        expect(result.config.defaultProvider).toBe('anthropic')
-        expect(result.overrides).toEqual({ defaultProvider: 'anthropic' })
+        expect(result.config.defaultProvider).toBe('anthropic-sdk')
+        expect(result.overrides).toEqual({ defaultProvider: 'anthropic-sdk' })
       })
 
       it('loads and merges defaultModel override', () => {
-        const settings = { defaultModel: 'gpt-5.1' }
+        const settings = { defaultModel: 'claude-opus-4-5-20251101' }
         writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
 
         const baseConfig = createBaseConfig()
         const result = loadProjectSettings(baseConfig, projectPath)
 
-        expect(result.config.defaultModel).toBe('gpt-5.1')
-        expect(result.overrides).toEqual({ defaultModel: 'gpt-5.1' })
+        expect(result.config.defaultModel).toBe('claude-opus-4-5-20251101')
+        expect(result.overrides).toEqual({ defaultModel: 'claude-opus-4-5-20251101' })
       })
 
       it('loads and merges apiKeyEnvVar override', () => {
@@ -92,56 +90,20 @@ describe('project-settings', () => {
         expect(result.overrides).toEqual({ apiKeyEnvVar: 'PROJECT_API_KEY' })
       })
 
-      it('loads and merges MCP config overrides', () => {
-        const settings = {
-          mcp: {
-            enabled: true,
-            writeMode: 'confirm',
-          },
-        }
-        writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
-
-        const baseConfig = createBaseConfig()
-        const result = loadProjectSettings(baseConfig, projectPath)
-
-        expect(result.config.mcp?.enabled).toBe(true)
-        expect(result.config.mcp?.writeMode).toBe('confirm')
-      })
-
-      it('merges MCP obsidian settings', () => {
-        const settings = {
-          mcp: {
-            obsidian: {
-              host: '192.168.1.100',
-              port: 27125,
-            },
-          },
-        }
-        writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
-
-        const baseConfig = createBaseConfig()
-        const result = loadProjectSettings(baseConfig, projectPath)
-
-        expect(result.config.mcp?.obsidian.host).toBe('192.168.1.100')
-        expect(result.config.mcp?.obsidian.port).toBe(27125)
-        // Base config's apiKeyEnvVar should be preserved
-        expect(result.config.mcp?.obsidian.apiKeyEnvVar).toBe('OBSIDIAN_API_KEY')
-      })
-
       it('merges multiple settings', () => {
         const settings = {
-          defaultProvider: 'anthropic',
-          defaultModel: 'claude-3-opus',
-          apiKeyEnvVar: 'ANTHROPIC_API_KEY',
+          defaultProvider: 'anthropic-sdk',
+          defaultModel: 'claude-opus-4-5-20251101',
+          apiKeyEnvVar: 'CUSTOM_ANTHROPIC_KEY',
         }
         writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
 
         const baseConfig = createBaseConfig()
         const result = loadProjectSettings(baseConfig, projectPath)
 
-        expect(result.config.defaultProvider).toBe('anthropic')
-        expect(result.config.defaultModel).toBe('claude-3-opus')
-        expect(result.config.apiKeyEnvVar).toBe('ANTHROPIC_API_KEY')
+        expect(result.config.defaultProvider).toBe('anthropic-sdk')
+        expect(result.config.defaultModel).toBe('claude-opus-4-5-20251101')
+        expect(result.config.apiKeyEnvVar).toBe('CUSTOM_ANTHROPIC_KEY')
         // vaultPath should remain from base
         expect(result.config.vaultPath).toBe('/vault/projects')
       })
@@ -166,7 +128,7 @@ describe('project-settings', () => {
         const baseConfig = createBaseConfig()
         const result = loadProjectSettings(baseConfig, projectPath)
 
-        expect(result.config.defaultProvider).toBe('openai') // unchanged from base
+        expect(result.config.defaultProvider).toBe('anthropic-sdk') // unchanged from base
         expect(result.warnings.some(w => w.includes('defaultProvider'))).toBe(true)
       })
 
@@ -177,7 +139,7 @@ describe('project-settings', () => {
         const baseConfig = createBaseConfig()
         const result = loadProjectSettings(baseConfig, projectPath)
 
-        expect(result.config.defaultModel).toBe('gpt-5.2') // unchanged
+        expect(result.config.defaultModel).toBe('claude-sonnet-4-5-20250929') // unchanged
         expect(result.warnings.some(w => w.includes('defaultModel'))).toBe(true)
       })
 
@@ -188,22 +150,8 @@ describe('project-settings', () => {
         const baseConfig = createBaseConfig()
         const result = loadProjectSettings(baseConfig, projectPath)
 
-        expect(result.config.defaultModel).toBe('gpt-5.2') // unchanged
+        expect(result.config.defaultModel).toBe('claude-sonnet-4-5-20250929') // unchanged
         expect(result.warnings.some(w => w.includes('defaultModel'))).toBe(true)
-      })
-
-      it('warns for invalid MCP writeMode', () => {
-        const settings = {
-          mcp: {
-            writeMode: 'invalid',
-          },
-        }
-        writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
-
-        const baseConfig = createBaseConfig()
-        const result = loadProjectSettings(baseConfig, projectPath)
-
-        expect(result.warnings.some(w => w.includes('writeMode'))).toBe(true)
       })
 
       it('warns for unknown settings keys', () => {
@@ -218,16 +166,6 @@ describe('project-settings', () => {
 
         expect(result.warnings.some(w => w.includes('unknownSetting'))).toBe(true)
         expect(result.warnings.some(w => w.includes('anotherUnknown'))).toBe(true)
-      })
-
-      it('warns when mcp is not an object', () => {
-        const settings = { mcp: 'invalid' }
-        writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
-
-        const baseConfig = createBaseConfig()
-        const result = loadProjectSettings(baseConfig, projectPath)
-
-        expect(result.warnings.some(w => w.includes('mcp must be an object'))).toBe(true)
       })
 
       it('handles null values gracefully', () => {
@@ -292,42 +230,57 @@ describe('project-settings', () => {
     })
 
     describe('provider validation', () => {
-      it.each(['anthropic', 'openai', 'vertex', 'other'] as const)(
-        'accepts valid provider: %s',
-        (provider) => {
-          const settings = { defaultProvider: provider }
-          writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
+      it('accepts anthropic-sdk as valid provider', () => {
+        const settings = { defaultProvider: 'anthropic-sdk' }
+        writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
 
-          const baseConfig = createBaseConfig()
-          const result = loadProjectSettings(baseConfig, projectPath)
+        const baseConfig = createBaseConfig()
+        const result = loadProjectSettings(baseConfig, projectPath)
 
-          expect(result.config.defaultProvider).toBe(provider)
-          expect(result.warnings).toEqual([])
-        },
-      )
-    })
+        expect(result.config.defaultProvider).toBe('anthropic-sdk')
+        expect(result.warnings).toEqual([])
+      })
 
-    describe('MCP writeMode validation', () => {
-      it.each(['confirm', 'auto', 'disabled'] as const)(
-        'accepts valid writeMode: %s',
-        (writeMode) => {
-          const settings = { mcp: { writeMode } }
-          writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
+      it('accepts openai as valid provider', () => {
+        const settings = { defaultProvider: 'openai' }
+        writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
 
-          const baseConfig = createBaseConfig()
-          const result = loadProjectSettings(baseConfig, projectPath)
+        const baseConfig = createBaseConfig()
+        const result = loadProjectSettings(baseConfig, projectPath)
 
-          expect(result.config.mcp?.writeMode).toBe(writeMode)
-        },
-      )
+        expect(result.config.defaultProvider).toBe('openai')
+        expect(result.warnings).toEqual([])
+      })
+
+      it('accepts claude-code as valid provider', () => {
+        const settings = { defaultProvider: 'claude-code' }
+        writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
+
+        const baseConfig = createBaseConfig()
+        const result = loadProjectSettings(baseConfig, projectPath)
+
+        expect(result.config.defaultProvider).toBe('claude-code')
+        expect(result.warnings).toEqual([])
+      })
+
+      it('rejects invalid providers', () => {
+        const settings = { defaultProvider: 'invalid-provider' }
+        writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(settings))
+
+        const baseConfig = createBaseConfig()
+        const result = loadProjectSettings(baseConfig, projectPath)
+
+        expect(result.config.defaultProvider).toBe('anthropic-sdk') // unchanged
+        expect(result.warnings.some(w => w.includes('defaultProvider'))).toBe(true)
+      })
     })
   })
 
   describe('saveProjectSettings', () => {
     it('saves settings to Settings.json', () => {
       const settings: Partial<LachesisConfig> = {
-        defaultProvider: 'anthropic',
-        defaultModel: 'claude-3-opus',
+        defaultProvider: 'anthropic-sdk',
+        defaultModel: 'claude-opus-4-5-20251101',
       }
 
       const result = saveProjectSettings(projectPath, settings)
@@ -336,14 +289,14 @@ describe('project-settings', () => {
       expect(existsSync(result.settingsPath)).toBe(true)
 
       const saved = JSON.parse(readFileSync(result.settingsPath, 'utf-8'))
-      expect(saved.defaultProvider).toBe('anthropic')
-      expect(saved.defaultModel).toBe('claude-3-opus')
+      expect(saved.defaultProvider).toBe('anthropic-sdk')
+      expect(saved.defaultModel).toBe('claude-opus-4-5-20251101')
     })
 
     it('only saves allowed project-level keys', () => {
       const settings: Partial<LachesisConfig> = {
-        defaultProvider: 'anthropic',
-        defaultModel: 'claude-3-opus',
+        defaultProvider: 'anthropic-sdk',
+        defaultModel: 'claude-opus-4-5-20251101',
         apiKeyEnvVar: 'CUSTOM_KEY',
         vaultPath: '/should/not/be/saved', // not a project-level setting
       }
@@ -351,27 +304,10 @@ describe('project-settings', () => {
       const result = saveProjectSettings(projectPath, settings)
 
       const saved = JSON.parse(readFileSync(result.settingsPath, 'utf-8'))
-      expect(saved.defaultProvider).toBe('anthropic')
-      expect(saved.defaultModel).toBe('claude-3-opus')
+      expect(saved.defaultProvider).toBe('anthropic-sdk')
+      expect(saved.defaultModel).toBe('claude-opus-4-5-20251101')
       expect(saved.apiKeyEnvVar).toBe('CUSTOM_KEY')
       expect(saved.vaultPath).toBeUndefined()
-    })
-
-    it('saves MCP config', () => {
-      const settings: Partial<LachesisConfig> = {
-        mcp: {
-          ...DEFAULT_MCP_CONFIG,
-          enabled: true,
-          writeMode: 'confirm',
-        },
-      }
-
-      const result = saveProjectSettings(projectPath, settings)
-
-      const saved = JSON.parse(readFileSync(result.settingsPath, 'utf-8'))
-      expect(saved.mcp).toBeDefined()
-      expect(saved.mcp.enabled).toBe(true)
-      expect(saved.mcp.writeMode).toBe('confirm')
     })
 
     it('creates directory if it does not exist', () => {
@@ -390,17 +326,17 @@ describe('project-settings', () => {
 
     it('overwrites existing Settings.json', () => {
       // Create initial settings
-      const initial = { defaultProvider: 'openai' }
+      const initial = { defaultModel: 'claude-haiku-3-5-20241022' }
       writeFileSync(join(projectPath, 'Settings.json'), JSON.stringify(initial))
 
       // Save new settings
       const newSettings: Partial<LachesisConfig> = {
-        defaultProvider: 'anthropic',
+        defaultModel: 'claude-opus-4-5-20251101',
       }
       saveProjectSettings(projectPath, newSettings)
 
       const saved = JSON.parse(readFileSync(join(projectPath, 'Settings.json'), 'utf-8'))
-      expect(saved.defaultProvider).toBe('anthropic')
+      expect(saved.defaultModel).toBe('claude-opus-4-5-20251101')
     })
 
     it('handles empty settings object', () => {
@@ -427,8 +363,8 @@ describe('project-settings', () => {
 
     it('formats JSON with indentation', () => {
       const settings: Partial<LachesisConfig> = {
-        defaultProvider: 'anthropic',
-        defaultModel: 'claude-3',
+        defaultProvider: 'anthropic-sdk',
+        defaultModel: 'claude-sonnet-4-5-20250929',
       }
 
       const result = saveProjectSettings(projectPath, settings)
@@ -455,43 +391,17 @@ describe('project-settings', () => {
     it('load after save returns same values', () => {
       const baseConfig = createBaseConfig()
       const projectSettings: Partial<LachesisConfig> = {
-        defaultProvider: 'anthropic',
-        defaultModel: 'claude-3-opus',
+        defaultProvider: 'anthropic-sdk',
+        defaultModel: 'claude-opus-4-5-20251101',
         apiKeyEnvVar: 'PROJECT_KEY',
       }
 
       saveProjectSettings(projectPath, projectSettings)
       const result = loadProjectSettings(baseConfig, projectPath)
 
-      expect(result.config.defaultProvider).toBe('anthropic')
-      expect(result.config.defaultModel).toBe('claude-3-opus')
+      expect(result.config.defaultProvider).toBe('anthropic-sdk')
+      expect(result.config.defaultModel).toBe('claude-opus-4-5-20251101')
       expect(result.config.apiKeyEnvVar).toBe('PROJECT_KEY')
-    })
-
-    it('preserves MCP config through save/load cycle', () => {
-      const baseConfig = createBaseConfig()
-      const projectSettings: Partial<LachesisConfig> = {
-        mcp: {
-          ...DEFAULT_MCP_CONFIG,
-          enabled: true,
-          writeMode: 'disabled',
-          scopeWritesToProject: false,
-          obsidian: {
-            ...DEFAULT_MCP_CONFIG.obsidian,
-            host: 'custom-host',
-            port: 12345,
-          },
-        },
-      }
-
-      saveProjectSettings(projectPath, projectSettings)
-      const result = loadProjectSettings(baseConfig, projectPath)
-
-      expect(result.config.mcp?.enabled).toBe(true)
-      expect(result.config.mcp?.writeMode).toBe('disabled')
-      expect(result.config.mcp?.scopeWritesToProject).toBe(false)
-      expect(result.config.mcp?.obsidian.host).toBe('custom-host')
-      expect(result.config.mcp?.obsidian.port).toBe(12345)
     })
   })
 })

@@ -1,59 +1,13 @@
-import { describe, it, expect, mock } from 'bun:test'
-import { buildProjectSnapshotViaMCP } from './snapshot-builder.ts'
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
+import { buildProjectSnapshot } from './snapshot-builder.ts'
 import { EXPECTED_CORE_FILES, type ExpectedCoreFile } from './snapshot.ts'
-import type { Tool } from 'ai'
 
 // ============================================================================
-// Mock Tool Factory
+// Test Helpers
 // ============================================================================
-
-type MockToolResponses = {
-  listFilesInDir?: (args: { dirpath: string }) => unknown
-  listFilesInVault?: () => unknown
-  getFileContents?: (args: { filepath: string }) => unknown
-}
-
-function createMockTools(responses: MockToolResponses): Record<string, Tool> {
-  const tools: Record<string, Tool> = {}
-
-  if (responses.listFilesInDir) {
-    tools['obsidian_list_files_in_dir'] = {
-      execute: responses.listFilesInDir,
-    } as unknown as Tool
-  }
-
-  if (responses.listFilesInVault) {
-    tools['obsidian_list_files_in_vault'] = {
-      execute: responses.listFilesInVault,
-    } as unknown as Tool
-  }
-
-  if (responses.getFileContents) {
-    tools['obsidian_get_file_contents'] = {
-      execute: responses.getFileContents,
-    } as unknown as Tool
-  }
-
-  return tools
-}
-
-// Helper to create MCP response format
-function mcpResponse(text: string, isError = false) {
-  return {
-    content: [{ type: 'text', text }],
-    isError,
-  }
-}
-
-// Helper to create file list response
-function fileListResponse(files: string[]) {
-  return mcpResponse(JSON.stringify(files))
-}
-
-// Helper to create file content response
-function fileContentResponse(content: string) {
-  return mcpResponse(content)
-}
 
 // Helper to create realistic Overview.md content
 function createOverviewContent(options: {
@@ -124,19 +78,32 @@ title: ${file.replace('.md', '')}
 // Tests
 // ============================================================================
 
-describe('buildProjectSnapshotViaMCP', () => {
+describe('buildProjectSnapshot', () => {
+  let tempDir: string
+  let projectPath: string
+
+  beforeEach(() => {
+    // Create a unique temp directory for each test
+    tempDir = join(tmpdir(), `lachesis-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    projectPath = join(tempDir, 'TestProject')
+    mkdirSync(projectPath, { recursive: true })
+  })
+
+  afterEach(() => {
+    // Clean up temp directory
+    if (existsSync(tempDir)) {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
   describe('basic snapshot structure', () => {
     it('returns a valid ProjectSnapshot with all expected fields', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md', 'Roadmap.md', 'Log.md']),
-        getFileContents: () => fileContentResponse(createFilledContent('Overview.md')),
-      })
+      // Create some files
+      writeFileSync(join(projectPath, 'Overview.md'), createFilledContent('Overview.md'))
+      writeFileSync(join(projectPath, 'Roadmap.md'), createFilledContent('Roadmap.md'))
+      writeFileSync(join(projectPath, 'Log.md'), createFilledContent('Log.md'))
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot).toHaveProperty('projectName')
       expect(snapshot).toHaveProperty('projectPath')
@@ -148,47 +115,18 @@ describe('buildProjectSnapshotViaMCP', () => {
     })
 
     it('extracts project name from path', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse([]),
-        getFileContents: () => fileContentResponse(''),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/MyAwesomeProject',
-        '/vault/Projects',
-        tools,
-      )
-
-      expect(snapshot.projectName).toBe('MyAwesomeProject')
+      const snapshot = await buildProjectSnapshot(projectPath)
+      expect(snapshot.projectName).toBe('TestProject')
     })
 
     it('includes all expected core files in expectedFiles', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse([]),
-        getFileContents: () => fileContentResponse(''),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
-
+      const snapshot = await buildProjectSnapshot(projectPath)
       expect(snapshot.expectedFiles).toEqual(EXPECTED_CORE_FILES)
     })
 
     it('sets capturedAt to ISO timestamp', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse([]),
-        getFileContents: () => fileContentResponse(''),
-      })
-
       const before = new Date().toISOString()
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
       const after = new Date().toISOString()
 
       expect(snapshot.capturedAt >= before).toBe(true)
@@ -197,68 +135,27 @@ describe('buildProjectSnapshotViaMCP', () => {
   })
 
   describe('file discovery', () => {
-    it('uses obsidian_list_files_in_dir when available', async () => {
-      const listFilesInDirFn = mock(() =>
-        fileListResponse(['Overview.md', 'Roadmap.md', 'Log.md']),
-      )
-
-      const tools = createMockTools({
-        listFilesInDir: listFilesInDirFn,
-        getFileContents: () => fileContentResponse(createFilledContent('Overview.md')),
-      })
-
-      await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
-
-      expect(listFilesInDirFn).toHaveBeenCalled()
-    })
-
     it('marks found files as existing', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md', 'Roadmap.md']),
-        getFileContents: () => fileContentResponse(createFilledContent('Overview.md')),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), createFilledContent('Overview.md'))
+      writeFileSync(join(projectPath, 'Roadmap.md'), createFilledContent('Roadmap.md'))
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.files['Overview.md'].exists).toBe(true)
       expect(snapshot.files['Roadmap.md'].exists).toBe(true)
     })
 
     it('marks missing files as not existing', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(createFilledContent('Overview.md')),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), createFilledContent('Overview.md'))
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.files['Tasks.md'].exists).toBe(false)
       expect(snapshot.files['Archive.md'].exists).toBe(false)
     })
 
-    it('handles empty file list', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse([]),
-        getFileContents: () => fileContentResponse(''),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+    it('handles empty project directory', async () => {
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       // All files should be marked as missing
       for (const file of EXPECTED_CORE_FILES) {
@@ -266,148 +163,16 @@ describe('buildProjectSnapshotViaMCP', () => {
         expect(snapshot.files[file].templateStatus).toBe('missing')
       }
     })
-
-    it('falls back to list_files_in_vault when list_files_in_dir unavailable', async () => {
-      const listFilesInVaultFn = mock(() => [
-        'Projects/TestProject/Overview.md',
-        'Projects/TestProject/Roadmap.md',
-        'Projects/OtherProject/Overview.md', // Should be filtered out
-      ])
-
-      const tools = createMockTools({
-        listFilesInVault: listFilesInVaultFn,
-        getFileContents: () => fileContentResponse(createFilledContent('Overview.md')),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
-
-      expect(listFilesInVaultFn).toHaveBeenCalled()
-    })
   })
 
-  describe('MCP response parsing', () => {
-    it('handles new MCP format with content array', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => ({
-          content: [{ type: 'text', text: '["Overview.md", "Log.md"]' }],
-          isError: false,
-        }),
-        getFileContents: () => ({
-          content: [{ type: 'text', text: createFilledContent('Overview.md') }],
-          isError: false,
-        }),
-      })
+  describe('path handling', () => {
+    it('handles project path with trailing slash', async () => {
+      writeFileSync(join(projectPath, 'Overview.md'), createFilledContent('Overview.md'))
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath + '/')
 
+      expect(snapshot.projectName).toBe('TestProject')
       expect(snapshot.files['Overview.md'].exists).toBe(true)
-      expect(snapshot.files['Log.md'].exists).toBe(true)
-    })
-
-    it('handles legacy array response format', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => ['Overview.md', 'Roadmap.md'],
-        getFileContents: () => createFilledContent('Overview.md'),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
-
-      expect(snapshot.files['Overview.md'].exists).toBe(true)
-      expect(snapshot.files['Roadmap.md'].exists).toBe(true)
-    })
-
-    it('handles legacy { content: string } response format', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => ({ content: createFilledContent('Overview.md') }),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
-
-      expect(snapshot.files['Overview.md'].exists).toBe(true)
-      expect(snapshot.files['Overview.md'].templateStatus).toBe('filled')
-    })
-
-    it('handles MCP error responses gracefully', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => ({
-          content: [{ type: 'text', text: 'Error: Permission denied' }],
-          isError: true,
-        }),
-        getFileContents: () => fileContentResponse(''),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
-
-      // Should handle gracefully without throwing
-      expect(snapshot.projectName).toBe('TestProject')
-    })
-  })
-
-  describe('path normalization', () => {
-    it('handles Windows backslash paths', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(createFilledContent('Overview.md')),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        'G:\\My Drive\\Nexus\\Projects\\TestProject',
-        'G:\\My Drive\\Nexus\\Projects',
-        tools,
-      )
-
-      expect(snapshot.projectName).toBe('TestProject')
-    })
-
-    it('strips trailing slashes from paths', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(createFilledContent('Overview.md')),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject/',
-        '/vault/Projects/',
-        tools,
-      )
-
-      expect(snapshot.projectName).toBe('TestProject')
-    })
-
-    it('handles mixed path separators', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(createFilledContent('Overview.md')),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        'G:/My Drive\\Nexus/Projects\\TestProject',
-        'G:/My Drive\\Nexus/Projects',
-        tools,
-      )
-
-      expect(snapshot.projectName).toBe('TestProject')
     })
   })
 
@@ -420,16 +185,9 @@ priority: high
 ---
 # Content`
 
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(content),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), content)
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.files['Overview.md'].frontmatter).toEqual({
         title: 'My Project',
@@ -441,16 +199,9 @@ priority: high
     it('handles missing frontmatter', async () => {
       const content = '# No Frontmatter\n\nJust content here.'
 
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(content),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), content)
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.files['Overview.md'].frontmatter).toEqual({})
     })
@@ -461,16 +212,9 @@ invalid: yaml: content: here
 ---
 # Content`
 
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(content),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), content)
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       // Should not crash, return empty frontmatter
       expect(snapshot.files['Overview.md'].frontmatter).toEqual({})
@@ -479,80 +223,53 @@ invalid: yaml: content: here
 
   describe('GitHub repos extraction', () => {
     it('extracts single GitHub repo from frontmatter', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () =>
-          fileContentResponse(createOverviewContent({ github: 'user/repo' })),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
+      writeFileSync(
+        join(projectPath, 'Overview.md'),
+        createOverviewContent({ github: 'user/repo' }),
       )
+
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.githubRepos).toEqual(['user/repo'])
     })
 
     it('extracts multiple GitHub repos (comma-separated)', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () =>
-          fileContentResponse(createOverviewContent({ github: 'user/repo1, user/repo2, org/repo3' })),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
+      writeFileSync(
+        join(projectPath, 'Overview.md'),
+        createOverviewContent({ github: 'user/repo1, user/repo2, org/repo3' }),
       )
+
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.githubRepos).toEqual(['user/repo1', 'user/repo2', 'org/repo3'])
     })
 
     it('returns empty array when no GitHub field', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(createOverviewContent({})),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), createOverviewContent({}))
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.githubRepos).toEqual([])
     })
 
     it('handles "N/A" github field', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () =>
-          fileContentResponse(createOverviewContent({ github: 'N/A' })),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
+      writeFileSync(
+        join(projectPath, 'Overview.md'),
+        createOverviewContent({ github: 'N/A' }),
       )
+
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.githubRepos).toEqual([])
     })
 
     it('handles "n/a" github field (case insensitive)', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () =>
-          fileContentResponse(createOverviewContent({ github: 'n/a' })),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
+      writeFileSync(
+        join(projectPath, 'Overview.md'),
+        createOverviewContent({ github: 'n/a' }),
       )
+
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.githubRepos).toEqual([])
     })
@@ -560,16 +277,10 @@ invalid: yaml: content: here
 
   describe('health assessment', () => {
     it('reports missing files in health.missingFiles', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md', 'Log.md']),
-        getFileContents: () => fileContentResponse(createFilledContent('Overview.md')),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), createFilledContent('Overview.md'))
+      writeFileSync(join(projectPath, 'Log.md'), createFilledContent('Log.md'))
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.health.missingFiles).toContain('Roadmap.md')
       expect(snapshot.health.missingFiles).toContain('Tasks.md')
@@ -580,16 +291,9 @@ invalid: yaml: content: here
     })
 
     it('reports template_only files in health.thinOrTemplateFiles', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(createTemplateContent('Overview.md')),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), createTemplateContent('Overview.md'))
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       const templateFiles = snapshot.health.thinOrTemplateFiles
       const overviewEntry = templateFiles.find((f) => f.file === 'Overview.md')
@@ -605,16 +309,9 @@ title: Overview
 
 Short description.
 `
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(thinContent),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), thinContent)
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       const templateFiles = snapshot.health.thinOrTemplateFiles
       const overviewEntry = templateFiles.find((f) => f.file === 'Overview.md')
@@ -623,21 +320,10 @@ Short description.
     })
 
     it('does not include filled files in health.thinOrTemplateFiles', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md', 'Log.md']),
-        getFileContents: (args: { filepath: string }) => {
-          if (args.filepath.includes('Overview')) {
-            return fileContentResponse(createFilledContent('Overview.md'))
-          }
-          return fileContentResponse(createFilledContent('Log.md'))
-        },
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), createFilledContent('Overview.md'))
+      writeFileSync(join(projectPath, 'Log.md'), createFilledContent('Log.md'))
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       const filledFileNames = snapshot.health.thinOrTemplateFiles.map((f) => f.file)
       expect(filledFileNames).not.toContain('Overview.md')
@@ -645,16 +331,9 @@ Short description.
     })
 
     it('includes reasons for thin/template status', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(createTemplateContent('Overview.md')),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), createTemplateContent('Overview.md'))
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       const templateFiles = snapshot.health.thinOrTemplateFiles
       const overviewEntry = templateFiles.find((f) => f.file === 'Overview.md')
@@ -664,59 +343,25 @@ Short description.
 
   describe('template status evaluation', () => {
     it('marks files with empty content as not existing', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(''),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), '')
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
-      // File found in listing but content is empty string (falsy)
-      // The code treats empty content the same as no content: exists: false
+      // File exists on disk but content is empty (falsy)
+      // The code treats empty content as not existing
       expect(snapshot.files['Overview.md'].exists).toBe(false)
       expect(snapshot.files['Overview.md'].templateStatus).toBe('missing')
     })
 
     it('evaluates each file with correct template rules', async () => {
-      // Create different content for different files
-      const fileContents: Record<string, string> = {
-        Overview: createFilledContent('Overview.md'),
-        Roadmap: createTemplateContent('Roadmap.md'),
-        Log: createFilledContent('Log.md'),
-        Tasks: createFilledContent('Tasks.md'),
-        Ideas: createTemplateContent('Ideas.md'),
-        Archive: createFilledContent('Archive.md'),
-      }
+      writeFileSync(join(projectPath, 'Overview.md'), createFilledContent('Overview.md'))
+      writeFileSync(join(projectPath, 'Roadmap.md'), createTemplateContent('Roadmap.md'))
+      writeFileSync(join(projectPath, 'Log.md'), createFilledContent('Log.md'))
+      writeFileSync(join(projectPath, 'Tasks.md'), createFilledContent('Tasks.md'))
+      writeFileSync(join(projectPath, 'Ideas.md'), createTemplateContent('Ideas.md'))
+      writeFileSync(join(projectPath, 'Archive.md'), createFilledContent('Archive.md'))
 
-      const tools = createMockTools({
-        listFilesInDir: () =>
-          fileListResponse([
-            'Overview.md',
-            'Roadmap.md',
-            'Log.md',
-            'Tasks.md',
-            'Ideas.md',
-            'Archive.md',
-          ]),
-        getFileContents: (args: { filepath: string }) => {
-          for (const [name, content] of Object.entries(fileContents)) {
-            if (args.filepath.includes(name)) {
-              return fileContentResponse(content)
-            }
-          }
-          return fileContentResponse('')
-        },
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.files['Overview.md'].templateStatus).toBe('filled')
       expect(snapshot.files['Roadmap.md'].templateStatus).toBe('template_only')
@@ -725,125 +370,41 @@ Short description.
   })
 
   describe('error handling', () => {
-    it('handles tool execution errors gracefully', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => {
-          throw new Error('Network error')
-        },
-        listFilesInVault: () => {
-          throw new Error('Also failed')
-        },
-        getFileContents: () => fileContentResponse(''),
-      })
+    it('handles non-existent project directory', async () => {
+      const nonExistentPath = join(tempDir, 'non-existent-project')
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(nonExistentPath)
 
-      // Should return a valid snapshot even if file listing fails
-      expect(snapshot.projectName).toBe('TestProject')
-      // All files will be marked as missing
+      // Should return a valid snapshot with all files marked as missing
+      expect(snapshot.projectName).toBe('non-existent-project')
       for (const file of EXPECTED_CORE_FILES) {
         expect(snapshot.files[file].exists).toBe(false)
       }
-    })
-
-    it('handles missing tools gracefully', async () => {
-      // No tools at all
-      const tools: Record<string, Tool> = {}
-
-      // Without file listing tools, the function still returns a snapshot
-      // but all files will be marked as missing (no way to discover them)
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
-
-      expect(snapshot.projectName).toBe('TestProject')
-      // All files should be missing since no tools to list them
-      for (const file of EXPECTED_CORE_FILES) {
-        expect(snapshot.files[file].exists).toBe(false)
-      }
-    })
-
-    it('handles file read errors for individual files', async () => {
-      let callCount = 0
-      const tools = createMockTools({
-        listFilesInDir: () =>
-          fileListResponse(['Overview.md', 'Log.md']),
-        getFileContents: (args: { filepath: string }) => {
-          callCount++
-          // First call (Overview.md) throws, second call (Log.md) succeeds
-          if (args.filepath.includes('Overview')) {
-            throw new Error('File read error')
-          }
-          return fileContentResponse(createFilledContent('Log.md'))
-        },
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
-
-      // Should complete without crashing
-      // Overview.md read failed, so it exists but has no content (treated as not fully existing)
-      // The code marks files without readable content as not existing
-      expect(snapshot.files['Overview.md'].exists).toBe(false)
-      // Log.md should succeed
-      expect(snapshot.files['Log.md'].exists).toBe(true)
     })
   })
 
   describe('file entry structure', () => {
     it('includes correct path in file entries', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(createFilledContent('Overview.md')),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), createFilledContent('Overview.md'))
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.files['Overview.md'].path).toBe(
-        '/vault/Projects/TestProject/Overview.md',
+        join(projectPath, 'Overview.md'),
       )
     })
 
     it('includes templateFindings for each file', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse(['Overview.md']),
-        getFileContents: () => fileContentResponse(createFilledContent('Overview.md')),
-      })
+      writeFileSync(join(projectPath, 'Overview.md'), createFilledContent('Overview.md'))
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.files['Overview.md'].templateFindings).toBeDefined()
       expect(Array.isArray(snapshot.files['Overview.md'].templateFindings)).toBe(true)
     })
 
     it('sets templateFindings for missing files', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse([]),
-        getFileContents: () => fileContentResponse(''),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.files['Overview.md'].templateFindings).toContain('File missing')
     })
@@ -851,24 +412,14 @@ Short description.
 
   describe('complex scenarios', () => {
     it('handles a fully populated project', async () => {
-      const files = EXPECTED_CORE_FILES
+      for (const file of EXPECTED_CORE_FILES) {
+        writeFileSync(join(projectPath, file), createFilledContent(file))
+      }
 
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse([...files]),
-        getFileContents: (args: { filepath: string }) => {
-          const fileName = args.filepath.split('/').pop() as ExpectedCoreFile
-          return fileContentResponse(createFilledContent(fileName))
-        },
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/TestProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       // All files should exist and be filled
-      for (const file of files) {
+      for (const file of EXPECTED_CORE_FILES) {
         expect(snapshot.files[file].exists).toBe(true)
         expect(snapshot.files[file].templateStatus).toBe('filled')
       }
@@ -879,16 +430,7 @@ Short description.
     })
 
     it('handles a completely empty project', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () => fileListResponse([]),
-        getFileContents: () => fileContentResponse(''),
-      })
-
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/EmptyProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       // All files should be missing
       expect(snapshot.health.missingFiles).toEqual(EXPECTED_CORE_FILES)
@@ -896,35 +438,17 @@ Short description.
     })
 
     it('handles mixed file states', async () => {
-      const tools = createMockTools({
-        listFilesInDir: () =>
-          fileListResponse(['Overview.md', 'Roadmap.md', 'Log.md']),
-        getFileContents: (args: { filepath: string }) => {
-          if (args.filepath.includes('Overview')) {
-            return fileContentResponse(createFilledContent('Overview.md'))
-          }
-          if (args.filepath.includes('Roadmap')) {
-            return fileContentResponse(createTemplateContent('Roadmap.md'))
-          }
-          if (args.filepath.includes('Log')) {
-            // Thin content
-            return fileContentResponse(`---
+      writeFileSync(join(projectPath, 'Overview.md'), createFilledContent('Overview.md'))
+      writeFileSync(join(projectPath, 'Roadmap.md'), createTemplateContent('Roadmap.md'))
+      writeFileSync(join(projectPath, 'Log.md'), `---
 title: Log
 ---
 # Log
 
 Started.
 `)
-          }
-          return fileContentResponse('')
-        },
-      })
 
-      const snapshot = await buildProjectSnapshotViaMCP(
-        '/vault/Projects/MixedProject',
-        '/vault/Projects',
-        tools,
-      )
+      const snapshot = await buildProjectSnapshot(projectPath)
 
       expect(snapshot.files['Overview.md'].templateStatus).toBe('filled')
       expect(snapshot.files['Roadmap.md'].templateStatus).toBe('template_only')

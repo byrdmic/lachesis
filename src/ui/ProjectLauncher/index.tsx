@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { useApp, useInput } from 'ink'
 import type { LachesisConfig } from '../../config/types.ts'
-import { DEFAULT_MCP_CONFIG } from '../../config/types.ts'
 import { updateConfig } from '../../config/config.ts'
-import type { AIStatusDescriptor, MCPStatusDescriptor } from '../components/StatusBar.tsx'
+import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 import { SettingsPanel } from '../components/index.ts'
 import { NewProjectFlow } from '../NewProject/index.tsx'
 import { ExistingProjectFlow } from '../ExistingProject/index.tsx'
@@ -11,7 +10,6 @@ import {
   hasNewProjectInProgress,
   clearNewProjectInProgress,
 } from '../../core/conversation-store.ts'
-import { testMCPConnection } from '../../mcp/index.ts'
 import { debugLog } from '../../debug/logger.ts'
 import { assertNever } from '../../utils/type-guards.ts'
 import { LauncherMenuView } from './LauncherMenuView.tsx'
@@ -49,47 +47,14 @@ export function ProjectLauncher({
   const [state, setState] = useState<LauncherState>({ step: 'menu' })
   const [showSettings, setShowSettings] = useState(false)
   const [hasWIP, setHasWIP] = useState(() => hasNewProjectInProgress())
-  const [mcpStatus, setMcpStatus] = useState<MCPStatusDescriptor>({ state: 'idle' })
 
   // Derived state
   const settingsHotkeyEnabled = !showSettings && state.step === 'menu'
   const aiStatus: AIStatusDescriptor = { state: 'idle', message: 'Ready' }
 
   // ============================================================================
-  // MCP Testing
-  // ============================================================================
-
-  const runMCPTest = useCallback(async () => {
-    const mcpConfig = config.mcp ?? DEFAULT_MCP_CONFIG
-    if (!mcpConfig.enabled) {
-      setMcpStatus({ state: 'idle' })
-      return
-    }
-
-    setMcpStatus({ state: 'connecting' })
-    debugLog.info('MCP: Starting connection test...')
-
-    const result = await testMCPConnection(mcpConfig)
-
-    if (result.success) {
-      setMcpStatus({ state: 'connected', toolCount: result.toolCount })
-      debugLog.info('MCP: Test passed', { toolCount: result.toolCount, tools: result.toolNames })
-    } else {
-      setMcpStatus({ state: 'error', error: result.error })
-      debugLog.error('MCP: Test failed', { error: result.error })
-    }
-  }, [config.mcp])
-
-  // ============================================================================
   // Effects
   // ============================================================================
-
-  // Auto-test MCP on mount when debug mode is enabled
-  useEffect(() => {
-    if (debug && config.mcp?.enabled) {
-      runMCPTest()
-    }
-  }, [debug])
 
   // Check for WIP on menu return
   useEffect(() => {
@@ -166,11 +131,6 @@ export function ProjectLauncher({
         setShowSettings(true)
         return
       }
-
-      if (lower === 'm' && debug && state.step === 'menu' && !showSettings) {
-        runMCPTest()
-        return
-      }
     },
     { isActive: state.step === 'menu' && !showSettings },
   )
@@ -200,7 +160,6 @@ export function ProjectLauncher({
             hasWIP={hasWIP}
             debug={debug}
             aiStatus={aiStatus}
-            mcpStatus={mcpStatus}
             settingsHotkeyEnabled={settingsHotkeyEnabled}
             onMenuSelect={handleMenuSelect}
           />

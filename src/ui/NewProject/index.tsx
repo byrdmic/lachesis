@@ -8,6 +8,7 @@ import type { ConversationMessage, ExtractedProjectData } from '../../ai/client.
 import type { StoredConversationState } from './ConversationPhase.tsx'
 import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
 import { ConversationPhase } from './ConversationPhase.tsx'
+import { SessionConversationPhase } from './SessionConversationPhase.tsx'
 import { FinalizePhase } from './FinalizePhase.tsx'
 import { StatusBar, SettingsPanel } from '../components/index.ts'
 import { updateConfig } from '../../config/config.ts'
@@ -22,6 +23,14 @@ import { WelcomeScreen } from './WelcomeScreen.tsx'
 import { ConversationChoiceScreen } from './ConversationChoiceScreen.tsx'
 import { QuickCapturePhase } from './QuickCapturePhase.tsx'
 import { ExistingProjectFlow } from '../ExistingProject/index.tsx'
+
+// ============================================================================
+// Feature Flags
+// ============================================================================
+
+// Set to true to use the new session-based conversation system
+// The session system enables CLI testing and separates UI from business logic
+const USE_SESSION_CONVERSATION = false
 
 // ============================================================================
 // Types
@@ -274,6 +283,29 @@ export function NewProjectFlow({
         )
 
       case 'conversation':
+        // Use session-based conversation if feature flag is enabled
+        if (USE_SESSION_CONVERSATION) {
+          return renderWithStatusBar(
+            <SessionConversationPhase
+              config={config}
+              planningLevel={state.planningLevel}
+              projectName={state.projectName}
+              oneLiner={state.oneLiner}
+              debug={debug}
+              sessionKind="new"
+              onInputModeChange={setInputLocked}
+              onAIStatusChange={setAIStatus}
+              onDebugHotkeysChange={notifyDebugHotkeys}
+              onShowSettings={() => setShowSettings(true)}
+              onComplete={(extractedData, conversationLog, selectedProjectName) =>
+                handleConversationComplete(extractedData, conversationLog, selectedProjectName, state.oneLiner, state.planningLevel)
+              }
+              onCancel={handleCancel}
+            />,
+          )
+        }
+
+        // Original ConversationPhase
         return renderWithStatusBar(
           <ConversationPhase
             config={config}

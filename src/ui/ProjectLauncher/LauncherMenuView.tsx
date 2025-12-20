@@ -1,7 +1,7 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import type { LachesisConfig } from '../../config/types.ts'
-import type { AIStatusDescriptor, MCPStatusDescriptor, ActiveChatInfo } from '../components/StatusBar.tsx'
+import type { AIStatusDescriptor, ActiveChatInfo } from '../components/StatusBar.tsx'
 import { Select, StatusBar } from '../components/index.ts'
 import {
   getNewProjectInProgress,
@@ -13,7 +13,6 @@ type LauncherMenuViewProps = {
   hasWIP: boolean
   debug: boolean
   aiStatus: AIStatusDescriptor
-  mcpStatus: MCPStatusDescriptor
   settingsHotkeyEnabled: boolean
   onMenuSelect: (value: string) => void
 }
@@ -23,7 +22,6 @@ export function LauncherMenuView({
   hasWIP,
   debug,
   aiStatus,
-  mcpStatus,
   settingsHotkeyEnabled,
   onMenuSelect,
 }: LauncherMenuViewProps) {
@@ -43,14 +41,13 @@ export function LauncherMenuView({
         />
         <Box marginTop={1}>
           <Text dimColor>
-            Use ↑/↓ to choose, Enter to confirm. [s] settings{debug ? ' [m] test MCP' : ''}. [ESC]/[Q] quit.
+            Use up/down to choose, Enter to confirm. [s] settings. [ESC]/[Q] quit.
           </Text>
         </Box>
       </Box>
       <StatusBar
         config={config}
         aiStatus={aiStatus}
-        mcpStatus={debug ? mcpStatus : undefined}
         showSettingsHint={settingsHotkeyEnabled}
         activeChat={activeChat}
       />
@@ -63,7 +60,7 @@ function buildMenuOptions(hasWIP: boolean) {
 
   if (hasWIP) {
     options.push({
-      label: '⟳ Resume Project (Work in Progress)',
+      label: '> Resume Project (Work in Progress)',
       value: 'resume',
     })
   }

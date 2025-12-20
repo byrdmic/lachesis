@@ -24,7 +24,14 @@
       "Bash(timeout 45 bun run:*)",
       "Bash(docker.exe run:*)",
       "Bash(find:*)",
-      "Bash(bun test:*)"
+      "Bash(bun test:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:www.anthropic.com)",
+      "WebFetch(domain:www.promptfoo.dev)",
+      "WebFetch(domain:docs.claude.com)",
+      "Bash(bun remove:*)",
+      "Bash(claude:*)"
     ],
     "deny": [],
     "ask": []

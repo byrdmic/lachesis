@@ -6,8 +6,8 @@ import type { LachesisConfig } from '../../config/types.ts'
 import { loadProjectSettings, saveProjectSettings } from '../../config/project-settings.ts'
 import { updateConfig } from '../../config/config.ts'
 import { StatusBar, SettingsPanel } from '../components/index.ts'
-import type { AIStatusDescriptor, MCPStatusDescriptor } from '../components/StatusBar.tsx'
-import { buildProjectSnapshotViaMCP } from '../../core/project/snapshot-builder.ts'
+import type { AIStatusDescriptor } from '../components/StatusBar.tsx'
+import { buildProjectSnapshot } from '../../core/project/snapshot-builder.ts'
 import { formatProjectSnapshotForModel } from '../../ai/prompts.ts'
 import {
   getConversationState,
@@ -19,24 +19,7 @@ import {
 import type { ExtractedProjectData, ConversationMessage } from '../../ai/client.ts'
 import { ConversationPhase, type StoredConversationState } from '../NewProject/ConversationPhase.tsx'
 import { debugLog } from '../../debug/logger.ts'
-import {
-  initializeMCPClient,
-  closeMCPClient,
-  isMCPConnected,
-  getMCPToolNames,
-  getMCPTools,
-} from '../../mcp/index.ts'
 import { assertNever } from '../../utils/type-guards.ts'
-
-/**
- * Loading progress steps for project context building
- */
-type LoadingStep = 'connecting_mcp' | 'building_snapshot'
-
-const LOADING_STEP_MESSAGES: Record<LoadingStep, string> = {
-  connecting_mcp: 'Connecting to MCP...',
-  building_snapshot: 'Building project snapshot...',
-}
 
 type ProjectSummary = {
   name: string
@@ -86,14 +69,8 @@ export function ExistingProjectFlow({
   })
   const [inputLocked, setInputLocked] = useState(false)
 
-  // MCP status for status bar
-  const [mcpStatus, setMCPStatus] = useState<MCPStatusDescriptor>({
-    state: 'idle',
-  })
-
   // Context loading state
   const [serializedContext, setSerializedContext] = useState<string | null>(null)
-  const [loadingStep, setLoadingStep] = useState<LoadingStep>('connecting_mcp')
 
   const notifyDebugHotkeys = useCallback(
     (enabled: boolean) => onDebugHotkeysChange?.(enabled),
@@ -204,38 +181,15 @@ export function ExistingProjectFlow({
 
     async function loadContext() {
       try {
-        debugLog.info('Starting project snapshot build (MCP)', {
+        debugLog.info('Starting project snapshot build', {
           projectName: project.name,
           projectPath: project.path,
         })
 
-        if (!projectConfig.mcp?.enabled) {
-          throw new Error('MCP is required for existing projects. Enable MCP in settings.')
-        }
-
-        // Step 1: Connect MCP
-        setLoadingStep('connecting_mcp')
-        setAIStatus({ state: 'processing', message: 'Connecting to MCP...' })
-        const mcpState = await initializeMCPClient(projectConfig.mcp!)
-        if (cancelled) return
-        if (!mcpState.connected) {
-          throw new Error(mcpState.error || 'Failed to connect to MCP')
-        }
-        // Update MCP status so ConversationPhase knows it's connected
-        setMCPStatus({
-          state: 'connected',
-          toolCount: mcpState.toolNames.length,
-        })
-
-        // Step 2: Build snapshot via MCP
-        setLoadingStep('building_snapshot')
         setAIStatus({ state: 'processing', message: 'Building project snapshot...' })
 
-        const tools = getMCPTools()
-        // Use the configured project path (normalized) for MCP calls
-        const mcpProjectPath = project.path.replace(/\\/g, '/')
-        const snapshot = await buildProjectSnapshotViaMCP(mcpProjectPath, projectConfig.vaultPath, tools)
-        debugLog.info('snapshot', {...snapshot})
+        const snapshot = await buildProjectSnapshot(project.path)
+        debugLog.info('snapshot', { ...snapshot })
         if (cancelled) return
 
         const serialized = formatProjectSnapshotForModel(snapshot)
@@ -275,66 +229,6 @@ export function ExistingProjectFlow({
       })
     }
   }, [view, loadedProject?.name, loadedProject?.path])
-
-  // Effect to initialize MCP client when entering conversation view
-  useEffect(() => {
-    if (view !== 'conversation' || !loadedProject || !projectConfig.mcp?.enabled) {
-      // MCP not needed or not enabled
-      setMCPStatus({ state: 'idle' })
-      return
-    }
-
-    let cancelled = false
-
-    async function connectMCP() {
-      setMCPStatus({ state: 'connecting' })
-      debugLog.info('MCP: Initiating connection for project', {
-        projectName: loadedProject!.name,
-        host: projectConfig.mcp?.obsidian.host,
-        port: projectConfig.mcp?.obsidian.port,
-      })
-
-      try {
-        const result = await initializeMCPClient(projectConfig.mcp!)
-
-        if (cancelled) return
-
-        if (result.connected) {
-          setMCPStatus({
-            state: 'connected',
-            toolCount: result.toolNames.length,
-          })
-          debugLog.info('MCP: Connected successfully', {
-            toolCount: result.toolNames.length,
-            tools: result.toolNames,
-          })
-        } else {
-          setMCPStatus({
-            state: 'error',
-            error: result.error,
-          })
-          debugLog.warn('MCP: Connection failed', { error: result.error })
-        }
-      } catch (err) {
-        if (cancelled) return
-        const message = err instanceof Error ? err.message : String(err)
-        setMCPStatus({ state: 'error', error: message })
-        debugLog.error('MCP: Exception during connection', { error: message })
-      }
-    }
-
-    connectMCP()
-
-    return () => {
-      cancelled = true
-      // Close MCP client on cleanup
-      closeMCPClient().catch((err) => {
-        debugLog.warn('MCP: Error closing client on cleanup', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-      })
-    }
-  }, [view, loadedProject?.path, projectConfig.mcp?.enabled])
 
   // Handle conversation completion
   const handleConversationComplete = useCallback(
@@ -477,7 +371,6 @@ export function ExistingProjectFlow({
       <StatusBar
         config={statusConfig}
         aiStatus={aiStatus}
-        mcpStatus={mcpStatus}
         showSettingsHint={false}
         projectName={statusBarProjectName}
       />
@@ -560,8 +453,6 @@ export function ExistingProjectFlow({
 
       case 'loading_context': {
         if (!loadedProject) return null
-        const steps: LoadingStep[] = ['connecting_mcp', 'building_snapshot']
-        const currentStepIndex = steps.indexOf(loadingStep)
 
         return (
           <Box padding={1} flexDirection="column">
@@ -571,28 +462,11 @@ export function ExistingProjectFlow({
             <Text>{'\n'}</Text>
 
             <Box flexDirection="column" marginLeft={1}>
-              {steps.map((step, idx) => {
-                const isComplete = idx < currentStepIndex
-                const isCurrent = idx === currentStepIndex
-
-                let icon = '○'
-                let color: string | undefined = 'gray'
-                if (isComplete) {
-                  icon = '✓'
-                  color = 'green'
-                } else if (isCurrent) {
-                  icon = '●'
-                  color = 'cyan'
-                }
-
-                return (
-                  <Box key={step}>
-                    <Text color={color}>
-                      {icon} {LOADING_STEP_MESSAGES[step]}
-                    </Text>
-                  </Box>
-                )
-              })}
+              <Box>
+                <Text color="cyan">
+                  {'●'} Building project snapshot...
+                </Text>
+              </Box>
             </Box>
 
             <Text>{'\n'}</Text>
@@ -604,7 +478,6 @@ export function ExistingProjectFlow({
       case 'conversation': {
         if (!loadedProject || !serializedContext) return null
         const storedState = getConversationState(loadedProject.path)
-        const mcpEnabled = mcpStatus.state === 'connected'
 
         return (
           <ConversationPhase
@@ -616,7 +489,7 @@ export function ExistingProjectFlow({
             sessionKind="existing"
             projectContext={serializedContext}
             initialState={storedState ?? undefined}
-            mcpEnabled={mcpEnabled}
+            agenticEnabled={true}
             projectPath={loadedProject.path}
             onInputModeChange={setInputLocked}
             onAIStatusChange={setAIStatus}
@@ -657,7 +530,7 @@ export function ExistingProjectFlow({
           <Box padding={1} flexDirection="column" flexGrow={1}>
             <Text bold>Select an existing project</Text>
             <Text dimColor>
-              Use ↑/↓ to navigate, Enter to load, [B] back, [Q] quit.
+              Use up/down to navigate, Enter to load, [B] back, [Q] quit.
             </Text>
             <Text dimColor>
               Vault: {config.vaultPath || 'Not set - update in settings'}
@@ -666,7 +539,7 @@ export function ExistingProjectFlow({
 
             {formattedProjects.map((project, idx) => {
               const isSelected = idx === selectedIndex
-              const prefix = isSelected ? '❯ ' : '  '
+              const prefix = isSelected ? '> ' : '  '
               const paddedName = project.name.padEnd(nameWidth)
               const paddedUpdated =
                 updatedWidth > 0 ? project.updatedLabel.padEnd(updatedWidth) : ''
@@ -709,4 +582,3 @@ function buildOverviewPreview(content: string): string {
   const lines = content.split(/\r?\n/).filter((line) => line.trim() !== '')
   return lines.slice(0, 5).join('\n')
 }
-

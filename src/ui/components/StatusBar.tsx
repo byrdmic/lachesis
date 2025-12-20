@@ -1,7 +1,8 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import Spinner from 'ink-spinner'
-import type { LachesisConfig, AIProvider } from '../../config/types.ts'
+import type { LachesisConfig } from '../../config/types.ts'
+import { getProviderDisplayName } from '../../config/types.ts'
 
 export type AIStatusState =
   | 'idle'
@@ -77,19 +78,6 @@ const STATUS_STYLES: Record<
 
 const DEFAULT_STATUS: AIStatusDescriptor = { state: 'idle', message: 'Ready' }
 
-function formatProviderLabel(provider: AIProvider): string {
-  switch (provider) {
-    case 'openai':
-      return 'OpenAI'
-    case 'anthropic':
-      return 'Anthropic'
-    case 'vertex':
-      return 'Vertex AI'
-    default:
-      return 'Custom'
-  }
-}
-
 export function StatusBar({
   config,
   aiStatus = DEFAULT_STATUS,
@@ -101,7 +89,7 @@ export function StatusBar({
 }: StatusBarProps) {
   const status = STATUS_STYLES[aiStatus.state] ?? STATUS_STYLES.idle
   const message = aiStatus.message || status.defaultMessage
-  const providerLabel = formatProviderLabel(config.defaultProvider)
+  const providerLabel = getProviderDisplayName(config.defaultProvider)
   const modelLabel = config.defaultModel || 'Not set'
   const showSpinner = Boolean(status.spin)
 
@@ -217,7 +205,7 @@ type AIStatusProps = {
 export function AIStatus({ config, aiStatus = DEFAULT_STATUS }: AIStatusProps) {
   const status = STATUS_STYLES[aiStatus.state] ?? STATUS_STYLES.idle
   const message = aiStatus.message || status.defaultMessage
-  const providerLabel = formatProviderLabel(config.defaultProvider)
+  const providerLabel = getProviderDisplayName(config.defaultProvider)
 
   return (
     <Box>

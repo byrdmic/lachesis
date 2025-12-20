@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { Select } from './Select.tsx'
 import { TextInput } from './TextInput.tsx'
-import type { LachesisConfig, AIProvider, MCPWriteMode, MCPTransportMode } from '../../config/types.ts'
-import { DEFAULT_MCP_CONFIG } from '../../config/types.ts'
+import type { LachesisConfig, AIProvider } from '../../config/types.ts'
+import {
+  getModelsForProvider,
+  getProviderDisplayName,
+  getDefaultApiKeyEnvVar,
+} from '../../config/types.ts'
 
 type ProjectSettingsSummary = {
   projectName?: string
@@ -29,13 +33,6 @@ type SettingsView =
   | 'model'
   | 'apikey'
   | 'vault'
-  | 'mcp'
-  | 'mcp-transport'
-  | 'mcp-docker-image'
-  | 'mcp-host'
-  | 'mcp-port'
-  | 'mcp-apikey'
-  | 'mcp-writemode'
   | 'project-provider'
   | 'project-model'
   | 'project-apikey'
@@ -59,15 +56,6 @@ export function SettingsPanel({
   const [tempProjectApiKeyVar, setTempProjectApiKeyVar] = useState(
     projectSettings?.overrides?.apiKeyEnvVar ?? '',
   )
-
-  // MCP temp values - ensure obsidian config is always defined
-  const mcpConfig = config.mcp ?? DEFAULT_MCP_CONFIG
-  const obsidianConfig = mcpConfig.obsidian ?? DEFAULT_MCP_CONFIG.obsidian
-  const dockerConfig = mcpConfig.docker ?? DEFAULT_MCP_CONFIG.docker
-  const [tempMCPHost, setTempMCPHost] = useState(obsidianConfig.host)
-  const [tempMCPPort, setTempMCPPort] = useState(String(obsidianConfig.port))
-  const [tempMCPApiKeyVar, setTempMCPApiKeyVar] = useState(obsidianConfig.apiKeyEnvVar)
-  const [tempDockerImage, setTempDockerImage] = useState(dockerConfig?.imageName ?? 'mcp/obsidian')
 
   const projectOverrides = projectSettings?.overrides ?? {}
   const hasProjectContext = Boolean(projectSettings?.projectPath)
@@ -114,10 +102,9 @@ export function SettingsPanel({
         <Select
           label="Select AI provider for this project:"
           options={[
-            { label: 'OpenAI', value: 'openai' },
-            { label: 'Anthropic', value: 'anthropic' },
-            { label: 'Vertex AI', value: 'vertex' },
-            { label: 'Other', value: 'other' },
+            { label: 'Anthropic SDK (Claude via API)', value: 'anthropic-sdk' },
+            { label: 'Claude Code (MAX subscription)', value: 'claude-code' },
+            { label: 'OpenAI (Vercel AI SDK)', value: 'openai' },
             { label: 'Use global default', value: '__clear__' },
           ]}
           onSelect={(value) => {
@@ -136,7 +123,7 @@ export function SettingsPanel({
         />
         <Box marginTop={1}>
           <Text dimColor>
-            Global default: {config.defaultProvider}
+            Global default: {getProviderDisplayName(config.defaultProvider)}
           </Text>
         </Box>
       </SettingsContainer>
@@ -145,23 +132,25 @@ export function SettingsPanel({
 
   // Project model input view
   if (view === 'project-model') {
+    // Use project provider if set, otherwise global provider
+    const effectiveProvider = projectOverrides.defaultProvider ?? config.defaultProvider
+    const availableModels = getModelsForProvider(effectiveProvider)
+    const modelOptions: Array<{ label: string; value: string }> = availableModels.map((m) => ({ label: m, value: m }))
+    modelOptions.push({ label: 'Use global default', value: '__clear__' })
+
     return (
       <SettingsContainer title="Project Model" onBack={() => setView('main')}>
-        <TextInput
-          label="Enter model name for this project:"
-          value={tempProjectModel}
-          onChange={setTempProjectModel}
-          placeholder={config.defaultModel}
-          onSubmit={(value) => {
+        <Select
+          label={`Select ${getProviderDisplayName(effectiveProvider)} model for this project:`}
+          options={modelOptions}
+          onSelect={(value) => {
             if (onSaveProject) {
-              const trimmed = value.trim()
-              if (trimmed) {
-                onSaveProject({ ...projectOverrides, defaultModel: trimmed })
-              } else {
-                // Clear the override
+              if (value === '__clear__') {
                 const newOverrides = { ...projectOverrides }
                 delete newOverrides.defaultModel
                 onSaveProject(newOverrides)
+              } else {
+                onSaveProject({ ...projectOverrides, defaultModel: value })
               }
             }
             setView('main')
@@ -169,7 +158,7 @@ export function SettingsPanel({
         />
         <Box marginTop={1}>
           <Text dimColor>
-            Leave empty to use global default: {config.defaultModel}
+            Global default: {config.defaultModel}
           </Text>
         </Box>
       </SettingsContainer>
@@ -178,33 +167,48 @@ export function SettingsPanel({
 
   // Project API key env var input view
   if (view === 'project-apikey') {
+    const effectiveProvider = projectOverrides.defaultProvider ?? config.defaultProvider
+    const defaultEnvVar = getDefaultApiKeyEnvVar(effectiveProvider)
+    const needsApiKey = effectiveProvider !== 'claude-code'
+
     return (
       <SettingsContainer title="Project API Key Env Var" onBack={() => setView('main')}>
-        <TextInput
-          label="Enter env variable name for this project:"
-          value={tempProjectApiKeyVar}
-          onChange={setTempProjectApiKeyVar}
-          placeholder={config.apiKeyEnvVar}
-          onSubmit={(value) => {
-            if (onSaveProject) {
-              const trimmed = value.trim()
-              if (trimmed) {
-                onSaveProject({ ...projectOverrides, apiKeyEnvVar: trimmed })
-              } else {
-                // Clear the override
-                const newOverrides = { ...projectOverrides }
-                delete newOverrides.apiKeyEnvVar
-                onSaveProject(newOverrides)
-              }
-            }
-            setView('main')
-          }}
-        />
-        <Box marginTop={1}>
-          <Text dimColor>
-            Leave empty to use global default: {config.apiKeyEnvVar}
-          </Text>
-        </Box>
+        {needsApiKey ? (
+          <>
+            <TextInput
+              label="Enter env variable name for this project:"
+              value={tempProjectApiKeyVar}
+              onChange={setTempProjectApiKeyVar}
+              placeholder={config.apiKeyEnvVar}
+              onSubmit={(value) => {
+                if (onSaveProject) {
+                  const trimmed = value.trim()
+                  if (trimmed) {
+                    onSaveProject({ ...projectOverrides, apiKeyEnvVar: trimmed })
+                  } else {
+                    // Clear the override
+                    const newOverrides = { ...projectOverrides }
+                    delete newOverrides.apiKeyEnvVar
+                    onSaveProject(newOverrides)
+                  }
+                }
+                setView('main')
+              }}
+            />
+            <Box marginTop={1}>
+              <Text dimColor>
+                Default for {getProviderDisplayName(effectiveProvider)}: {defaultEnvVar}
+              </Text>
+            </Box>
+          </>
+        ) : (
+          <Box flexDirection="column">
+            <Text color="green">Claude Code uses your MAX subscription - no API key needed!</Text>
+            <Box marginTop={1}>
+              <Text dimColor>Press Esc to go back</Text>
+            </Box>
+          </Box>
+        )}
       </SettingsContainer>
     )
   }
@@ -216,36 +220,36 @@ export function SettingsPanel({
         <Select
           label="Select AI provider:"
           options={[
-            { label: 'OpenAI', value: 'openai' },
-            { label: 'Anthropic', value: 'anthropic' },
-            { label: 'Vertex AI', value: 'vertex' },
-            { label: 'Other', value: 'other' },
+            { label: 'Anthropic SDK (Claude via API)', value: 'anthropic-sdk' },
+            { label: 'Claude Code (MAX subscription)', value: 'claude-code' },
+            { label: 'OpenAI (Vercel AI SDK)', value: 'openai' },
           ]}
           onSelect={(value) => {
             onSave({ defaultProvider: value as AIProvider })
             setView('main')
           }}
         />
-        <Box marginTop={1}>
-          <Text dimColor>Applies to all projects (global config).</Text>
+        <Box marginTop={1} flexDirection="column">
+          <Text dimColor>Anthropic SDK: Requires ANTHROPIC_API_KEY env variable</Text>
+          <Text dimColor>Claude Code: Uses MAX subscription via CLI (no API key)</Text>
+          <Text dimColor>OpenAI: Requires OPENAI_API_KEY env variable</Text>
         </Box>
       </SettingsContainer>
     )
   }
 
-  // Global model input view
+  // Global model selection view
   if (view === 'model') {
+    const availableModels = getModelsForProvider(config.defaultProvider)
+    const modelOptions = availableModels.map((m) => ({ label: m, value: m }))
+
     return (
       <SettingsContainer title="Global Model" onBack={() => setView('main')}>
-        <TextInput
-          label="Enter model name (e.g., gpt-4, claude-3-opus):"
-          value={tempModel}
-          onChange={setTempModel}
-          placeholder={config.defaultModel}
-          onSubmit={(value) => {
-            if (value.trim()) {
-              onSave({ defaultModel: value.trim() })
-            }
+        <Select
+          label={`Select ${getProviderDisplayName(config.defaultProvider)} model:`}
+          options={modelOptions}
+          onSelect={(value) => {
+            onSave({ defaultModel: value })
             setView('main')
           }}
         />
@@ -258,26 +262,40 @@ export function SettingsPanel({
 
   // Global API key env var input view
   if (view === 'apikey') {
+    const needsApiKey = config.defaultProvider !== 'claude-code'
+    const defaultEnvVar = getDefaultApiKeyEnvVar(config.defaultProvider)
+
     return (
       <SettingsContainer
         title="Global API Key Environment Variable"
         onBack={() => setView('main')}
       >
-        <TextInput
-          label="Enter env variable name for API key:"
-          value={tempApiKeyVar}
-          onChange={setTempApiKeyVar}
-          placeholder={config.apiKeyEnvVar}
-          onSubmit={(value) => {
-            if (value.trim()) {
-              onSave({ apiKeyEnvVar: value.trim() })
-            }
-            setView('main')
-          }}
-        />
-        <Box marginTop={1}>
-          <Text dimColor>Applies to all projects (global config).</Text>
-        </Box>
+        {needsApiKey ? (
+          <>
+            <TextInput
+              label="Enter env variable name for API key:"
+              value={tempApiKeyVar}
+              onChange={setTempApiKeyVar}
+              placeholder={config.apiKeyEnvVar}
+              onSubmit={(value) => {
+                if (value.trim()) {
+                  onSave({ apiKeyEnvVar: value.trim() })
+                }
+                setView('main')
+              }}
+            />
+            <Box marginTop={1}>
+              <Text dimColor>Default for {getProviderDisplayName(config.defaultProvider)}: {defaultEnvVar}</Text>
+            </Box>
+          </>
+        ) : (
+          <Box flexDirection="column">
+            <Text color="green">Claude Code uses your MAX subscription - no API key needed!</Text>
+            <Box marginTop={1}>
+              <Text dimColor>Press Esc to go back</Text>
+            </Box>
+          </Box>
+        )}
       </SettingsContainer>
     )
   }
@@ -308,343 +326,13 @@ export function SettingsPanel({
     )
   }
 
-  // MCP settings menu
-  if (view === 'mcp') {
-    const transportMode = mcpConfig.transportMode ?? 'uvx'
-    const transportLabels: Record<string, string> = {
-      uvx: 'uvx (Python)',
-      docker: 'Docker',
-      gateway: 'MCP Gateway (SSE)',
-    }
-    const transportLabel = transportLabels[transportMode] ?? transportMode
-
-    // Build options dynamically based on transport mode
-    const mcpOptions = [
-      {
-        label: `Enabled: ${mcpConfig.enabled ? 'Yes' : 'No'}`,
-        value: 'toggle-enabled',
-      },
-      {
-        label: `Transport: ${transportLabel}`,
-        value: 'mcp-transport',
-      },
-    ]
-
-    // Show Docker image option only when using docker transport
-    if (transportMode === 'docker') {
-      mcpOptions.push({
-        label: `Docker Image: ${dockerConfig?.imageName ?? 'mcp/obsidian'}`,
-        value: 'mcp-docker-image',
-      })
-    }
-
-    // Host/Port/API key only relevant for non-gateway modes (gateway uses docker mcp gateway run)
-    if (transportMode !== 'gateway') {
-      mcpOptions.push(
-        {
-          label: `Host: ${obsidianConfig.host}`,
-          value: 'mcp-host',
-        },
-        {
-          label: `Port: ${obsidianConfig.port}`,
-          value: 'mcp-port',
-        },
-        {
-          label: `API Key Env: ${obsidianConfig.apiKeyEnvVar}`,
-          value: 'mcp-apikey',
-        },
-      )
-    }
-
-    mcpOptions.push(
-      {
-        label: `Write Mode: ${mcpConfig.writeMode}`,
-        value: 'mcp-writemode',
-      },
-      { label: 'Back', value: 'back' },
-    )
-
-    return (
-      <SettingsContainer title="MCP Settings" onBack={() => setView('main')}>
-        <Select
-          label="Configure MCP (Model Context Protocol):"
-          options={mcpOptions}
-          onSelect={(value) => {
-            if (value === 'toggle-enabled') {
-              onSave({
-                mcp: {
-                  ...mcpConfig,
-                  enabled: !mcpConfig.enabled,
-                },
-              })
-            } else if (value === 'back') {
-              setView('main')
-            } else {
-              setView(value as SettingsView)
-            }
-          }}
-        />
-        <Box marginTop={1}>
-          <Text dimColor>
-            MCP connects to Obsidian's REST API plugin for vault access.
-          </Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text dimColor>
-            {transportMode === 'gateway'
-              ? 'Using Docker MCP Gateway (docker mcp gateway run).'
-              : transportMode === 'docker'
-                ? 'Using Docker container for mcp-obsidian server.'
-                : 'Using uvx to run mcp-obsidian (requires Python/uv).'}
-          </Text>
-        </Box>
-      </SettingsContainer>
-    )
-  }
-
-  // MCP transport mode selection view
-  if (view === 'mcp-transport') {
-    return (
-      <SettingsContainer title="MCP Transport" onBack={() => setView('mcp')}>
-        <Select
-          label="Select how to run the MCP server:"
-          options={[
-            {
-              label: 'Docker MCP Gateway - Uses Docker Desktop MCP Toolkit',
-              value: 'gateway',
-            },
-            {
-              label: 'uvx (Python) - Spawns mcp-obsidian via uvx',
-              value: 'uvx',
-            },
-            {
-              label: 'Docker - Runs mcp-obsidian in a Docker container',
-              value: 'docker',
-            },
-          ]}
-          onSelect={(value) => {
-            onSave({
-              mcp: {
-                ...mcpConfig,
-                transportMode: value as MCPTransportMode,
-              },
-            })
-            setView('mcp')
-          }}
-        />
-        <Box marginTop={1}>
-          <Text dimColor>
-            Gateway: Uses `docker mcp gateway run` (requires Docker Desktop).
-          </Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text dimColor>
-            uvx: Requires Python and uv installed locally.
-          </Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text dimColor>
-            Docker: Spawns a container directly (requires docker command).
-          </Text>
-        </Box>
-      </SettingsContainer>
-    )
-  }
-
-  // MCP Docker image input view
-  if (view === 'mcp-docker-image') {
-    return (
-      <SettingsContainer title="Docker Image" onBack={() => setView('mcp')}>
-        <TextInput
-          label="Enter Docker image name for mcp-obsidian:"
-          value={tempDockerImage}
-          onChange={setTempDockerImage}
-          placeholder={dockerConfig?.imageName ?? 'mcp/obsidian'}
-          onSubmit={(value) => {
-            const trimmed = value.trim()
-            if (trimmed) {
-              onSave({
-                mcp: {
-                  ...mcpConfig,
-                  docker: {
-                    ...dockerConfig,
-                    imageName: trimmed,
-                  },
-                },
-              })
-            }
-            setView('mcp')
-          }}
-        />
-        <Box marginTop={1}>
-          <Text dimColor>
-            The Docker image containing the mcp-obsidian server.
-          </Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text dimColor>
-            Example: mcp/obsidian, ghcr.io/org/mcp-obsidian
-          </Text>
-        </Box>
-      </SettingsContainer>
-    )
-  }
-
-  // MCP host input view
-  if (view === 'mcp-host') {
-    return (
-      <SettingsContainer title="MCP Host" onBack={() => setView('mcp')}>
-        <TextInput
-          label="Enter Obsidian REST API host:"
-          value={tempMCPHost}
-          onChange={setTempMCPHost}
-          placeholder={obsidianConfig.host}
-          onSubmit={(value) => {
-            const trimmed = value.trim()
-            if (trimmed) {
-              onSave({
-                mcp: {
-                  ...mcpConfig,
-                  obsidian: {
-                    ...obsidianConfig,
-                    host: trimmed,
-                  },
-                },
-              })
-            }
-            setView('mcp')
-          }}
-        />
-        <Box marginTop={1}>
-          <Text dimColor>
-            From WSL, use your Windows host IP (check /etc/resolv.conf).
-          </Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text dimColor>
-            Common values: 127.0.0.1 (local), host.docker.internal (Docker)
-          </Text>
-        </Box>
-      </SettingsContainer>
-    )
-  }
-
-  // MCP port input view
-  if (view === 'mcp-port') {
-    return (
-      <SettingsContainer title="MCP Port" onBack={() => setView('mcp')}>
-        <TextInput
-          label="Enter Obsidian REST API port:"
-          value={tempMCPPort}
-          onChange={setTempMCPPort}
-          placeholder={String(obsidianConfig.port)}
-          onSubmit={(value) => {
-            const trimmed = value.trim()
-            const port = parseInt(trimmed, 10)
-            if (!isNaN(port) && port > 0 && port < 65536) {
-              onSave({
-                mcp: {
-                  ...mcpConfig,
-                  obsidian: {
-                    ...obsidianConfig,
-                    port,
-                  },
-                },
-              })
-            }
-            setView('mcp')
-          }}
-        />
-        <Box marginTop={1}>
-          <Text dimColor>
-            Default is 27124 (Obsidian Local REST API default).
-          </Text>
-        </Box>
-      </SettingsContainer>
-    )
-  }
-
-  // MCP API key env var input view
-  if (view === 'mcp-apikey') {
-    return (
-      <SettingsContainer title="MCP API Key Env Var" onBack={() => setView('mcp')}>
-        <TextInput
-          label="Enter env variable name for Obsidian API key:"
-          value={tempMCPApiKeyVar}
-          onChange={setTempMCPApiKeyVar}
-          placeholder={obsidianConfig.apiKeyEnvVar}
-          onSubmit={(value) => {
-            const trimmed = value.trim()
-            if (trimmed) {
-              onSave({
-                mcp: {
-                  ...mcpConfig,
-                  obsidian: {
-                    ...obsidianConfig,
-                    apiKeyEnvVar: trimmed,
-                  },
-                },
-              })
-            }
-            setView('mcp')
-          }}
-        />
-        <Box marginTop={1}>
-          <Text dimColor>
-            The API key value should be set in this environment variable.
-          </Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text dimColor>
-            Get the key from Obsidian Local REST API plugin settings.
-          </Text>
-        </Box>
-      </SettingsContainer>
-    )
-  }
-
-  // MCP write mode selection view
-  if (view === 'mcp-writemode') {
-    return (
-      <SettingsContainer title="MCP Write Mode" onBack={() => setView('mcp')}>
-        <Select
-          label="Select write safety mode:"
-          options={[
-            {
-              label: 'Auto - Write directly without confirmation',
-              value: 'auto',
-            },
-            {
-              label: 'Confirm - Show preview before writing',
-              value: 'confirm',
-            },
-            {
-              label: 'Disabled - Read-only access',
-              value: 'disabled',
-            },
-          ]}
-          onSelect={(value) => {
-            onSave({
-              mcp: {
-                ...mcpConfig,
-                writeMode: value as MCPWriteMode,
-              },
-            })
-            setView('mcp')
-          }}
-        />
-        <Box marginTop={1}>
-          <Text dimColor>
-            Controls how the AI handles vault file modifications.
-          </Text>
-        </Box>
-      </SettingsContainer>
-    )
-  }
-
   // Main settings view - show EITHER Project Settings OR Global Settings
   if (hasProjectContext) {
     // Project Settings only
+    const projectProviderDisplay = projectOverrides.defaultProvider
+      ? getProviderDisplayName(projectOverrides.defaultProvider)
+      : `(${getProviderDisplayName(config.defaultProvider)})`
+
     return (
       <SettingsContainer
         title={`Project Settings: ${projectSettings?.projectName || 'Project'}`}
@@ -654,7 +342,7 @@ export function SettingsPanel({
           label="Choose a setting to modify:"
           options={[
             {
-              label: `AI Provider: ${projectOverrides.defaultProvider || `(${config.defaultProvider})`}`,
+              label: `AI Provider: ${projectProviderDisplay}`,
               value: 'project-provider',
             },
             {
@@ -701,7 +389,7 @@ export function SettingsPanel({
         label="Choose a setting to modify:"
         options={[
           {
-            label: `AI Provider: ${config.defaultProvider}`,
+            label: `AI Provider: ${getProviderDisplayName(config.defaultProvider)}`,
             value: 'provider',
           },
           { label: `Model: ${config.defaultModel}`, value: 'model' },
@@ -709,10 +397,6 @@ export function SettingsPanel({
           {
             label: `Vault Path: ${config.vaultPath || 'Not set'}`,
             value: 'vault',
-          },
-          {
-            label: `MCP: ${mcpConfig.enabled ? 'Enabled' : 'Disabled'}`,
-            value: 'mcp',
           },
           { label: 'Close settings', value: 'close' },
         ]}
@@ -760,4 +444,3 @@ function SettingsContainer({ title, onBack, children }: SettingsContainerProps) 
     </Box>
   )
 }
-
