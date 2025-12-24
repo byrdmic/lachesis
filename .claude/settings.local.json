@@ -31,7 +31,8 @@
       "WebFetch(domain:www.promptfoo.dev)",
       "WebFetch(domain:docs.claude.com)",
       "Bash(bun remove:*)",
-      "Bash(claude:*)"
+      "Bash(claude:*)",
+      "Bash(node esbuild.config.mjs:*)"
     ],
     "deny": [],
     "ask": []

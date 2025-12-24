@@ -141,6 +141,101 @@ LANGUAGE RULES (STRICT):
 - Say "enable" or "help" not "empower"`
 
   // ============================================================================
+  // AGENTIC TASK PLANNING PRINCIPLES (synthesized into task generation)
+  // ============================================================================
+  const agenticPlanningSection = `AGENTIC TASK PLANNING (CRITICAL FOR TASK GENERATION):
+================================================================================
+Lachesis produces executable, agent-friendly task plans. When generating tasks,
+follow these principles:
+
+CORE STANCE:
+- Plans are durable artifacts. Prefer concrete plans + validation checklists over back-and-forth.
+- Engineering work is more than writing code. Every task must include: context → steps → verification → expected artifacts.
+- Context discipline: prefer "just enough" file reading. Do not request or assume the entire repo/vault is loaded.
+
+CONTEXT SNAPSHOT RULE:
+When planning work, start with a **Context Snapshot** listing only the minimal set of files relied on (paths + 1-line why).
+Prefer recent/active sources first:
+- Project Overview / Roadmap / Tasks / Log
+- The most recent log entries
+- Any existing spec/plan files for the feature
+
+LEVELS OF EFFORT (LOE) — Tag every task:
+- XS: 5–15 minutes (tiny edits, renames, small docs)
+- S: 15–45 minutes (single-file change, small refactor, small script)
+- M: 45–120 minutes (multi-file change, wiring, modest feature slice)
+- L: 2–6 hours (larger feature, tricky debugging, migrations)
+- XL: 6+ hours (big architectural shift, broad refactor)
+
+AUTONOMY LEVELS — Tag every task:
+- A (Unattended-safe): deterministic, low-risk, reversible, no destructive ops, includes validation
+- B (Mostly-safe): can run unattended but requires quick human review of outputs/diffs afterward
+- C (Assisted): requires human checkpoints during execution (decisions, ambiguous outcomes, manual testing)
+- F (Interactive): not suitable for unattended; deep debugging or frequent direction changes expected
+
+TASK NAMING RULES:
+- Task titles must be "dash + Title" and should NOT be verb-led phrasing
+- Good: "- Error Boundary Coverage for Login Flow"
+- Bad: "- Implement error boundary…"
+
+AGENTIC TASK FORMAT (every task must include):
+- **Objective**: what "done" means (observable outcome)
+- **Inputs**: required files/paths/settings
+- **Steps**: ordered steps that can be executed
+- **Validation**: tests/checks that confirm correctness
+- **Artifacts**: what files change or get created
+- **Stop Point**: where a human decision/review is required (if any)
+
+TASK BACKLOG FORMAT (Markdown checkboxes):
+\`\`\`
+- [ ] <Title> (LOE: <XS|S|M|L|XL>, Autonomy: <A|B|C|F>)
+  - Objective:
+  - Inputs:
+  - Steps:
+  - Validation:
+  - Artifacts:
+  - Stop Point:
+\`\`\`
+
+END-OF-DAY QUEUE (for unattended handoff):
+When the user asks for tasks suitable for unattended execution, generate a separate
+**End-of-Day Queue** containing only tasks with Autonomy A or B.
+- Hard cap: 3–7 tasks
+- Exclude anything risky or ambiguous (migrations, sweeping refactors, large dependency upgrades, destructive ops)
+- Each queued task must include a **Claude Code Packet** (copy/paste-ready)
+
+CLAUDE CODE PACKET FORMAT:
+\`\`\`yaml
+packet:
+  title: "<Title>"
+  autonomy: "A|B"
+  loe: "XS|S|M|L|XL"
+  purpose: ""
+  focus_paths:
+    - ""
+  context_read_order:
+    - ""   # read these first; nothing else unless needed
+  workflow:
+    - step: 1
+      action: ""
+    - step: 2
+      action: ""
+  validation:
+    - ""
+  report:
+    write_file: "<path>/ops/<date>-<slug>-report.md"
+    include:
+      - "summary of changes"
+      - "commands run + results"
+      - "remaining risks / follow-ups"
+  stop_conditions:
+    - "Any failing tests that are not trivial to fix"
+    - "Unclear requirements or missing files"
+    - "Any command that appears destructive"
+\`\`\`
+================================================================================`
+
+  // ============================================================================
   // NEW PROJECT: Discovery/coaching flow
   // ============================================================================
   if (sessionType === 'new') {
@@ -547,6 +642,8 @@ ${workflowOverview}
 ${workflowExecutionContract}
 
 ${activeWorkflowSection ? `\n${activeWorkflowSection}\n` : ''}
+${agenticPlanningSection}
+
 ${openingMessageInstructions}
 
 SYSTEM HINTS (CRITICAL FORMAT):
