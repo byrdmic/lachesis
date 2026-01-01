@@ -62,7 +62,7 @@ export function getDefaultModel(type: ProviderType): string {
     case 'anthropic':
       return 'claude-sonnet-4-20250514'
     case 'openai':
-      return 'gpt-4o'
+      return 'gpt-5.2'
     default:
       return ''
   }
@@ -81,9 +81,10 @@ export function getModelsForProvider(type: ProviderType): Array<{ value: string;
       ]
     case 'openai':
       return [
-        { value: 'gpt-4o', label: 'GPT-4o (Recommended)' },
-        { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Faster, cheaper)' },
-        { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+        { value: 'gpt-5.2', label: 'GPT-5.2 (Recommended)' },
+        { value: 'gpt-5.2-thinking', label: 'GPT-5.2 Thinking (Deep reasoning)' },
+        { value: 'gpt-5.1-codex-max', label: 'GPT-5.1 Codex Max (Coding)' },
+        { value: 'gpt-5.1', label: 'GPT-5.1 (Balanced)' },
       ]
     default:
       return []

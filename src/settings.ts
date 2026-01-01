@@ -35,7 +35,7 @@ export const DEFAULT_SETTINGS: LachesisSettings = {
   anthropicApiKey: '',
   anthropicModel: 'claude-sonnet-4-20250514',
   openaiApiKey: '',
-  openaiModel: 'gpt-4o',
+  openaiModel: 'gpt-5.2',
   projectsFolder: 'Projects',
 }
 
