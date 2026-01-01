@@ -13,6 +13,8 @@ lachesis/
 │   ├── core/        # Core logic (sessions, projects, workflows)
 │   ├── scaffolder/  # File scaffolding
 │   └── ui/          # Obsidian modals
+├── dist/            # Build output (gitignored)
+│   └── main.js      # Bundled plugin
 ├── manifest.json    # Plugin manifest
 ├── styles.css       # Plugin styles
 └── package.json     # Dependencies
@@ -83,11 +85,11 @@ Six workflows for existing project management:
 After making changes:
 1. Run `npm run typecheck`
 2. Run `npm run build` to verify the build
-3. Copy `main.js`, `manifest.json`, and `styles.css` to an Obsidian vault's `.obsidian/plugins/lachesis/` folder to test
+3. Copy `dist/main.js`, `manifest.json`, and `styles.css` to an Obsidian vault's `.obsidian/plugins/lachesis/` folder to test
 
 ## Testing in Obsidian
 1. Build the plugin: `npm run build`
 2. Create plugin folder: `<vault>/.obsidian/plugins/lachesis/`
-3. Copy files: `main.js`, `manifest.json`, `styles.css`
+3. Copy files: `dist/main.js`, `manifest.json`, `styles.css`
 4. Enable the plugin in Obsidian settings
 5. Click the brain icon or use command palette: "Lachesis: Open project picker"
