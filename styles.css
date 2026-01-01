@@ -1,0 +1,374 @@
+/* Lachesis Plugin Styles */
+
+/* Modal container */
+.lachesis-modal {
+  display: flex;
+  flex-direction: column;
+  min-height: 400px;
+  max-height: 70vh;
+}
+
+/* Message container (scrollable area for conversation) */
+.lachesis-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Individual message bubble */
+.lachesis-message {
+  padding: 10px 14px;
+  border-radius: 8px;
+  max-width: 85%;
+  line-height: 1.5;
+}
+
+/* Assistant messages - left aligned */
+.lachesis-message.assistant {
+  background: var(--background-secondary);
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+}
+
+/* User messages - right aligned */
+.lachesis-message.user {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+
+/* Streaming indicator */
+.lachesis-message.streaming::after {
+  content: '▊';
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Input area at bottom */
+.lachesis-input-area {
+  padding: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  display: flex;
+  gap: 8px;
+}
+
+.lachesis-input-area input {
+  flex: 1;
+}
+
+/* Planning level selector */
+.lachesis-planning-select {
+  margin-bottom: 16px;
+}
+
+/* Status indicator */
+.lachesis-status {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  padding: 8px 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+/* Name suggestions */
+.lachesis-name-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+
+.lachesis-name-suggestion {
+  padding: 12px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.lachesis-name-suggestion:hover {
+  background: var(--background-modifier-hover);
+}
+
+.lachesis-name-suggestion .name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.lachesis-name-suggestion .reasoning {
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+/* Subtitle text */
+.lachesis-subtitle {
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+/* Planning level options (setup phase) */
+.lachesis-planning-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.lachesis-planning-option {
+  padding: 12px 16px;
+  background: var(--background-secondary);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lachesis-planning-option:hover {
+  background: var(--background-modifier-hover);
+}
+
+.lachesis-planning-option.selected {
+  border-color: var(--interactive-accent);
+  background: var(--background-secondary-alt);
+}
+
+.lachesis-option-label {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.lachesis-option-desc {
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+/* Button container */
+.lachesis-button-container {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* Header in conversation phase */
+.lachesis-header {
+  padding: 0 0 12px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 0;
+}
+
+.lachesis-header h2 {
+  margin: 0;
+}
+
+/* Input styling */
+.lachesis-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.lachesis-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+}
+
+/* Send button */
+.lachesis-send-button {
+  padding: 8px 16px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: opacity 0.15s ease;
+}
+
+.lachesis-send-button:hover {
+  opacity: 0.9;
+}
+
+.lachesis-send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Custom name input section */
+.lachesis-custom-name {
+  padding: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lachesis-custom-name label {
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.lachesis-custom-name .lachesis-input {
+  margin-bottom: 8px;
+}
+
+/* Success message */
+.lachesis-success-message {
+  color: var(--text-success);
+  font-size: 1.1em;
+}
+
+/* Path display */
+.lachesis-path {
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  padding: 8px 12px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+/* Error message */
+.lachesis-error-message {
+  color: var(--text-error);
+  background: var(--background-modifier-error);
+  padding: 12px;
+  border-radius: 6px;
+}
+
+/* Message text (API key missing, etc) */
+.lachesis-message-text {
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+/* ============================================================================
+   Project Picker Modal
+   ============================================================================ */
+
+.lachesis-project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.lachesis-project-item {
+  padding: 12px 16px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.lachesis-project-item:hover {
+  background: var(--background-modifier-hover);
+}
+
+.lachesis-project-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.lachesis-project-name {
+  font-weight: 600;
+  flex: 1;
+}
+
+.lachesis-project-status {
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.lachesis-project-status.ready {
+  background: var(--background-modifier-success);
+  color: var(--text-success);
+}
+
+.lachesis-project-status.needs-work {
+  background: var(--background-modifier-error);
+  color: var(--text-warning);
+}
+
+.lachesis-project-health {
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.lachesis-empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-muted);
+}
+
+.lachesis-muted {
+  color: var(--text-faint);
+  font-size: 0.9em;
+}
+
+.lachesis-modal-footer {
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.lachesis-loading {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ============================================================================
+   Status Badge (in header)
+   ============================================================================ */
+
+.lachesis-status-badge {
+  font-size: 0.7em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  margin-left: 12px;
+  vertical-align: middle;
+}
+
+.lachesis-status-badge.ready {
+  background: var(--background-modifier-success);
+  color: var(--text-success);
+}
+
+.lachesis-status-badge.needs-work {
+  background: var(--background-modifier-error);
+  color: var(--text-warning);
+}
+
+/* ============================================================================
+   Hints (in messages)
+   ============================================================================ */
+
+.lachesis-hint {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: var(--background-primary-alt);
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: 0 4px 4px 0;
+  font-size: 0.9em;
+  color: var(--text-muted);
+}

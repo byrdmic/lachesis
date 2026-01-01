@@ -1,0 +1,9 @@
+{
+  "id": "lachesis",
+  "name": "Lachesis",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "AI-powered project planning interviews that scaffold structured project documentation",
+  "author": "Lachesis",
+  "isDesktopOnly": false
+}

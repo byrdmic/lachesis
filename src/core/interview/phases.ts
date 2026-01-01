@@ -1,9 +1,5 @@
 // Phase definitions for project intake
-import type { PhaseDefinition } from './types.ts'
-
-// Setup phase questions are now gathered inside the AI prompt (no separate UI)
-// These are kept for reference but no longer used directly
-export const setupQuestions = []
+import type { PhaseDefinition } from './types'
 
 // AI Conversation phase - AI handles all questions dynamically
 export const aiConversationPhase: PhaseDefinition = {
@@ -20,7 +16,7 @@ export const finalizePhase: PhaseDefinition = {
   name: 'Finalize',
   description: 'Review and generate project files',
   summaryCheckQuestion: 'Ready to generate your project structure?',
-  questions: [], // Handled directly in FinalizePhase component
+  questions: [],
 }
 
 // All phases in order
@@ -32,14 +28,13 @@ export function getPhaseById(id: string): PhaseDefinition | undefined {
 }
 
 // Topics for AI guidance - derived from Overview.md template sections.
-// The AI uses these as a checklist of areas to cover.
 export const DISCOVERY_TOPICS = [
-  'elevator_pitch',      // What are you building, for whom, why?
-  'problem_statement',   // What hurts, why, consequence?
-  'target_users',        // Who, context, non-users?
-  'value_proposition',   // Benefit, differentiator?
-  'scope_and_antigoals', // In-scope, out-of-scope?
-  'constraints',         // Time, tech, money, operational?
+  'elevator_pitch',
+  'problem_statement',
+  'target_users',
+  'value_proposition',
+  'scope_and_antigoals',
+  'constraints',
 ] as const
 
 export type DiscoveryTopic = (typeof DISCOVERY_TOPICS)[number]

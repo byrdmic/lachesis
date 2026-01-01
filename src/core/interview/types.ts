@@ -1,9 +1,6 @@
 // Interview engine types
 
-export type PhaseId =
-  | 'setup'
-  | 'vision' // AI-guided discovery phase
-  | 'finalize'
+export type PhaseId = 'setup' | 'vision' | 'finalize'
 
 export type QuestionType = 'text' | 'select' | 'multiline' | 'confirm'
 
@@ -17,7 +14,7 @@ export type Question = {
   phase: PhaseId
   text: string
   type: QuestionType
-  options?: SelectOption[] // For select type
+  options?: SelectOption[]
   required?: boolean
 }
 

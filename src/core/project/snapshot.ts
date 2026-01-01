@@ -1,4 +1,4 @@
-// Project snapshot types for existing projects (MCP-driven)
+// Project snapshot types for existing projects
 // Captures a deterministic view of core files, their metadata, and template fill status.
 
 export type ExpectedCoreFile =
@@ -60,10 +60,7 @@ export type ProjectSnapshot = {
   capturedAt: string
   expectedFiles: ExpectedCoreFile[]
   files: Record<ExpectedCoreFile, SnapshotFileEntry>
-  githubRepos: string[]
   health: SnapshotHealth
   /** Readiness assessment for workflow gating */
   readiness: ProjectReadinessAssessment
 }
-
-

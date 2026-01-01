@@ -1,4 +1,5 @@
-import { type ExpectedCoreFile, type TemplateStatus } from './snapshot.ts'
+// Template evaluator for determining if a file has been filled in
+import { type ExpectedCoreFile, type TemplateStatus } from './snapshot'
 
 type TemplateDefinition = {
   /** Placeholder patterns that indicate unfilled template content */

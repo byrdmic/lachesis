@@ -1,6 +1,8 @@
-import { readdir, readFile, stat } from 'fs/promises'
-import { join } from 'path'
-import { parse as parseYaml } from 'yaml'
+// Project snapshot builder for Obsidian plugin
+// Uses Obsidian's Vault API instead of Node.js fs
+
+import type { Vault, TFile, TFolder } from 'obsidian'
+import { parseYaml } from 'obsidian'
 import {
   EXPECTED_CORE_FILES,
   type ExpectedCoreFile,
@@ -8,9 +10,8 @@ import {
   type ProjectReadinessAssessment,
   type SnapshotFileEntry,
   type SnapshotHealth,
-} from './snapshot.ts'
-import { evaluateTemplateStatus } from './template-evaluator.ts'
-import { debugLog } from '../../debug/logger.ts'
+} from './snapshot'
+import { evaluateTemplateStatus } from './template-evaluator'
 
 function extractFrontmatter(content: string): Record<string, unknown> {
   const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
@@ -136,32 +137,17 @@ function assessReadiness(
   }
 }
 
-function parseGithubRepos(frontmatter: Record<string, unknown>): string[] {
-  const raw = frontmatter['github']
-  if (raw === undefined || raw === null) return []
-  if (typeof raw !== 'string') return []
-  const trimmed = raw.trim()
-  if (!trimmed || trimmed.toLowerCase() === 'n/a') return []
-  return trimmed
-    .split(',')
-    .map((r) => r.trim())
-    .filter((r) => r.length > 0)
-}
-
 function buildFileEntry(
   projectFolder: string,
   file: ExpectedCoreFile,
   exists: boolean,
   content: string | null,
-  sizeBytes?: number,
-  modifiedAt?: string,
+  mtime?: number,
 ): SnapshotFileEntry {
   if (!exists || !content) {
     return {
       path: `${projectFolder}/${file}`,
       exists: false,
-      sizeBytes,
-      modifiedAt,
       frontmatter: {},
       templateStatus: 'missing',
       templateFindings: ['File missing'],
@@ -174,8 +160,8 @@ function buildFileEntry(
   return {
     path: `${projectFolder}/${file}`,
     exists: true,
-    sizeBytes,
-    modifiedAt,
+    sizeBytes: content.length,
+    modifiedAt: mtime ? new Date(mtime).toISOString() : undefined,
     frontmatter,
     templateStatus: status,
     templateFindings: reasons,
@@ -183,71 +169,40 @@ function buildFileEntry(
 }
 
 /**
- * List files in a project directory using native fs
- */
-async function listProjectFiles(projectFolder: string): Promise<string[]> {
-  try {
-    const entries = await readdir(projectFolder, { withFileTypes: true })
-    return entries.filter((e) => e.isFile()).map((e) => e.name)
-  } catch (err) {
-    debugLog.warn('Failed to list project files', {
-      projectFolder,
-      error: err instanceof Error ? err.message : String(err),
-    })
-    return []
-  }
-}
-
-/**
- * Read file contents using native fs
- */
-async function readFileContents(
-  projectFolder: string,
-  file: ExpectedCoreFile,
-): Promise<{ content: string | null; size?: number; mtime?: string }> {
-  const filePath = join(projectFolder, file)
-
-  try {
-    const [content, stats] = await Promise.all([
-      readFile(filePath, 'utf-8'),
-      stat(filePath),
-    ])
-
-    return {
-      content,
-      size: stats.size,
-      mtime: stats.mtime.toISOString(),
-    }
-  } catch {
-    return { content: null }
-  }
-}
-
-/**
- * Build a deterministic project snapshot using native filesystem operations.
- * This replaces the MCP-based implementation.
+ * Build a deterministic project snapshot using Obsidian's Vault API.
  */
 export async function buildProjectSnapshot(
-  projectFolder: string,
+  vault: Vault,
+  projectPath: string,
 ): Promise<ProjectSnapshot> {
-  // Normalize project folder (strip trailing slash)
-  const projectFolderNorm = projectFolder.replace(/\\/g, '/').replace(/\/+$/, '')
-
+  // Normalize project folder path
+  const projectFolderNorm = projectPath.replace(/\\/g, '/').replace(/\/+$/, '')
   const capturedAt = new Date().toISOString()
   const projectName = projectFolderNorm.split('/').pop() || projectFolderNorm
 
-  debugLog.info('Building project snapshot', {
-    projectFolder: projectFolderNorm,
-    projectName,
-  })
-
-  const fileList = await listProjectFiles(projectFolderNorm)
-  const fileSet = new Set(fileList)
-
-  debugLog.info('Project files found', {
-    count: fileList.length,
-    files: fileList,
-  })
+  // Get the project folder
+  const folder = vault.getAbstractFileByPath(projectFolderNorm)
+  if (!folder || !(folder instanceof Object && 'children' in folder)) {
+    // Folder doesn't exist - return snapshot with all files missing
+    const files: Record<ExpectedCoreFile, SnapshotFileEntry> = {} as Record<
+      ExpectedCoreFile,
+      SnapshotFileEntry
+    >
+    for (const file of EXPECTED_CORE_FILES) {
+      files[file] = buildFileEntry(projectFolderNorm, file, false, null)
+    }
+    const health = deriveHealth(files)
+    const readiness = assessReadiness(files, health)
+    return {
+      projectName,
+      projectPath: projectFolderNorm,
+      capturedAt,
+      expectedFiles: [...EXPECTED_CORE_FILES],
+      files,
+      health,
+      readiness,
+    }
+  }
 
   const files: Record<ExpectedCoreFile, SnapshotFileEntry> = {} as Record<
     ExpectedCoreFile,
@@ -255,50 +210,77 @@ export async function buildProjectSnapshot(
   >
 
   for (const file of EXPECTED_CORE_FILES) {
-    const exists = fileSet.has(file)
-    const { content, size, mtime } = exists
-      ? await readFileContents(projectFolderNorm, file)
-      : { content: null, size: undefined, mtime: undefined }
+    const filePath = `${projectFolderNorm}/${file}`
+    const abstractFile = vault.getAbstractFileByPath(filePath)
 
-    debugLog.info('Processing core file', {
-      file,
-      exists,
-      contentLength: content?.length,
-    })
-
-    files[file] = buildFileEntry(projectFolderNorm, file, exists, content, size, mtime)
+    if (abstractFile && 'extension' in abstractFile) {
+      // It's a TFile
+      const tfile = abstractFile as TFile
+      try {
+        const content = await vault.read(tfile)
+        const mtime = tfile.stat.mtime
+        files[file] = buildFileEntry(projectFolderNorm, file, true, content, mtime)
+      } catch {
+        files[file] = buildFileEntry(projectFolderNorm, file, false, null)
+      }
+    } else {
+      files[file] = buildFileEntry(projectFolderNorm, file, false, null)
+    }
   }
-
-  const overviewFrontmatter = files['Overview.md']?.frontmatter ?? {}
-  const githubRepos = parseGithubRepos(overviewFrontmatter)
 
   const health = deriveHealth(files)
   const readiness = assessReadiness(files, health)
 
-  debugLog.info('Snapshot health summary', {
-    missing: health.missingFiles,
-    thinOrTemplate: health.thinOrTemplateFiles,
-    githubRepos,
-  })
-
-  debugLog.info('Readiness assessment', {
-    isReady: readiness.isReady,
-    missingBasics: readiness.missingBasics,
-    prioritizedFiles: readiness.prioritizedFiles,
-    gatingSummary: readiness.gatingSummary,
-  })
-
   return {
     projectName,
-    projectPath: projectFolder,
+    projectPath: projectFolderNorm,
     capturedAt,
     expectedFiles: [...EXPECTED_CORE_FILES],
     files,
-    githubRepos,
     health,
     readiness,
   }
 }
 
-// Export alias for backward compatibility
-export const buildProjectSnapshotViaMCP = buildProjectSnapshot
+/**
+ * Format a snapshot for display to the AI model.
+ */
+export function formatProjectSnapshotForModel(snapshot: ProjectSnapshot): string {
+  const lines: string[] = []
+  lines.push(`PROJECT: ${snapshot.projectName}`)
+  lines.push(`PATH: ${snapshot.projectPath}`)
+  lines.push(`CAPTURED: ${snapshot.capturedAt}`)
+
+  // Readiness assessment (for workflow gating)
+  lines.push('')
+  lines.push(`READINESS: ${snapshot.readiness.isReady ? 'READY for workflows' : 'NOT READY - basics needed'}`)
+  if (!snapshot.readiness.isReady) {
+    lines.push(`GATING: ${snapshot.readiness.gatingSummary}`)
+    if (snapshot.readiness.prioritizedFiles.length > 0) {
+      lines.push(`PRIORITY ORDER: ${snapshot.readiness.prioritizedFiles.join(' → ')}`)
+    }
+  }
+
+  lines.push('')
+  lines.push('CORE FILES:')
+  for (const file of snapshot.expectedFiles) {
+    const entry = snapshot.files[file]
+    const status = entry.exists ? entry.templateStatus : 'missing'
+    const reasons =
+      entry.templateFindings.length > 0 ? ` (${entry.templateFindings.join('; ')})` : ''
+    lines.push(`- ${file}: ${status}${reasons}`)
+  }
+
+  if (snapshot.health.missingFiles.length > 0) {
+    lines.push('')
+    lines.push(`MISSING: ${snapshot.health.missingFiles.join(', ')}`)
+  }
+  if (snapshot.health.thinOrTemplateFiles.length > 0) {
+    lines.push('NEEDS FILLING:')
+    for (const weak of snapshot.health.thinOrTemplateFiles) {
+      lines.push(`- ${weak.file}: ${weak.status} (${weak.reasons.join('; ')})`)
+    }
+  }
+
+  return lines.join('\n')
+}

@@ -1,18 +1,18 @@
-// Session Manager - central coordinator for all session operations
-// This is the main entry point that both CLI and TUI will use
+// Session Manager for Obsidian plugin
+// Combines session management and AI operations
 
-import type { LachesisConfig } from '../../config/types.ts'
+import type { Vault } from 'obsidian'
 import type {
   SessionId,
   SessionState,
+  SessionStep,
   SessionEvent,
   SessionEventCallback,
   CreateSessionOptions,
-  SessionManager as ISessionManager,
-} from './types.ts'
-import {
-  createInitialSessionState,
-} from './types.ts'
+  ISessionManager,
+  ProjectNameSuggestion,
+} from './types'
+import { createInitialSessionState } from './types'
 import {
   getSession,
   saveSession,
@@ -21,33 +21,133 @@ import {
   updateSession,
   subscribe as subscribeToStore,
   emitEvent,
-} from './session-store.ts'
+} from './session-store'
+import {
+  streamNextQuestion as aiStreamNextQuestion,
+  extractProjectData as aiExtractProjectData,
+  generateProjectNameSuggestions as aiGenerateProjectNameSuggestions,
+  extractProjectName as aiExtractProjectName,
+  type ConversationMessage,
+  type ExtractedProjectData,
+} from '../../ai/client'
+import { buildSystemPrompt } from '../../ai/prompts'
+import { getProvider } from '../../ai/providers/factory'
+import type { AIProvider } from '../../ai/providers/types'
+import type { LachesisSettings } from '../../settings'
+import { createFolderName } from '../project/types'
+import { scaffoldProject, type ScaffoldProjectData } from '../../scaffolder/scaffolder'
 
 // ============================================================================
-// Session Manager Implementation
+// Constants
 // ============================================================================
 
-/**
- * Create a session manager instance.
- * The manager requires a config to communicate with AI services.
- */
-export function createSessionManager(config: LachesisConfig): ISessionManager {
+const TRANSITION_PHRASE = 'very well, sir. let us proceed'
+
+// ============================================================================
+// Topic Detection
+// ============================================================================
+
+function detectTopics(questionText: string, existingTopics: string[]): string[] {
+  const topicKeywords: Record<string, string[]> = {
+    elevator_pitch: ['what are you building', 'what is this', 'describe', 'one sentence', 'elevator'],
+    problem_statement: ['problem', 'pain', 'hurts', 'solve', 'why build', 'consequence'],
+    target_users: ['who will', 'who is', 'target', 'audience', 'users', 'customer', 'context'],
+    value_proposition: ['benefit', 'value', 'alternative', 'different', 'why this'],
+    scope_and_antigoals: ['scope', 'in scope', 'out of scope', 'anti-goal', 'avoid', "shouldn't", 'not become'],
+    constraints: ['constraint', 'limitation', 'budget', 'time', 'deadline', 'tech stack', 'money'],
+  }
+
+  const lowerQuestion = questionText.toLowerCase()
+  const newTopics = new Set(existingTopics)
+
+  for (const [topic, keywords] of Object.entries(topicKeywords)) {
+    if (keywords.some((kw) => lowerQuestion.includes(kw))) {
+      newTopics.add(topic)
+    }
+  }
+
+  return Array.from(newTopics)
+}
+
+function checkForTransitionPhrase(responseText: string): boolean {
+  return responseText.toLowerCase().includes(TRANSITION_PHRASE)
+}
+
+// ============================================================================
+// Session State Helpers
+// ============================================================================
+
+function transitionTo(
+  sessionId: SessionId,
+  newStep: SessionStep,
+  additionalUpdates: Partial<SessionState> = {},
+  onEvent?: SessionEventCallback,
+): SessionState | null {
+  const session = getSession(sessionId)
+  if (!session) return null
+
+  const previousStep = session.step
+  const updated = updateSession(sessionId, {
+    step: newStep,
+    ...additionalUpdates,
+  })
+
+  if (updated) {
+    const event: SessionEvent = {
+      type: 'step_changed',
+      step: newStep,
+      previousStep,
+    }
+    emitEvent(event)
+    onEvent?.(event)
+  }
+
+  return updated
+}
+
+function addMessage(
+  sessionId: SessionId,
+  message: ConversationMessage,
+  onEvent?: SessionEventCallback,
+): SessionState | null {
+  const session = getSession(sessionId)
+  if (!session) return null
+
+  const updated = updateSession(sessionId, {
+    messages: [...session.messages, message],
+  })
+
+  if (updated) {
+    const event: SessionEvent = { type: 'message_added', message }
+    emitEvent(event)
+    onEvent?.(event)
+  }
+
+  return updated
+}
+
+// ============================================================================
+// Session Manager Factory
+// ============================================================================
+
+export interface SessionManagerConfig {
+  settings: LachesisSettings
+  vault: Vault
+}
+
+export function createSessionManager(config: SessionManagerConfig): ISessionManager {
+  const provider: AIProvider = getProvider(config.settings)
+
   // ============================================================================
   // Session Lifecycle
   // ============================================================================
 
-  async function createSession(
-    options: CreateSessionOptions,
-  ): Promise<SessionState> {
+  async function createSession(options: CreateSessionOptions): Promise<SessionState> {
     const session = createInitialSessionState(options)
-
-    // Save to store
     saveSession(session)
 
-    // Emit creation event
     emitEvent({ type: 'session_created', sessionId: session.id })
 
-    // Start generating the first question
     const updatedSession = updateSession(session.id, { step: 'generating_question' })
     if (updatedSession) {
       emitEvent({
@@ -87,32 +187,17 @@ export function createSessionManager(config: LachesisConfig): ISessionManager {
     }
 
     // Add user message
-    const userMessage = {
-      role: 'user' as const,
+    const userMessage: ConversationMessage = {
+      role: 'user',
       content: message,
       timestamp: new Date().toISOString(),
     }
 
-    const messagesUpdated = [...session.messages, userMessage]
-    updateSession(sessionId, { messages: messagesUpdated })
-
-    // Emit message added event
-    const messageEvent: SessionEvent = { type: 'message_added', message: userMessage }
-    emitEvent(messageEvent)
-    onEvent?.(messageEvent)
+    addMessage(sessionId, userMessage, onEvent)
 
     // Transition to generating question
-    const stepEvent: SessionEvent = {
-      type: 'step_changed',
-      step: 'generating_question',
-      previousStep: session.step,
-    }
-    updateSession(sessionId, { step: 'generating_question' })
-    emitEvent(stepEvent)
-    onEvent?.(stepEvent)
+    transitionTo(sessionId, 'generating_question', {}, onEvent)
 
-    // Generate next question (this will be implemented in session-operations.ts)
-    // For now, return the updated session
     const updatedSession = getSession(sessionId)
     if (!updatedSession) {
       throw new Error(`Session lost during message processing: ${sessionId}`)
@@ -130,57 +215,126 @@ export function createSessionManager(config: LachesisConfig): ISessionManager {
       throw new Error(`Session not found: ${sessionId}`)
     }
 
-    // This will be implemented in session-operations.ts
-    // For now, just return the current session
-    return session
+    // Build context
+    const effectiveProjectName = session.projectName?.trim() || 'Untitled Project'
+    const effectiveOneLiner = session.oneLiner?.trim() || 'Not provided yet'
+    const isFirstMessage = session.messages.length === 0
+
+    const prompt = buildSystemPrompt({
+      projectName: effectiveProjectName,
+      oneLiner: effectiveOneLiner,
+      planningLevel: session.planningLevel ?? 'medium',
+      coveredTopics: session.coveredTopics,
+      currentHour: new Date().getHours(),
+      isFirstMessage,
+    })
+
+    const context = {
+      planningLevel: session.planningLevel ?? 'medium',
+      projectName: effectiveProjectName,
+      oneLiner: effectiveOneLiner,
+      messages: session.messages,
+      coveredTopics: session.coveredTopics,
+    }
+
+    const result = await aiStreamNextQuestion(context, prompt, provider, (partial) => {
+      emitEvent({ type: 'ai_streaming', partial })
+      onUpdate(partial)
+    })
+
+    if (result.success && result.content) {
+      // Add assistant message
+      const assistantMessage: ConversationMessage = {
+        role: 'assistant',
+        content: result.content,
+        timestamp: new Date().toISOString(),
+      }
+      addMessage(sessionId, assistantMessage)
+
+      emitEvent({ type: 'ai_complete', content: result.content })
+
+      // Check for transition phrase
+      const shouldTransition = checkForTransitionPhrase(result.content)
+
+      if (!shouldTransition) {
+        // Detect and update topics
+        const newTopics = detectTopics(result.content, session.coveredTopics)
+        if (newTopics.length > session.coveredTopics.length) {
+          updateSession(sessionId, { coveredTopics: newTopics })
+          emitEvent({ type: 'topics_updated', topics: newTopics })
+        }
+      }
+
+      transitionTo(sessionId, 'waiting_for_answer')
+    } else {
+      transitionTo(sessionId, 'error', {
+        error: result.error || 'Failed to generate question',
+        errorDetails: result.debugDetails,
+      })
+    }
+
+    return getSession(sessionId)!
   }
 
   // ============================================================================
   // Phase Transitions
   // ============================================================================
 
-  async function requestNameSuggestions(
-    sessionId: SessionId,
-  ): Promise<SessionState> {
+  async function requestNameSuggestions(sessionId: SessionId): Promise<SessionState> {
     const session = getSession(sessionId)
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`)
     }
 
-    // Transition to generating names
-    updateSession(sessionId, { step: 'generating_names' })
-    emitEvent({
-      type: 'step_changed',
-      step: 'generating_names',
-      previousStep: session.step,
-    })
+    transitionTo(sessionId, 'generating_names')
 
-    // This will be implemented in session-operations.ts
+    const effectiveProjectName = session.projectName?.trim() || 'Untitled Project'
+    const effectiveOneLiner = session.oneLiner?.trim() || 'Not provided yet'
+
+    const context = {
+      planningLevel: session.planningLevel ?? 'medium',
+      projectName: effectiveProjectName,
+      oneLiner: effectiveOneLiner,
+      messages: session.messages,
+      coveredTopics: session.coveredTopics,
+    }
+
+    const result = await aiGenerateProjectNameSuggestions(context, provider)
+
+    if (result.success && result.suggestions && result.suggestions.length > 0) {
+      updateSession(sessionId, { nameSuggestions: result.suggestions })
+      emitEvent({ type: 'names_generated', suggestions: result.suggestions })
+      transitionTo(sessionId, 'naming_project')
+    } else {
+      // Generate a default suggestion based on the conversation
+      const defaultSuggestions: ProjectNameSuggestion[] = [
+        { name: 'New Project', reasoning: 'Default name - you can customize it' },
+      ]
+      updateSession(sessionId, { nameSuggestions: defaultSuggestions })
+      emitEvent({ type: 'names_generated', suggestions: defaultSuggestions })
+      transitionTo(sessionId, 'naming_project')
+    }
+
     return getSession(sessionId)!
   }
 
-  async function selectProjectName(
-    sessionId: SessionId,
-    name: string,
-  ): Promise<SessionState> {
+  async function selectProjectName(sessionId: SessionId, name: string): Promise<SessionState> {
     const session = getSession(sessionId)
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`)
     }
 
-    // Save selected name
-    updateSession(sessionId, {
-      selectedName: name,
-      step: 'extracting_data',
-    })
+    // Try to extract clean name if it looks like conversational input
+    let finalName = name
+    if (name.toLowerCase().includes("let's") || name.toLowerCase().includes('call it')) {
+      const extracted = await aiExtractProjectName(name, provider)
+      if (extracted.success && extracted.name) {
+        finalName = extracted.name
+      }
+    }
 
-    // Emit events
-    emitEvent({ type: 'name_selected', name })
-    emitEvent({
-      type: 'step_changed',
-      step: 'extracting_data',
-      previousStep: 'naming_project',
-    })
+    updateSession(sessionId, { selectedName: finalName })
+    emitEvent({ type: 'name_selected', name: finalName })
 
     return getSession(sessionId)!
   }
@@ -191,14 +345,47 @@ export function createSessionManager(config: LachesisConfig): ISessionManager {
       throw new Error(`Session not found: ${sessionId}`)
     }
 
-    // This will be implemented in session-operations.ts
-    // For now, transition to ready_to_scaffold
-    updateSession(sessionId, { step: 'ready_to_scaffold' })
-    emitEvent({
-      type: 'step_changed',
-      step: 'ready_to_scaffold',
-      previousStep: session.step,
-    })
+    transitionTo(sessionId, 'extracting_data')
+
+    const effectiveProjectName = session.selectedName || session.projectName?.trim() || 'Untitled Project'
+    const effectiveOneLiner = session.oneLiner?.trim() || 'Not provided yet'
+
+    const context = {
+      planningLevel: session.planningLevel ?? 'medium',
+      projectName: effectiveProjectName,
+      oneLiner: effectiveOneLiner,
+      messages: session.messages,
+      coveredTopics: session.coveredTopics,
+    }
+
+    const result = await aiExtractProjectData(context, provider)
+
+    let extractedData: ExtractedProjectData
+    if (result.success && result.data) {
+      extractedData = result.data
+    } else {
+      // Create minimal fallback data
+      extractedData = {
+        vision: {
+          oneLinePitch: effectiveOneLiner,
+          description: effectiveOneLiner,
+          primaryAudience: 'To be defined',
+          problemSolved: 'To be defined',
+          successCriteria: 'To be defined',
+        },
+        constraints: {
+          known: [],
+          assumptions: [],
+          risks: [],
+          antiGoals: [],
+        },
+        execution: {},
+      }
+    }
+
+    updateSession(sessionId, { extractedData })
+    emitEvent({ type: 'extraction_complete', data: extractedData })
+    transitionTo(sessionId, 'ready_to_scaffold')
 
     return getSession(sessionId)!
   }
@@ -215,41 +402,48 @@ export function createSessionManager(config: LachesisConfig): ISessionManager {
       return { success: false, error: `Session not found: ${sessionId}` }
     }
 
-    // Transition to scaffolding
-    updateSession(sessionId, { step: 'scaffolding' })
-    emitEvent({
-      type: 'step_changed',
-      step: 'scaffolding',
-      previousStep: session.step,
-    })
+    if (!session.extractedData) {
+      return { success: false, error: 'No extracted data available. Run extraction first.' }
+    }
 
-    // This will be implemented in session-operations.ts
-    // For now, return a placeholder
-    return { success: false, error: 'Not implemented yet' }
-  }
+    if (!session.selectedName) {
+      return { success: false, error: 'No project name selected.' }
+    }
 
-  // ============================================================================
-  // Existing Project Support
-  // ============================================================================
+    transitionTo(sessionId, 'scaffolding')
 
-  async function loadExistingProject(
-    projectPath: string,
-    onEvent?: SessionEventCallback,
-  ): Promise<SessionState> {
-    // Create a session for an existing project
-    const session = createInitialSessionState({
-      type: 'existing_project',
-      projectPath,
-    })
+    try {
+      const projectSlug = createFolderName(session.selectedName)
 
-    saveSession(session)
+      const projectData: ScaffoldProjectData = {
+        projectName: session.selectedName,
+        projectSlug,
+        oneLiner: session.oneLiner,
+        extracted: session.extractedData,
+      }
 
-    // Emit creation event
-    const createEvent: SessionEvent = { type: 'session_created', sessionId: session.id }
-    emitEvent(createEvent)
-    onEvent?.(createEvent)
+      const result = await scaffoldProject(
+        config.vault,
+        config.settings.projectsFolder,
+        projectSlug,
+        projectData,
+      )
 
-    return session
+      if (!result.success) {
+        transitionTo(sessionId, 'error', { error: result.error })
+        return { success: false, error: result.error }
+      }
+
+      updateSession(sessionId, { scaffoldedPath: result.projectPath })
+      emitEvent({ type: 'scaffold_complete', projectPath: result.projectPath! })
+      transitionTo(sessionId, 'complete')
+
+      return { success: true, projectPath: result.projectPath }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown scaffolding error'
+      transitionTo(sessionId, 'error', { error: errorMessage })
+      return { success: false, error: errorMessage }
+    }
   }
 
   // ============================================================================
@@ -275,31 +469,6 @@ export function createSessionManager(config: LachesisConfig): ISessionManager {
     selectProjectName,
     extractProjectData,
     scaffold,
-    loadExistingProject,
     subscribe,
   }
-}
-
-// ============================================================================
-// Singleton Instance
-// ============================================================================
-
-let defaultManager: ISessionManager | null = null
-
-/**
- * Get the default session manager instance.
- * Creates one if it doesn't exist.
- */
-export function getDefaultSessionManager(config: LachesisConfig): ISessionManager {
-  if (!defaultManager) {
-    defaultManager = createSessionManager(config)
-  }
-  return defaultManager
-}
-
-/**
- * Reset the default session manager (for testing)
- */
-export function resetDefaultSessionManager(): void {
-  defaultManager = null
 }

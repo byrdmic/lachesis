@@ -1,8 +1,8 @@
-// Session management types for CLI-first architecture
-// These types define the session state machine that both CLI and TUI use
+// Session management types for Obsidian plugin
+// These types define the session state machine
 
-import type { PlanningLevel } from '../project/types.ts'
-import type { ConversationMessage, ExtractedProjectData } from '../../ai/client.ts'
+import type { PlanningLevel } from '../project/types'
+import type { ConversationMessage, ExtractedProjectData } from '../../ai/client'
 
 // ============================================================================
 // Session Identity
@@ -16,10 +16,6 @@ export type SessionType = 'new_project' | 'existing_project'
 // Session Steps (State Machine)
 // ============================================================================
 
-/**
- * Session steps represent the current phase of the conversation workflow.
- * This is a superset of the original ConversationStep from ConversationPhase.
- */
 export type SessionStep =
   | 'idle' // Session created but not started
   | 'generating_question' // AI is generating the next question
@@ -45,10 +41,6 @@ export type ProjectNameSuggestion = {
 // Session State
 // ============================================================================
 
-/**
- * Complete session state that can be serialized to JSON.
- * This is the single source of truth for a conversation session.
- */
 export type SessionState = {
   // Identity
   id: SessionId
@@ -87,10 +79,6 @@ export type SessionState = {
 // Session Events (for real-time updates)
 // ============================================================================
 
-/**
- * Events emitted during session operations.
- * Used for streaming updates to CLI (NDJSON) or TUI (callbacks).
- */
 export type SessionEvent =
   | { type: 'session_created'; sessionId: SessionId }
   | { type: 'step_changed'; step: SessionStep; previousStep: SessionStep }
@@ -122,7 +110,7 @@ export type CreateSessionOptions = {
 
 export type SessionEventCallback = (event: SessionEvent) => void
 
-export interface SessionManager {
+export interface ISessionManager {
   // Session lifecycle
   createSession(options: CreateSessionOptions): Promise<SessionState>
   getSession(sessionId: SessionId): SessionState | null
@@ -151,73 +139,20 @@ export interface SessionManager {
     sessionId: SessionId,
   ): Promise<{ success: boolean; projectPath?: string; error?: string }>
 
-  // Existing project support
-  loadExistingProject(
-    projectPath: string,
-    onEvent?: SessionEventCallback,
-  ): Promise<SessionState>
-
-  // Event subscription (for TUI)
+  // Event subscription
   subscribe(callback: SessionEventCallback): () => void
-}
-
-// ============================================================================
-// JSON Output Types (for CLI)
-// ============================================================================
-
-export type SessionStartOutput = {
-  sessionId: SessionId
-  type: SessionType
-  step: SessionStep
-  planningLevel?: PlanningLevel
-  createdAt: string
-}
-
-export type SessionMessageOutput = {
-  sessionId: SessionId
-  step: SessionStep
-  response?: string
-  messages: ConversationMessage[]
-  coveredTopics: string[]
-}
-
-export type SessionStatusOutput = SessionState
-
-export type SessionListOutput = {
-  sessions: Array<{
-    id: SessionId
-    type: SessionType
-    step: SessionStep
-    projectName?: string
-    createdAt: string
-    updatedAt: string
-  }>
-}
-
-export type SessionFinalizeOutput = {
-  sessionId: SessionId
-  step: SessionStep
-  projectPath?: string
-  extractedData?: ExtractedProjectData
-  error?: string
 }
 
 // ============================================================================
 // Utility Functions
 // ============================================================================
 
-/**
- * Generate a unique session ID
- */
 export function generateSessionId(): SessionId {
   const timestamp = Date.now().toString(36)
   const random = Math.random().toString(36).substring(2, 8)
   return `sess_${timestamp}_${random}`
 }
 
-/**
- * Create initial session state
- */
 export function createInitialSessionState(
   options: CreateSessionOptions,
 ): SessionState {
@@ -237,23 +172,14 @@ export function createInitialSessionState(
   }
 }
 
-/**
- * Check if a session step allows user input
- */
 export function isInputStep(step: SessionStep): boolean {
   return step === 'waiting_for_answer' || step === 'naming_project'
 }
 
-/**
- * Check if a session is in a terminal state
- */
 export function isTerminalStep(step: SessionStep): boolean {
   return step === 'complete' || step === 'error'
 }
 
-/**
- * Check if a session is in an AI processing state
- */
 export function isProcessingStep(step: SessionStep): boolean {
   return (
     step === 'generating_question' ||

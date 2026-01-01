@@ -1,13 +1,12 @@
 // Provider interface and shared types for multi-provider AI architecture
 
 import type { z } from 'zod'
-import type { LachesisConfig } from '../../config/types.ts'
 
 // ============================================================================
 // Provider Types
 // ============================================================================
 
-export type ProviderType = 'anthropic-sdk' | 'claude-code' | 'openai'
+export type ProviderType = 'anthropic' | 'openai'
 
 // ============================================================================
 // Shared Result Types
@@ -39,31 +38,7 @@ export type StructuredResult<T> = {
 export type ConversationMessage = {
   role: 'assistant' | 'user'
   content: string
-  timestamp: string
-}
-
-export type ToolCallRecord = {
-  name: string
-  args: Record<string, unknown>
-  result: unknown
-}
-
-export type AgenticResult = {
-  success: boolean
-  response?: string
-  toolCalls?: ToolCallRecord[]
-  error?: string
-  debugDetails?: string
-}
-
-export type AgenticOptions = {
-  systemPrompt: string
-  messages: ConversationMessage[]
-  projectPath?: string
-  maxTurns?: number
-  onToolCall?: (toolName: string, args: Record<string, unknown>) => void
-  onToolResult?: (toolName: string, result: unknown) => void
-  onTextUpdate?: (partial: string) => void
+  timestamp?: string
 }
 
 // ============================================================================
@@ -85,9 +60,9 @@ export interface AIProvider {
   readonly displayName: string
 
   /**
-   * Test the provider connection (API key, CLI login, etc.)
+   * Test the provider connection (API key, etc.)
    */
-  testConnection(config: LachesisConfig): Promise<ConnectionResult>
+  testConnection(): Promise<ConnectionResult>
 
   /**
    * Stream text generation with incremental updates
@@ -95,7 +70,6 @@ export interface AIProvider {
   streamText(
     systemPrompt: string,
     messages: ConversationMessage[],
-    config: LachesisConfig,
     onUpdate?: (partial: string) => void,
   ): Promise<TextResult>
 
@@ -105,7 +79,6 @@ export interface AIProvider {
   generateText(
     systemPrompt: string,
     userPrompt: string,
-    config: LachesisConfig,
   ): Promise<TextResult>
 
   /**
@@ -114,22 +87,12 @@ export interface AIProvider {
   generateStructuredOutput<T>(
     prompt: string,
     schema: z.ZodSchema<T>,
-    config: LachesisConfig,
   ): Promise<StructuredResult<T>>
 
   /**
-   * Run an agentic conversation with file tool access (Read, Write, Edit, Glob, Grep)
+   * Check if this provider is available (has API key, etc.)
    */
-  runAgenticConversation(
-    config: LachesisConfig,
-    options: AgenticOptions,
-  ): Promise<AgenticResult>
-
-  /**
-   * Check if this provider is available (for auto-fallback logic)
-   * e.g., claude-code checks if CLI is installed and user is logged in
-   */
-  isAvailable(): Promise<boolean>
+  isAvailable(): boolean
 }
 
 // ============================================================================
@@ -161,16 +124,16 @@ export function mapToProviderError(
   const message = err instanceof Error ? err.message : String(err)
 
   // Detect common error patterns
-  if (message.includes('401') || message.includes('API key') || message.includes('Unauthorized')) {
+  if (message.includes('401') || message.includes('API key') || message.includes('Unauthorized') || message.includes('authentication')) {
     return { code: 'auth_failed', message, provider }
   }
   if (message.includes('429') || message.includes('rate limit')) {
     return { code: 'rate_limited', message, provider }
   }
-  if (message.includes('ENOTFOUND') || message.includes('network') || message.includes('fetch')) {
+  if (message.includes('ENOTFOUND') || message.includes('network') || message.includes('fetch') || message.includes('Failed to fetch')) {
     return { code: 'network_error', message, provider }
   }
-  if (message.includes('not found') || message.includes('unavailable') || message.includes('ENOENT')) {
+  if (message.includes('not found') || message.includes('unavailable')) {
     return { code: 'unavailable', message, provider }
   }
 

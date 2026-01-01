@@ -1,32 +1,65 @@
-// Session store for in-memory state + optional file persistence
-// Manages the lifecycle of session state across CLI invocations
+// Session store for Obsidian plugin
+// Uses plugin data storage instead of file system
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'node:fs'
-import { join } from 'node:path'
-import { homedir } from 'node:os'
-import type { SessionId, SessionState, SessionEventCallback, SessionEvent } from './types.ts'
+import type { Plugin } from 'obsidian'
+import type { SessionId, SessionState, SessionEventCallback, SessionEvent } from './types'
 
 // ============================================================================
-// Store Configuration
-// ============================================================================
-
-const SESSIONS_DIR = join(homedir(), '.lachesis', 'sessions')
-const MAX_SESSIONS = 100 // Maximum number of sessions to keep
-
-// ============================================================================
-// In-Memory Store
+// Store State
 // ============================================================================
 
 const sessionMap = new Map<SessionId, SessionState>()
 const subscribers = new Set<SessionEventCallback>()
+let pluginInstance: Plugin | null = null
+
+// ============================================================================
+// Initialization
+// ============================================================================
+
+/**
+ * Initialize the session store with the plugin instance
+ */
+export function initializeStore(plugin: Plugin): void {
+  pluginInstance = plugin
+}
+
+/**
+ * Load sessions from plugin data
+ */
+export async function loadFromDisk(): Promise<void> {
+  if (!pluginInstance) return
+
+  try {
+    const data = await pluginInstance.loadData()
+    if (data?.sessions) {
+      for (const [id, session] of Object.entries(data.sessions)) {
+        sessionMap.set(id, session as SessionState)
+      }
+    }
+  } catch {
+    // Silently fail - start with empty sessions
+  }
+}
+
+/**
+ * Save all sessions to plugin data
+ */
+async function saveToDisk(): Promise<void> {
+  if (!pluginInstance) return
+
+  try {
+    const data = (await pluginInstance.loadData()) || {}
+    data.sessions = Object.fromEntries(sessionMap.entries())
+    await pluginInstance.saveData(data)
+  } catch {
+    // Silently fail
+  }
+}
 
 // ============================================================================
 // Event Emission
 // ============================================================================
 
-/**
- * Emit an event to all subscribers
- */
 export function emitEvent(event: SessionEvent): void {
   for (const callback of subscribers) {
     try {
@@ -37,9 +70,6 @@ export function emitEvent(event: SessionEvent): void {
   }
 }
 
-/**
- * Subscribe to session events
- */
 export function subscribe(callback: SessionEventCallback): () => void {
   subscribers.add(callback)
   return () => {
@@ -51,77 +81,28 @@ export function subscribe(callback: SessionEventCallback): () => void {
 // Session CRUD Operations
 // ============================================================================
 
-/**
- * Get a session by ID (from memory first, then disk)
- */
 export function getSession(sessionId: SessionId): SessionState | null {
-  // Check memory first
-  const memorySession = sessionMap.get(sessionId)
-  if (memorySession) {
-    return memorySession
-  }
-
-  // Try to load from disk
-  const diskSession = loadSessionFromDisk(sessionId)
-  if (diskSession) {
-    // Cache in memory
-    sessionMap.set(sessionId, diskSession)
-    return diskSession
-  }
-
-  return null
+  return sessionMap.get(sessionId) ?? null
 }
 
-/**
- * Save a session (to memory and optionally disk)
- */
-export function saveSession(session: SessionState, persistToDisk = true): void {
-  // Update timestamp
+export function saveSession(session: SessionState): void {
   session.updatedAt = new Date().toISOString()
-
-  // Save to memory
   sessionMap.set(session.id, session)
-
-  // Persist to disk if requested
-  if (persistToDisk) {
-    saveSessionToDisk(session)
-  }
+  // Fire and forget disk save
+  saveToDisk()
 }
 
-/**
- * Delete a session
- */
 export function deleteSession(sessionId: SessionId): void {
   sessionMap.delete(sessionId)
-  deleteSessionFromDisk(sessionId)
+  saveToDisk()
 }
 
-/**
- * List all sessions (from memory + disk)
- */
 export function listSessions(): SessionState[] {
-  // Get all sessions from disk
-  const diskSessionIds = listSessionsFromDisk()
-
-  // Load any that aren't in memory
-  for (const id of diskSessionIds) {
-    if (!sessionMap.has(id)) {
-      const session = loadSessionFromDisk(id)
-      if (session) {
-        sessionMap.set(id, session)
-      }
-    }
-  }
-
-  // Return all sessions sorted by updated time (newest first)
   return Array.from(sessionMap.values()).sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   )
 }
 
-/**
- * Update session state with a partial update
- */
 export function updateSession(
   sessionId: SessionId,
   updates: Partial<SessionState>,
@@ -144,94 +125,14 @@ export function updateSession(
 }
 
 // ============================================================================
-// Disk Persistence
-// ============================================================================
-
-/**
- * Ensure the sessions directory exists
- */
-function ensureSessionsDir(): void {
-  if (!existsSync(SESSIONS_DIR)) {
-    mkdirSync(SESSIONS_DIR, { recursive: true })
-  }
-}
-
-/**
- * Get the file path for a session
- */
-function getSessionPath(sessionId: SessionId): string {
-  return join(SESSIONS_DIR, `${sessionId}.json`)
-}
-
-/**
- * Save a session to disk
- */
-function saveSessionToDisk(session: SessionState): void {
-  try {
-    ensureSessionsDir()
-    const filePath = getSessionPath(session.id)
-    writeFileSync(filePath, JSON.stringify(session, null, 2), 'utf-8')
-  } catch {
-    // Silently fail disk writes - in-memory is the source of truth
-  }
-}
-
-/**
- * Load a session from disk
- */
-function loadSessionFromDisk(sessionId: SessionId): SessionState | null {
-  try {
-    const filePath = getSessionPath(sessionId)
-    if (!existsSync(filePath)) {
-      return null
-    }
-    const content = readFileSync(filePath, 'utf-8')
-    return JSON.parse(content) as SessionState
-  } catch {
-    return null
-  }
-}
-
-/**
- * Delete a session from disk
- */
-function deleteSessionFromDisk(sessionId: SessionId): void {
-  try {
-    const filePath = getSessionPath(sessionId)
-    if (existsSync(filePath)) {
-      unlinkSync(filePath)
-    }
-  } catch {
-    // Silently fail
-  }
-}
-
-/**
- * List all session IDs from disk
- */
-function listSessionsFromDisk(): SessionId[] {
-  try {
-    ensureSessionsDir()
-    const files = readdirSync(SESSIONS_DIR)
-    return files
-      .filter((f) => f.endsWith('.json'))
-      .map((f) => f.replace('.json', ''))
-  } catch {
-    return []
-  }
-}
-
-// ============================================================================
 // Cleanup Operations
 // ============================================================================
 
-/**
- * Clean up old sessions (keep only recent ones)
- */
+const MAX_SESSIONS = 50
+
 export function cleanupOldSessions(): void {
   const sessions = listSessions()
 
-  // If we have too many sessions, delete the oldest ones
   if (sessions.length > MAX_SESSIONS) {
     const toDelete = sessions.slice(MAX_SESSIONS)
     for (const session of toDelete) {
@@ -240,48 +141,21 @@ export function cleanupOldSessions(): void {
   }
 }
 
-/**
- * Clear all sessions (for testing)
- */
 export function clearAllSessions(): void {
   sessionMap.clear()
-  try {
-    ensureSessionsDir()
-    const files = readdirSync(SESSIONS_DIR)
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        unlinkSync(join(SESSIONS_DIR, file))
-      }
-    }
-  } catch {
-    // Silently fail
-  }
+  saveToDisk()
 }
 
 // ============================================================================
 // Session State Helpers
 // ============================================================================
 
-/**
- * Get sessions by type
- */
 export function getSessionsByType(type: SessionState['type']): SessionState[] {
   return listSessions().filter((s) => s.type === type)
 }
 
-/**
- * Get active sessions (not complete or error)
- */
 export function getActiveSessions(): SessionState[] {
   return listSessions().filter(
     (s) => s.step !== 'complete' && s.step !== 'error',
   )
-}
-
-/**
- * Find a session by project path (for existing projects)
- */
-export function findSessionByProjectPath(projectPath: string): SessionState | null {
-  const sessions = listSessions()
-  return sessions.find((s) => s.projectPath === projectPath) ?? null
 }

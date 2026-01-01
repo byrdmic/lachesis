@@ -1,6 +1,5 @@
-// Core project types for Lachesis
+// Core project types for Lachesis Obsidian plugin
 
-// Freeform strings so the AI/user can provide any description
 export type PlanningLevel = string
 
 export type ProjectStatus = 'planning' | 'building'
@@ -27,7 +26,7 @@ export type ProjectConstraints = {
   assumptions: string[]
   risks: string[]
   derailmentFactors: string[]
-  antiGoals: string[] // "What do you not want this project to become?"
+  antiGoals: string[]
 }
 
 export type ProjectSolution = {
@@ -42,27 +41,11 @@ export type ExecutionPlan = {
   firstMove: string
   secondMove?: string
   thirdMove?: string
-  notYet: string[] // Things to intentionally postpone
+  notYet: string[]
 }
 
 export type SessionSetup = {
   planningLevel: PlanningLevel
-}
-
-export type ProjectDefinition = {
-  name: string
-  slug: string
-  createdAt: string
-  updatedAt: string
-  status: ProjectStatus
-  releasePhase: ReleasePhase
-  setup: SessionSetup
-  vision: ProjectVision
-  constraints: ProjectConstraints
-  solution: ProjectSolution
-  execution: ExecutionPlan
-  advisorsConfig: import('../../advisors/types.ts').AdvisorsConfig
-  sessionLog: SessionLogEntry[]
 }
 
 export type SessionLogEntry = {
@@ -83,13 +66,10 @@ export function createSlug(name: string): string {
 }
 
 // Helper to create a human-friendly folder name from a project name
-// Keeps original casing and spaces, only removes characters not allowed in folder names
 export function createFolderName(name: string): string {
   return name
     .trim()
-    // Remove characters not allowed in folder names (Windows: \ / : * ? " < > |)
     .replace(/[\\/:*?"<>|]/g, '')
-    // Collapse multiple spaces into one
     .replace(/\s+/g, ' ')
     .trim()
 }
