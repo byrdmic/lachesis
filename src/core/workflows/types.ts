@@ -12,12 +12,13 @@
  * The core workflow names used in UI and conversation.
  */
 export const WORKFLOW_NAMES = [
-  'synthesize',
-  'harvest-tasks',
-  'triage',
   'refine-log',
-  'align-templates',
-  'archive-pass',
+  // TODO: Re-enable as they're refined
+  // 'synthesize',
+  // 'harvest-tasks',
+  // 'triage',
+  // 'align-templates',
+  // 'archive-pass',
 ] as const
 
 export type WorkflowName = (typeof WORKFLOW_NAMES)[number]
