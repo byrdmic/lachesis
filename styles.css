@@ -305,7 +305,7 @@
 
 .lachesis-project-status.needs-work {
   background: var(--background-modifier-error);
-  color: var(--text-warning);
+  color: #fff;
 }
 
 .lachesis-project-health {
@@ -356,7 +356,7 @@
 
 .lachesis-status-badge.needs-work {
   background: var(--background-modifier-error);
-  color: var(--text-warning);
+  color: #fff;
 }
 
 /* ============================================================================
