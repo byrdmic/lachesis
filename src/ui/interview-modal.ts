@@ -1,6 +1,6 @@
 // Interview Modal - Main UI for project planning interviews
 
-import { App, Modal, Notice, Setting } from 'obsidian'
+import { App, Modal, Notice, Setting, MarkdownRenderer, Component } from 'obsidian'
 import type LachesisPlugin from '../main'
 import type { LachesisSettings } from '../settings'
 import {
@@ -36,6 +36,7 @@ export class InterviewModal extends Modal {
   private plugin: LachesisPlugin
   private sessionManager: ISessionManager | null = null
   private currentSession: SessionState | null = null
+  private renderComponent: Component
 
   // UI State
   private phase: ModalPhase = 'setup'
@@ -52,12 +53,14 @@ export class InterviewModal extends Modal {
   constructor(app: App, plugin: LachesisPlugin) {
     super(app)
     this.plugin = plugin
+    this.renderComponent = new Component()
   }
 
   async onOpen() {
     const { contentEl } = this
     contentEl.empty()
     contentEl.addClass('lachesis-modal')
+    this.renderComponent.load()
 
     // Check if provider is configured
     if (!isProviderAvailable(this.plugin.settings.provider, this.plugin.settings)) {
@@ -83,6 +86,7 @@ export class InterviewModal extends Modal {
   onClose() {
     const { contentEl } = this
     contentEl.empty()
+    this.renderComponent.unload()
     this.sessionManager = null
     this.currentSession = null
   }
@@ -339,7 +343,11 @@ export class InterviewModal extends Modal {
     const messageEl = this.messagesContainer.createDiv({
       cls: `lachesis-message ${role} ${isStreaming ? 'streaming' : ''}`,
     })
-    messageEl.setText(content)
+
+    // Render markdown for non-empty content
+    if (content) {
+      this.renderMarkdown(content, messageEl)
+    }
 
     // Scroll to bottom
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight
@@ -350,11 +358,24 @@ export class InterviewModal extends Modal {
   private updateStreamingMessage(content: string) {
     if (!this.messagesContainer) return
 
-    const streamingEl = this.messagesContainer.querySelector('.lachesis-message.streaming')
+    const streamingEl = this.messagesContainer.querySelector('.lachesis-message.streaming') as HTMLElement
     if (streamingEl) {
-      streamingEl.setText(content)
+      streamingEl.empty()
+      if (content) {
+        this.renderMarkdown(content, streamingEl)
+      }
       this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight
     }
+  }
+
+  private renderMarkdown(content: string, container: HTMLElement) {
+    MarkdownRenderer.render(
+      this.app,
+      content,
+      container,
+      '',
+      this.renderComponent
+    )
   }
 
   private finalizeStreamingMessage() {

@@ -4,8 +4,7 @@
 .lachesis-modal {
   display: flex;
   flex-direction: column;
-  min-height: 400px;
-  max-height: 70vh;
+  height: 75vh;
 }
 
 /* Message container (scrollable area for conversation) */
@@ -24,6 +23,53 @@
   border-radius: 8px;
   max-width: 85%;
   line-height: 1.5;
+  user-select: text;
+  cursor: text;
+}
+
+/* Markdown content inside messages */
+.lachesis-message p {
+  margin: 0 0 8px 0;
+}
+
+.lachesis-message p:last-child {
+  margin-bottom: 0;
+}
+
+.lachesis-message ul,
+.lachesis-message ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.lachesis-message li {
+  margin: 4px 0;
+}
+
+.lachesis-message strong {
+  font-weight: 600;
+}
+
+.lachesis-message code {
+  background: var(--background-primary-alt);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.lachesis-message pre {
+  background: var(--background-primary-alt);
+  padding: 8px 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.lachesis-message blockquote {
+  border-left: 3px solid var(--interactive-accent);
+  margin: 8px 0;
+  padding-left: 12px;
+  color: var(--text-muted);
 }
 
 /* Assistant messages - left aligned */
@@ -371,4 +417,35 @@
   border-radius: 0 4px 4px 0;
   font-size: 0.9em;
   color: var(--text-muted);
+}
+
+/* ============================================================================
+   Workflow Buttons Bar
+   ============================================================================ */
+
+.lachesis-workflow-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-workflow-button {
+  padding: 4px 10px;
+  font-size: 0.85em;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.lachesis-workflow-button:hover {
+  background: var(--background-modifier-hover);
+}
+
+.lachesis-workflow-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

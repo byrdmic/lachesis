@@ -7,6 +7,8 @@ import type { PlanningLevel } from '../core/project/types'
 // Types
 // ============================================================================
 
+import type { WorkflowDefinition } from '../core/workflows/types'
+
 export type SystemPromptOptions = {
   /**
    * Session type: 'new' for project discovery/creation, 'existing' for continuing a project.
@@ -41,9 +43,13 @@ export type SystemPromptOptions = {
    */
   snapshotSummary?: string
   /**
-   * Active workflow name (future use).
+   * Active workflow definition (when a workflow is being executed).
    */
-  activeWorkflow?: string
+  activeWorkflow?: WorkflowDefinition
+  /**
+   * File contents for the active workflow (actual content of readFiles).
+   */
+  workflowFileContents?: string
 }
 
 // ============================================================================
@@ -98,10 +104,12 @@ type ExistingProjectPromptOptions = {
   timeGreeting: string
   isFirstMessage: boolean
   snapshotSummary: string
+  activeWorkflow?: WorkflowDefinition
+  workflowFileContents?: string
 }
 
 function buildExistingProjectPrompt(options: ExistingProjectPromptOptions): string {
-  const { projectName, timeGreeting, isFirstMessage, snapshotSummary } = options
+  const { projectName, timeGreeting, isFirstMessage, snapshotSummary, activeWorkflow, workflowFileContents } = options
 
   const openingInstructions = isFirstMessage
     ? `OPENING MESSAGE (CRITICAL - FOLLOW EXACTLY):
@@ -138,6 +146,30 @@ LANGUAGE RULES (STRICT):
 - Say "clarify" not "crystallize"
 - Say "enable" or "help" not "empower"`
 
+  // Build workflow section if a workflow is active
+  let workflowSection = ''
+  if (activeWorkflow && workflowFileContents) {
+    workflowSection = `
+================================================================================
+ACTIVE WORKFLOW: ${activeWorkflow.displayName.toUpperCase()}
+================================================================================
+Intent: ${activeWorkflow.intent}
+
+Risk: ${activeWorkflow.risk} | Confirmation: ${activeWorkflow.confirmation}
+May read: ${activeWorkflow.readFiles.join(', ')}
+May write: ${activeWorkflow.writeFiles.join(', ')}
+May delete content: ${activeWorkflow.allowsDelete ? 'yes' : 'no'}
+May move between files: ${activeWorkflow.allowsCrossFileMove ? 'yes' : 'no'}
+
+RULES FOR THIS WORKFLOW:
+${activeWorkflow.rules.map((r) => `• ${r}`).join('\n')}
+
+FILE CONTENTS (for workflow execution):
+${workflowFileContents}
+================================================================================
+`
+  }
+
   return `You are Lachesis, a project coach helping someone continue work on an existing project.
 
 ================================================================================
@@ -145,7 +177,7 @@ PROJECT SNAPSHOT (CURRENT STATE)
 ================================================================================
 ${snapshotSummary || 'No snapshot available.'}
 ================================================================================
-
+${workflowSection}
 ${voiceSection}
 
 ${openingInstructions}
@@ -194,6 +226,8 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
       timeGreeting,
       isFirstMessage,
       snapshotSummary,
+      activeWorkflow: options.activeWorkflow,
+      workflowFileContents: options.workflowFileContents,
     })
   }
 

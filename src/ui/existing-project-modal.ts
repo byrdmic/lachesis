@@ -3,11 +3,13 @@
 import { App, Modal, Notice } from 'obsidian'
 import type LachesisPlugin from '../main'
 import type { ProjectSnapshot } from '../core/project/snapshot'
-import { buildProjectSnapshot, formatProjectSnapshotForModel } from '../core/project/snapshot-builder'
+import { buildProjectSnapshot, formatProjectSnapshotForModel, fetchProjectFileContents, formatFileContentsForModel } from '../core/project/snapshot-builder'
 import { getProvider } from '../ai/providers/factory'
 import { isProviderAvailable } from '../ai/providers/factory'
 import type { AIProvider, ConversationMessage } from '../ai/providers/types'
 import { buildSystemPrompt } from '../ai/prompts'
+import { getAllWorkflows, getWorkflowDefinition, WORKFLOW_DEFINITIONS } from '../core/workflows/definitions'
+import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 
 // ============================================================================
 // Types
@@ -30,6 +32,7 @@ export class ExistingProjectModal extends Modal {
   private messages: ConversationMessage[] = []
   private isProcessing = false
   private streamingText = ''
+  private activeWorkflow: WorkflowDefinition | null = null
 
   // DOM Elements
   private messagesContainer: HTMLElement | null = null
@@ -115,6 +118,20 @@ export class ExistingProjectModal extends Modal {
       cls: `lachesis-status-badge ${this.snapshot.readiness.isReady ? 'ready' : 'needs-work'}`,
     })
     statusBadge.setText(this.snapshot.readiness.isReady ? 'Ready' : 'Needs attention')
+
+    // Workflow buttons bar
+    const workflowBar = contentEl.createDiv({ cls: 'lachesis-workflow-bar' })
+    for (const workflow of getAllWorkflows()) {
+      const btn = workflowBar.createEl('button', {
+        text: workflow.displayName,
+        cls: 'lachesis-workflow-button',
+      })
+      btn.addEventListener('click', () => {
+        if (!this.isProcessing) {
+          this.triggerWorkflow(workflow.displayName)
+        }
+      })
+    }
 
     // Messages container
     this.messagesContainer = contentEl.createDiv({ cls: 'lachesis-messages' })
@@ -289,6 +306,11 @@ export class ExistingProjectModal extends Modal {
     // Clear input
     this.inputEl.value = ''
 
+    // Detect workflow request from user input (if not already set by button click)
+    if (!this.activeWorkflow) {
+      this.activeWorkflow = this.detectWorkflowFromMessage(message)
+    }
+
     // Add user message
     const userMessage: ConversationMessage = {
       role: 'user',
@@ -300,6 +322,23 @@ export class ExistingProjectModal extends Modal {
 
     // Generate response
     this.setInputEnabled(false)
+
+    // Fetch file contents if a workflow is active
+    let workflowFileContents: string | undefined
+    if (this.activeWorkflow) {
+      this.updateStatus(`Fetching files for ${this.activeWorkflow.displayName}...`)
+      try {
+        const fileContents = await fetchProjectFileContents(
+          this.app.vault,
+          this.projectPath,
+          this.activeWorkflow.readFiles,
+        )
+        workflowFileContents = formatFileContentsForModel(fileContents)
+      } catch (err) {
+        console.error('Failed to fetch workflow files:', err)
+      }
+    }
+
     this.updateStatus('Lachesis is thinking...')
     this.addMessageToUI('assistant', '', true)
 
@@ -310,7 +349,12 @@ export class ExistingProjectModal extends Modal {
       projectName: this.snapshot.projectName,
       isFirstMessage: false,
       snapshotSummary,
+      activeWorkflow: this.activeWorkflow ?? undefined,
+      workflowFileContents,
     })
+
+    // Clear active workflow after use (it was included in this request)
+    this.activeWorkflow = null
 
     try {
       const result = await this.provider.streamText(
@@ -341,5 +385,52 @@ export class ExistingProjectModal extends Modal {
       this.updateStatus(`Error: ${error}`)
       this.setInputEnabled(true)
     }
+  }
+
+  /**
+   * Detect if a user message is requesting a workflow.
+   * Returns the workflow definition if detected, null otherwise.
+   */
+  private detectWorkflowFromMessage(message: string): WorkflowDefinition | null {
+    // Check for common workflow trigger patterns
+    const workflowPatterns = [
+      /run\s+(?:the\s+)?(\w+(?:[- ]\w+)?)\s+workflow/i,
+      /execute\s+(?:the\s+)?(\w+(?:[- ]\w+)?)\s+workflow/i,
+      /start\s+(?:the\s+)?(\w+(?:[- ]\w+)?)\s+workflow/i,
+      /do\s+(?:a\s+)?(\w+(?:[- ]\w+)?)\s+(?:workflow|pass)/i,
+    ]
+
+    for (const pattern of workflowPatterns) {
+      const match = message.match(pattern)
+      if (match) {
+        const workflowName = match[1].toLowerCase().replace(/\s+/g, '-')
+
+        // Try to find workflow by name or display name
+        for (const workflow of getAllWorkflows()) {
+          if (
+            workflow.name === workflowName ||
+            workflow.displayName.toLowerCase() === match[1].toLowerCase() ||
+            workflow.displayName.toLowerCase().replace(/\s+/g, '-') === workflowName
+          ) {
+            return workflow
+          }
+        }
+      }
+    }
+
+    return null
+  }
+
+  private triggerWorkflow(workflowDisplayName: string) {
+    if (!this.inputEl) return
+
+    // Find the workflow by display name
+    const workflow = getAllWorkflows().find(w => w.displayName === workflowDisplayName)
+    if (workflow) {
+      this.activeWorkflow = workflow
+    }
+
+    this.inputEl.value = `Run the ${workflowDisplayName} workflow`
+    this.handleUserInput()
   }
 }

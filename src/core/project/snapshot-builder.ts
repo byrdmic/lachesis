@@ -243,6 +243,62 @@ export async function buildProjectSnapshot(
 }
 
 /**
+ * Fetch file contents for a set of files in a project.
+ * Used to provide actual content to the AI for workflow execution.
+ */
+export async function fetchProjectFileContents(
+  vault: Vault,
+  projectPath: string,
+  fileNames: string[],
+): Promise<Record<string, string | null>> {
+  const projectFolderNorm = projectPath.replace(/\\/g, '/').replace(/\/+$/, '')
+  const contents: Record<string, string | null> = {}
+
+  for (const fileName of fileNames) {
+    const filePath = `${projectFolderNorm}/${fileName}`
+    const abstractFile = vault.getAbstractFileByPath(filePath)
+
+    if (abstractFile && 'extension' in abstractFile) {
+      try {
+        const content = await vault.read(abstractFile as TFile)
+        contents[fileName] = content
+      } catch {
+        contents[fileName] = null
+      }
+    } else {
+      contents[fileName] = null
+    }
+  }
+
+  return contents
+}
+
+/**
+ * Format file contents for inclusion in the AI system prompt.
+ */
+export function formatFileContentsForModel(
+  fileContents: Record<string, string | null>,
+): string {
+  const lines: string[] = []
+
+  for (const [fileName, content] of Object.entries(fileContents)) {
+    lines.push(`═══════════════════════════════════════════════════════════════════════════════`)
+    lines.push(`FILE: ${fileName}`)
+    lines.push(`═══════════════════════════════════════════════════════════════════════════════`)
+    if (content === null) {
+      lines.push('[File does not exist or could not be read]')
+    } else if (content.trim() === '') {
+      lines.push('[File is empty]')
+    } else {
+      lines.push(content)
+    }
+    lines.push('')
+  }
+
+  return lines.join('\n')
+}
+
+/**
  * Format a snapshot for display to the AI model.
  */
 export function formatProjectSnapshotForModel(snapshot: ProjectSnapshot): string {
