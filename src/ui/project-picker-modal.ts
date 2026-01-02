@@ -38,6 +38,8 @@ export class ProjectPickerModal extends Modal {
   async onOpen() {
     const { contentEl } = this
     contentEl.empty()
+    // Style hook: Obsidian sizes modals via the root `.modal` element
+    this.modalEl.addClass('lachesis-modal-root')
     contentEl.addClass('lachesis-modal')
 
     this.renderLoading()

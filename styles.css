@@ -1,6 +1,17 @@
 /* Lachesis Plugin Styles */
 
 /* Modal container */
+.modal.lachesis-modal-root,
+.modal.lachesis-diff-modal-root {
+  /* Obsidian's modal sizing is driven by CSS vars; set them for consistency. */
+  --modal-width: 87vw;
+  --modal-max-width: 1400px;
+
+  /* Fallback in case Obsidian overrides width/max-width directly. */
+  width: 87vw !important;
+  max-width: 1400px !important;
+}
+
 .lachesis-modal {
   display: flex;
   flex-direction: column;

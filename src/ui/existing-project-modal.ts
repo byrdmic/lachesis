@@ -58,6 +58,8 @@ export class ExistingProjectModal extends Modal {
   async onOpen() {
     const { contentEl } = this
     contentEl.empty()
+    // Style hook: Obsidian sizes modals via the root `.modal` element
+    this.modalEl.addClass('lachesis-modal-root')
     contentEl.addClass('lachesis-modal')
 
     // Check if provider is configured
@@ -73,8 +75,8 @@ export class ExistingProjectModal extends Modal {
     this.phase = 'chat'
     this.renderChatPhase()
 
-    // Generate opening message
-    await this.generateOpeningMessage()
+    // Opening message is now triggered by the "Start Chat" button
+    // This allows users to immediately click workflow buttons like "Refine Log"
   }
 
   onClose() {
@@ -125,6 +127,18 @@ export class ExistingProjectModal extends Modal {
 
     // Workflow buttons bar
     const workflowBar = contentEl.createDiv({ cls: 'lachesis-workflow-bar' })
+
+    // Start Chat button - triggers the opening message
+    const startChatBtn = workflowBar.createEl('button', {
+      text: 'Start Chat',
+      cls: 'lachesis-workflow-button lachesis-start-chat-button',
+    })
+    startChatBtn.addEventListener('click', () => {
+      if (!this.isProcessing && this.messages.length === 0) {
+        this.generateOpeningMessage()
+      }
+    })
+
     for (const workflow of getAllWorkflows()) {
       const btn = workflowBar.createEl('button', {
         text: workflow.displayName,

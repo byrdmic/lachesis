@@ -30,6 +30,8 @@ export class DiffViewerModal extends Modal {
   onOpen() {
     const { contentEl } = this
     contentEl.empty()
+    // Style hook: Obsidian sizes modals via the root `.modal` element
+    this.modalEl.addClass('lachesis-diff-modal-root')
     contentEl.addClass('lachesis-diff-modal')
 
     // Header
