@@ -1,670 +1,470 @@
 /* Lachesis Plugin Styles */
 
+:root {
+  /* Inherit from Obsidian's theme variables */
+  --lachesis-bg-dark: var(--background-primary);
+  --lachesis-bg-surface: var(--background-secondary);
+  --lachesis-accent-primary: var(--interactive-accent);
+  --lachesis-accent-secondary: var(--interactive-accent-hover);
+  
+  /* Create gradients/glows based on the theme accent */
+  --lachesis-accent-gradient: linear-gradient(135deg, var(--lachesis-accent-secondary), var(--lachesis-accent-primary));
+  --lachesis-text-glow: 0 0 10px var(--interactive-accent);
+  --lachesis-border-glow: 0 0 8px var(--interactive-accent);
+  
+  /* Glass effect using theme background with opacity */
+  --lachesis-glass-bg: var(--background-secondary);
+  --lachesis-glass-border: 1px solid var(--background-modifier-border);
+  
+  /* Use Obsidian's standard font */
+  --lachesis-font-ui: var(--font-ui);
+}
+
 /* Modal container */
 .modal.lachesis-modal-root,
 .modal.lachesis-diff-modal-root {
   /* Obsidian's modal sizing is driven by CSS vars; set them for consistency. */
   --modal-width: 87vw;
   --modal-max-width: 1400px;
-
+  
   /* Fallback in case Obsidian overrides width/max-width directly. */
   width: 87vw !important;
   max-width: 1400px !important;
+  
+  background-color: transparent !important; /* Let our inner container handle bg */
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.modal.lachesis-modal-root .modal-close-button,
+.modal.lachesis-diff-modal-root .modal-close-button {
+  z-index: 10;
+  color: var(--text-muted);
+  top: 28px;
+  right: 18px;
+}
+
+/* Common Modal Styles */
+.lachesis-modal,
+.lachesis-diff-modal {
+  display: flex;
+  flex-direction: column;
+  /* Dark subtle gradient background with integrated glows */
+  background: 
+    /* Top Left Glow */
+    radial-gradient(circle at 0% 0%, rgba(var(--interactive-accent-rgb), 0.15) 0%, transparent 60%),
+    /* Top Right Glow */
+    radial-gradient(circle at 100% 0%, rgba(var(--interactive-accent-rgb), 0.1) 0%, transparent 50%),
+    /* Bottom Right Glow */
+    radial-gradient(circle at 100% 100%, rgba(var(--interactive-accent-rgb), 0.05) 0%, transparent 50%),
+    /* Base Gradient */
+    linear-gradient(145deg, var(--background-primary) 0%, var(--background-secondary) 100%);
+    
+  background-color: var(--background-primary); /* Fallback */
+  
+  border-radius: var(--radius-l);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px var(--background-modifier-border);
+  overflow: hidden;
+  font-family: var(--lachesis-font-ui);
+  position: relative;
+  border: 1px solid var(--background-modifier-border);
 }
 
 .lachesis-modal {
-  display: flex;
-  flex-direction: column;
   height: 75vh;
+}
+
+.lachesis-diff-modal {
+  height: 85vh; /* Taller for diffs */
+}
+
+/* Header in conversation phase */
+.lachesis-header,
+.lachesis-diff-modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 0;
+  background: rgba(var(--background-secondary-rgb), 0.6);
+  backdrop-filter: blur(8px);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lachesis-header h2,
+.lachesis-diff-modal-header h2 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-normal);
+  text-transform: uppercase;
+  font-size: 1.1em;
+}
+
+.lachesis-diff-modal-filename {
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+  color: var(--text-accent);
+  opacity: 0.9;
+}
+
+/* Status Badge (in header) */
+.lachesis-status-badge {
+  font-size: 0.65em;
+  padding: 4px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-left: 12px;
+  vertical-align: middle;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.lachesis-status-badge.ready {
+  background: var(--background-modifier-success);
+  color: var(--text-on-accent);
+}
+
+.lachesis-status-badge.needs-work {
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
+
+/* Workflow Buttons Bar */
+.lachesis-workflow-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 24px;
+  background: rgba(var(--background-primary-rgb), 0.3);
+  border-bottom: 1px solid var(--background-modifier-border);
+  z-index: 1;
+}
+
+.lachesis-workflow-button {
+  padding: 6px 16px;
+  font-size: 0.8em;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 20px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: none;
+}
+
+.lachesis-workflow-button:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+  transform: translateY(-1px);
+}
+
+.lachesis-workflow-button.lachesis-start-chat-button {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.lachesis-workflow-button.lachesis-start-chat-button:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
 }
 
 /* Message container (scrollable area for conversation) */
 .lachesis-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 20px;
+  z-index: 1;
+  scroll-behavior: smooth;
+  background: transparent;
+  position: relative;
+}
+
+/* Empty State */
+.lachesis-empty-state-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  text-align: center;
+  animation: fadeIn 0.5s ease-out;
+}
+
+.lachesis-empty-state-title {
+  font-size: 2em;
+  font-weight: 700;
+  color: var(--text-normal);
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, var(--text-normal) 0%, var(--text-muted) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.lachesis-empty-state-subtitle {
+  font-size: 1.1em;
+  max-width: 400px;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scrollbar styling */
+.lachesis-messages::-webkit-scrollbar,
+.lachesis-diff-modal-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.lachesis-messages::-webkit-scrollbar-track,
+.lachesis-diff-modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.lachesis-messages::-webkit-scrollbar-thumb,
+.lachesis-diff-modal-content::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 3px;
+}
+.lachesis-messages::-webkit-scrollbar-thumb:hover,
+.lachesis-diff-modal-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 /* Individual message bubble */
 .lachesis-message {
-  padding: 10px 14px;
-  border-radius: 8px;
+  padding: 16px 20px;
+  border-radius: 12px;
   max-width: 85%;
-  line-height: 1.5;
+  line-height: 1.6;
   user-select: text;
   cursor: text;
+  position: relative;
+  font-size: 0.95em;
+  backdrop-filter: blur(5px);
+}
+
+/* Assistant messages */
+.lachesis-message.assistant {
+  background: rgba(var(--background-secondary-rgb), 0.8);
+  border: 1px solid var(--background-modifier-border);
+  align-self: flex-start;
+  border-bottom-left-radius: 2px;
+  color: var(--text-normal);
+}
+
+/* User messages */
+.lachesis-message.user {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  align-self: flex-end;
+  border-bottom-right-radius: 2px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 /* Markdown content inside messages */
 .lachesis-message p {
-  margin: 0 0 8px 0;
+  margin: 0 0 10px 0;
 }
 
 .lachesis-message p:last-child {
   margin-bottom: 0;
 }
 
-.lachesis-message ul,
-.lachesis-message ol {
-  margin: 8px 0;
-  padding-left: 20px;
-}
-
-.lachesis-message li {
-  margin: 4px 0;
-}
-
-.lachesis-message strong {
-  font-weight: 600;
-}
-
 .lachesis-message code {
-  background: var(--background-primary-alt);
-  padding: 2px 4px;
-  border-radius: 3px;
+  background: var(--background-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
   font-size: 0.9em;
+  font-family: var(--font-monospace);
+  color: var(--text-accent);
+}
+
+.lachesis-message.user code {
+  background: rgba(0,0,0,0.2);
+  color: white;
 }
 
 .lachesis-message pre {
-  background: var(--background-primary-alt);
-  padding: 8px 12px;
-  border-radius: 4px;
+  background: var(--background-primary);
+  padding: 12px;
+  border-radius: 8px;
   overflow-x: auto;
-  margin: 8px 0;
+  margin: 12px 0;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-message.user pre {
+  background: rgba(0,0,0,0.2);
+  border-color: rgba(255,255,255,0.2);
 }
 
 .lachesis-message blockquote {
-  border-left: 3px solid var(--interactive-accent);
-  margin: 8px 0;
-  padding-left: 12px;
+  border-left: 2px solid var(--interactive-accent);
+  margin: 12px 0;
+  padding-left: 16px;
   color: var(--text-muted);
+  background: var(--background-secondary-alt);
+  padding: 8px 16px;
+  border-radius: 0 8px 8px 0;
 }
 
-/* Assistant messages - left aligned */
-.lachesis-message.assistant {
-  background: var(--background-secondary);
-  align-self: flex-start;
-  border-bottom-left-radius: 4px;
-}
-
-/* User messages - right aligned */
-.lachesis-message.user {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-  align-self: flex-end;
-  border-bottom-right-radius: 4px;
+.lachesis-message.user blockquote {
+  border-left-color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.9);
 }
 
 /* Streaming indicator */
 .lachesis-message.streaming::after {
-  content: '▊';
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  background: var(--interactive-accent);
+  margin-left: 4px;
+  vertical-align: middle;
   animation: blink 1s step-end infinite;
-}
-
-@keyframes blink {
-  50% {
-    opacity: 0;
-  }
 }
 
 /* Input area at bottom */
 .lachesis-input-area {
-  padding: 12px;
+  padding: 20px 24px;
+  background: rgba(var(--background-secondary-rgb), 0.8);
   border-top: 1px solid var(--background-modifier-border);
   display: flex;
-  gap: 8px;
+  gap: 12px;
+  z-index: 2;
+  align-items: center;
+  backdrop-filter: blur(5px);
 }
 
-.lachesis-input-area input {
-  flex: 1;
-}
-
-/* Planning level selector */
-.lachesis-planning-select {
-  margin-bottom: 16px;
-}
-
-/* Status indicator */
-.lachesis-status {
-  font-size: 0.85em;
-  color: var(--text-muted);
-  padding: 8px 16px;
-  border-top: 1px solid var(--background-modifier-border);
-}
-
-/* Name suggestions */
-.lachesis-name-suggestions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-}
-
-.lachesis-name-suggestion {
-  padding: 12px;
-  background: var(--background-secondary);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.lachesis-name-suggestion:hover {
-  background: var(--background-modifier-hover);
-}
-
-.lachesis-name-suggestion .name {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.lachesis-name-suggestion .reasoning {
-  font-size: 0.9em;
-  color: var(--text-muted);
-}
-
-/* Subtitle text */
-.lachesis-subtitle {
-  color: var(--text-muted);
-  margin-bottom: 16px;
-}
-
-/* Planning level options (setup phase) */
-.lachesis-planning-options {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.lachesis-planning-option {
-  padding: 12px 16px;
-  background: var(--background-secondary);
-  border: 2px solid transparent;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.lachesis-planning-option:hover {
-  background: var(--background-modifier-hover);
-}
-
-.lachesis-planning-option.selected {
-  border-color: var(--interactive-accent);
-  background: var(--background-secondary-alt);
-}
-
-.lachesis-option-label {
-  font-weight: 600;
-  margin-bottom: 2px;
-}
-
-.lachesis-option-desc {
-  font-size: 0.9em;
-  color: var(--text-muted);
-}
-
-/* Button container */
-.lachesis-button-container {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
-
-/* Header in conversation phase */
-.lachesis-header {
-  padding: 0 0 12px 0;
-  border-bottom: 1px solid var(--background-modifier-border);
-  margin-bottom: 0;
-}
-
-.lachesis-header h2 {
-  margin: 0;
-}
-
-/* Input styling */
 .lachesis-input {
-  width: 100%;
-  padding: 8px 12px;
+  flex: 1;
+  padding: 12px 16px;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--background-primary);
   color: var(--text-normal);
+  font-size: 0.95em;
+  transition: all 0.2s ease;
 }
 
 .lachesis-input:focus {
   border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
   outline: none;
 }
 
 /* Send button */
 .lachesis-send-button {
-  padding: 8px 16px;
+  padding: 10px 24px;
   background: var(--interactive-accent);
   color: var(--text-on-accent);
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  font-weight: 500;
-  transition: opacity 0.15s ease;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .lachesis-send-button:hover {
-  opacity: 0.9;
+  filter: brightness(1.1);
+  transform: translateY(-1px);
 }
 
-.lachesis-send-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Custom name input section */
-.lachesis-custom-name {
-  padding: 16px;
-  border-top: 1px solid var(--background-modifier-border);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.lachesis-custom-name label {
-  font-size: 0.9em;
-  color: var(--text-muted);
-}
-
-.lachesis-custom-name .lachesis-input {
-  margin-bottom: 8px;
-}
-
-/* Success message */
-.lachesis-success-message {
-  color: var(--text-success);
-  font-size: 1.1em;
-}
-
-/* Path display */
-.lachesis-path {
-  font-family: var(--font-monospace);
-  font-size: 0.9em;
-  color: var(--text-muted);
-  background: var(--background-secondary);
-  padding: 8px 12px;
-  border-radius: 4px;
-  word-break: break-all;
-}
-
-/* Error message */
-.lachesis-error-message {
-  color: var(--text-error);
-  background: var(--background-modifier-error);
-  padding: 12px;
-  border-radius: 6px;
-}
-
-/* Message text (API key missing, etc) */
-.lachesis-message-text {
-  color: var(--text-muted);
-  margin-bottom: 16px;
-}
-
-/* ============================================================================
-   Project Picker Modal
-   ============================================================================ */
-
-.lachesis-project-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px 0;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.lachesis-project-item {
-  padding: 12px 16px;
-  background: var(--background-secondary);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.lachesis-project-item:hover {
-  background: var(--background-modifier-hover);
-}
-
-.lachesis-project-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.lachesis-project-name {
-  font-weight: 600;
-  flex: 1;
-}
-
-.lachesis-project-status {
+/* Status indicator */
+.lachesis-status {
   font-size: 0.75em;
-  padding: 2px 8px;
-  border-radius: 4px;
+  color: var(--text-muted);
+  padding: 4px 24px 12px;
+  background: rgba(var(--background-secondary-rgb), 0.8);
   text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-top: none;
+  margin-top: -8px; /* Pull up closer to input */
+  z-index: 2;
+  backdrop-filter: blur(5px);
 }
 
-.lachesis-project-status.ready {
-  background: var(--background-modifier-success);
-  color: var(--text-success);
-}
-
-.lachesis-project-status.needs-work {
-  background: var(--background-modifier-error);
-  color: #fff;
-}
-
-.lachesis-project-health {
-  font-size: 0.85em;
-  color: var(--text-muted);
-}
-
-.lachesis-empty-state {
-  text-align: center;
-  padding: 32px 16px;
-  color: var(--text-muted);
-}
-
-.lachesis-muted {
-  color: var(--text-faint);
-  font-size: 0.9em;
-}
-
-.lachesis-modal-footer {
-  padding-top: 16px;
-  border-top: 1px solid var(--background-modifier-border);
-  display: flex;
-  justify-content: flex-end;
-}
-
-.lachesis-loading {
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-/* ============================================================================
-   Status Badge (in header)
-   ============================================================================ */
-
-.lachesis-status-badge {
-  font-size: 0.7em;
-  padding: 2px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  margin-left: 12px;
-  vertical-align: middle;
-}
-
-.lachesis-status-badge.ready {
-  background: var(--background-modifier-success);
-  color: var(--text-success);
-}
-
-.lachesis-status-badge.needs-work {
-  background: var(--background-modifier-error);
-  color: #fff;
-}
-
-/* ============================================================================
-   Hints (in messages)
-   ============================================================================ */
-
+/* Hints (in messages) */
 .lachesis-hint {
   margin-top: 12px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   background: var(--background-primary-alt);
   border-left: 3px solid var(--interactive-accent);
-  border-radius: 0 4px 4px 0;
+  border-radius: 4px;
   font-size: 0.9em;
   color: var(--text-muted);
 }
 
-/* ============================================================================
-   Workflow Buttons Bar
-   ============================================================================ */
-
-.lachesis-workflow-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--background-modifier-border);
-}
-
-.lachesis-workflow-button {
-  padding: 4px 10px;
-  font-size: 0.85em;
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.lachesis-workflow-button:hover {
-  background: var(--background-modifier-hover);
-}
-
-.lachesis-workflow-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ============================================================================
-   Diff Preview Blocks
-   ============================================================================ */
-
-.lachesis-diff-text {
-  margin: 8px 0;
-  line-height: 1.5;
-}
-
+/* Diff Preview Blocks */
 .lachesis-diff-block {
-  margin: 12px 0;
+  margin: 16px 0;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
   background: var(--background-primary);
 }
 
 .lachesis-diff-header {
-  padding: 8px 12px;
+  padding: 10px 16px;
   background: var(--background-secondary);
   border-bottom: 1px solid var(--background-modifier-border);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.lachesis-diff-filename {
-  font-family: var(--font-monospace);
-  font-size: 0.9em;
+  color: var(--text-normal);
 }
 
 .lachesis-diff-content {
-  padding: 8px 0;
-  margin: 0;
-  overflow-x: auto;
-  font-family: var(--font-monospace);
-  font-size: 0.85em;
-  line-height: 1.5;
-  background: var(--background-primary);
+  background: transparent;
+  color: var(--text-normal);
 }
 
 .lachesis-diff-hunk-header {
-  padding: 4px 12px;
+  background: var(--background-secondary-alt);
   color: var(--text-muted);
-  background: var(--background-primary-alt);
-}
-
-.lachesis-diff-line {
-  padding: 1px 12px;
-  white-space: pre;
 }
 
 .lachesis-diff-add {
-  background: rgba(46, 160, 67, 0.15);
+  background: rgba(46, 160, 67, 0.15); /* Keep standard diff colors as they are semantic */
   color: var(--text-success);
 }
 
 .lachesis-diff-remove {
-  background: rgba(248, 81, 73, 0.15);
+  background: rgba(248, 81, 73, 0.15); /* Keep standard diff colors as they are semantic */
   color: var(--text-error);
 }
 
-.lachesis-diff-context {
-  color: var(--text-muted);
-}
-
-.lachesis-diff-buttons {
-  padding: 8px 12px;
-  border-top: 1px solid var(--background-modifier-border);
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.lachesis-diff-accept-btn {
-  padding: 4px 12px;
-  background: var(--interactive-success);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.lachesis-diff-accept-btn:hover {
-  opacity: 0.9;
-}
-
-.lachesis-diff-reject-btn {
-  padding: 4px 12px;
-  background: var(--background-modifier-error);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.lachesis-diff-reject-btn:hover {
-  opacity: 0.9;
-}
-
-.lachesis-diff-status {
-  padding: 8px 12px;
-  border-top: 1px solid var(--background-modifier-border);
-  font-size: 0.85em;
-  text-align: center;
-}
-
-.lachesis-diff-status.accepted {
-  color: var(--text-success);
-  background: rgba(46, 160, 67, 0.1);
-}
-
-.lachesis-diff-status.rejected {
-  color: var(--text-muted);
-  background: var(--background-secondary);
-}
-
-.lachesis-diff-block.accepted {
-  opacity: 0.7;
-}
-
-.lachesis-diff-block.rejected {
-  opacity: 0.5;
-}
-
-/* ============================================================================
-   Diff File Links (in chat message)
-   ============================================================================ */
-
-.lachesis-diff-summary {
-  font-weight: 600;
-  margin: 8px 0;
-}
-
-.lachesis-diff-file-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 8px 0;
-}
-
+/* Diff File Links */
 .lachesis-diff-file-link {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  transition: background 0.15s ease;
+  border-radius: 8px;
+  padding: 10px 14px;
 }
 
 .lachesis-diff-file-link:hover {
   background: var(--background-modifier-hover);
-}
-
-.lachesis-diff-file-link.accepted {
-  border-color: var(--text-success);
-  opacity: 0.8;
-}
-
-.lachesis-diff-file-link.rejected {
-  border-color: var(--text-muted);
-  opacity: 0.6;
-}
-
-.lachesis-diff-file-icon {
-  font-size: 1em;
+  border-color: var(--interactive-accent);
 }
 
 .lachesis-diff-file-name {
-  flex: 1;
-  font-family: var(--font-monospace);
-  font-size: 0.9em;
   color: var(--text-accent);
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.lachesis-diff-file-name:hover {
-  text-decoration: underline;
-}
-
-.lachesis-diff-file-changes {
-  font-family: var(--font-monospace);
-  font-size: 0.8em;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.lachesis-diff-file-status {
-  font-size: 0.75em;
-  padding: 2px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.lachesis-diff-file-status.pending {
-  background: var(--background-modifier-border);
-  color: var(--text-muted);
 }
 
 .lachesis-diff-file-status.accepted {
@@ -672,89 +472,88 @@
   color: var(--text-success);
 }
 
-.lachesis-diff-file-status.rejected {
-  background: var(--background-secondary);
-  color: var(--text-muted);
-}
-
-/* ============================================================================
-   Diff Viewer Modal
-   ============================================================================ */
-
-.lachesis-diff-modal {
-  display: flex;
-  flex-direction: column;
-  height: 70vh;
-  width: 80vw;
-  max-width: 1200px;
-}
-
-.lachesis-diff-modal-header {
-  padding: 0 0 12px 0;
-  border-bottom: 1px solid var(--background-modifier-border);
-}
-
-.lachesis-diff-modal-header h2 {
-  margin: 0 0 4px 0;
-}
-
-.lachesis-diff-modal-filename {
-  font-family: var(--font-monospace);
-  font-size: 0.9em;
-  color: var(--text-muted);
-}
-
+/* Diff Viewer Modal Specifics */
 .lachesis-diff-modal-content {
   flex: 1;
   overflow: auto;
-  margin: 12px 0;
+  margin: 12px 24px;
 }
 
 .lachesis-diff-modal-pre {
   margin: 0;
-  padding: 8px 0;
+  padding: 16px;
   font-family: var(--font-monospace);
   font-size: 0.85em;
   line-height: 1.5;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
+  border-radius: 8px;
+  color: var(--text-normal);
   overflow-x: auto;
 }
 
 .lachesis-diff-modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding-top: 12px;
+  gap: 12px;
+  padding: 16px 24px;
   border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  z-index: 2;
 }
 
 .lachesis-diff-modal-accept-btn {
-  padding: 8px 16px;
+  padding: 8px 20px;
+  background: var(--interactive-success);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.lachesis-diff-modal-accept-btn:hover {
+  filter: brightness(1.1);
 }
 
 .lachesis-diff-modal-reject-btn {
-  padding: 8px 16px;
+  padding: 8px 20px;
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
+  color: var(--text-muted);
+  border-radius: 6px;
   cursor: pointer;
 }
 
 .lachesis-diff-modal-reject-btn:hover {
   background: var(--background-modifier-hover);
+  color: var(--text-normal);
 }
 
-.lachesis-diff-modal-status {
-  padding: 8px 16px;
-  font-weight: 500;
+/* Project Picker */
+.lachesis-project-item {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
 }
 
-.lachesis-diff-modal-status.accepted {
-  color: var(--text-success);
+.lachesis-project-item:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 15px rgba(var(--interactive-accent-rgb), 0.1);
 }
 
-.lachesis-diff-modal-status.rejected {
-  color: var(--text-muted);
+/* Loading/Error States */
+.lachesis-loading {
+  color: var(--text-accent);
+  text-align: center;
+  padding: 40px;
+  font-size: 1.1em;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
 }

@@ -10,7 +10,6 @@ if you want to view the source, please visit the github repository of this plugi
 `
 
 const prod = process.argv[2] === 'production'
-const deploy = process.argv[2] === 'deploy'
 const OBSIDIAN_PLUGIN_PATH = 'G:/My Drive/Nexus/.obsidian/plugins/lachesis'
 
 // Clean and prepare dist folder
@@ -46,23 +45,21 @@ const context = await esbuild.context({
   format: 'cjs',
   target: 'es2018',
   logLevel: 'info',
-  sourcemap: (prod || deploy) ? false : 'inline',
+  sourcemap: prod ? false : 'inline',
   treeShaking: true,
   outfile: 'dist/main.js',
 })
 
-if (prod || deploy) {
+if (prod) {
   await context.rebuild()
 
-  if (deploy) {
-    if (!existsSync(OBSIDIAN_PLUGIN_PATH)) {
-      mkdirSync(OBSIDIAN_PLUGIN_PATH, { recursive: true })
-    }
-    copyFileSync('dist/main.js', `${OBSIDIAN_PLUGIN_PATH}/main.js`)
-    copyFileSync('dist/manifest.json', `${OBSIDIAN_PLUGIN_PATH}/manifest.json`)
-    copyFileSync('dist/styles.css', `${OBSIDIAN_PLUGIN_PATH}/styles.css`)
-    console.log(`\n✓ Deployed to ${OBSIDIAN_PLUGIN_PATH}`)
+  if (!existsSync(OBSIDIAN_PLUGIN_PATH)) {
+    mkdirSync(OBSIDIAN_PLUGIN_PATH, { recursive: true })
   }
+  copyFileSync('dist/main.js', `${OBSIDIAN_PLUGIN_PATH}/main.js`)
+  copyFileSync('dist/manifest.json', `${OBSIDIAN_PLUGIN_PATH}/manifest.json`)
+  copyFileSync('dist/styles.css', `${OBSIDIAN_PLUGIN_PATH}/styles.css`)
+  console.log(`\n✓ Deployed to ${OBSIDIAN_PLUGIN_PATH}`)
 
   process.exit(0)
 } else {

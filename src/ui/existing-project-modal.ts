@@ -155,8 +155,12 @@ export class ExistingProjectModal extends Modal {
     this.messagesContainer = contentEl.createDiv({ cls: 'lachesis-messages' })
 
     // Render existing messages
-    for (const msg of this.messages) {
-      this.addMessageToUI(msg.role, msg.content)
+    if (this.messages.length === 0) {
+      this.renderEmptyState()
+    } else {
+      for (const msg of this.messages) {
+        this.addMessageToUI(msg.role, msg.content)
+      }
     }
 
     // Input area
@@ -592,5 +596,25 @@ export class ExistingProjectModal extends Modal {
 
     this.inputEl.value = `Run the ${workflowDisplayName} workflow`
     this.handleUserInput()
+  }
+
+  private renderEmptyState() {
+    if (!this.messagesContainer) return
+
+    const wrapper = this.messagesContainer.createDiv({ cls: 'lachesis-empty-state-wrapper' })
+    
+    wrapper.createEl('div', { 
+      text: this.snapshot.projectName,
+      cls: 'lachesis-empty-state-title'
+    })
+
+    const subtitle = this.snapshot.readiness.isReady 
+      ? 'Project is ready for workflows.' 
+      : 'Project needs attention.'
+    
+    wrapper.createEl('div', {
+      text: subtitle,
+      cls: 'lachesis-empty-state-subtitle'
+    })
   }
 }

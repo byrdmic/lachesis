@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "bun esbuild.config.mjs",
     "build": "bun esbuild.config.mjs production",
-    "build:deploy": "bun esbuild.config.mjs deploy",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
