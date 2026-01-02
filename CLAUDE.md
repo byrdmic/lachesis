@@ -10,9 +10,14 @@ An Obsidian plugin that helps users plan projects through AI-powered interviews,
 lachesis/
 ├── src/             # TypeScript source
 │   ├── ai/          # AI providers and client
-│   ├── core/        # Core logic (sessions, projects, workflows)
+│   ├── core/        # Core logic
+│   │   ├── interview/   # Interview phases and types
+│   │   ├── project/     # Project types, snapshot builder
+│   │   ├── session/     # Session state, conversation management
+│   │   └── workflows/   # Workflow definitions
 │   ├── scaffolder/  # File scaffolding
-│   └── ui/          # Obsidian modals
+│   ├── ui/          # Obsidian modals
+│   └── utils/       # Utility functions (diff, log-parser)
 ├── dist/            # Build output (gitignored)
 │   └── main.js      # Bundled plugin
 ├── manifest.json    # Plugin manifest
@@ -22,10 +27,11 @@ lachesis/
 
 ## Commands
 ```bash
-npm install              # Install dependencies
-npm run dev              # Build in watch mode
-npm run build            # Production build
-npm run typecheck        # Type check
+bun install              # Install dependencies
+bun run dev              # Build in watch mode
+bun run build            # Production build
+bun run build:deploy     # Build and copy to Obsidian vault
+bun run typecheck        # Type check
 ```
 
 ## Architecture
@@ -43,14 +49,20 @@ npm run typecheck        # Type check
 - **Prompts**: `src/ai/prompts.ts` — System prompt builder
 
 ### Core Logic
+- **Interview**: `src/core/interview/` — Interview phases and discovery topics
 - **Sessions**: `src/core/session/` — Session state machine, conversation management
-- **Projects**: `src/core/project/` — Project types, snapshot builder
-- **Workflows**: `src/core/workflows/` — 6 named workflows (synthesize, harvest-tasks, etc.)
+- **Projects**: `src/core/project/` — Project types, snapshot builder, template evaluator
+- **Workflows**: `src/core/workflows/` — Workflow definitions (currently: refine-log)
 
 ### UI
 - **Interview modal**: `src/ui/interview-modal.ts` — New project interview flow
 - **Project picker**: `src/ui/project-picker-modal.ts` — List/select existing projects
 - **Existing project modal**: `src/ui/existing-project-modal.ts` — Continue existing projects
+- **Diff viewer modal**: `src/ui/diff-viewer-modal.ts` — Preview changes before applying
+
+### Utils
+- **Diff**: `src/utils/diff.ts` — Diff generation utilities
+- **Log parser**: `src/utils/log-parser.ts` — Parse and process log entries
 
 ### Scaffolder
 - **Scaffolder**: `src/scaffolder/scaffolder.ts` — Creates project files
@@ -73,23 +85,25 @@ When a project is scaffolded, these files are created:
 6. **Archive.md** — Historical record
 
 ## Named Workflows
-Six workflows for existing project management:
-1. **Synthesize** — Light polish for clarity and consistency
-2. **Harvest Tasks** — Extract actionable items from Log/Ideas → Tasks
-3. **Triage** — Organize Tasks.md into executable priority order
-4. **Log Digest** — Add titles to untitled log entries
-5. **Align Templates** — Ensure file structure matches current templates
-6. **Archive Pass** — Move completed or cut work to Archive
+Workflows for existing project management (currently active):
+1. **Refine Log** — Add short titles to log entries (1-5 words after timestamp)
+
+Future workflows (hidden/in development):
+- Synthesize — Light polish for clarity and consistency
+- Harvest Tasks — Extract actionable items from Log/Ideas → Tasks
+- Triage — Organize Tasks.md into executable priority order
+- Align Templates — Ensure file structure matches current templates
+- Archive Pass — Move completed or cut work to Archive
 
 ## Verification
 After making changes:
-1. Run `npm run typecheck`
-2. Run `npm run build` to verify the build
-3. Copy `dist/main.js`, `manifest.json`, and `styles.css` to an Obsidian vault's `.obsidian/plugins/lachesis/` folder to test
+1. Run `bun run typecheck`
+2. Run `bun run build` to verify the build
+3. Run `bun run build:deploy` to build and auto-copy to the configured vault, or manually copy `dist/main.js`, `manifest.json`, and `styles.css` to an Obsidian vault's `.obsidian/plugins/lachesis/` folder to test
 
 ## Testing in Obsidian
-1. Build the plugin: `npm run build`
+1. Build the plugin: `bun run build` (or `bun run build:deploy` to auto-copy)
 2. Create plugin folder: `<vault>/.obsidian/plugins/lachesis/`
 3. Copy files: `dist/main.js`, `manifest.json`, `styles.css`
 4. Enable the plugin in Obsidian settings
-5. Click the brain icon or use command palette: "Lachesis: Open project picker"
+5. Click the brain-circuit icon or use command palette: "Lachesis: Open project picker"
