@@ -116,30 +116,33 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
   },
 
   /**
-   * LOG DIGEST: Add titles to untitled log entries.
-   * Low risk, no confirmation needed.
+   * REFINE LOG: Add short titles to log entries.
+   * Low risk, preview confirmation.
    */
-  'log-digest': {
-    name: 'log-digest',
-    displayName: 'Log Digest',
-    description: 'Add titles to untitled log entries',
+  'refine-log': {
+    name: 'refine-log',
+    displayName: 'Refine Log',
+    description: 'Add short titles to log entries',
     intent:
-      'Find log entries that lack titles and generate short (3-10 word) descriptive titles. ' +
-      'Does NOT change the content of entries - only adds/improves headings.',
+      'Find log entries and add short descriptive titles (1-5 words) after the timestamp. ' +
+      'Format: "11:48am - MCP Server" where the title captures the main topic. ' +
+      'Does NOT change the content of entries - only adds/improves the title after the time.',
     readFiles: [PROJECT_FILES.log],
     writeFiles: [PROJECT_FILES.log],
     risk: 'low',
-    confirmation: 'none',
+    confirmation: 'preview',
     allowsDelete: false,
     allowsCrossFileMove: false,
     rules: [
-      'Only touch entries that lack titles (format: ### HH:MM with no "—" title)',
-      'Generate titles that are 3-10 words, descriptive, scannable',
-      'Format: ### HH:MM — <Title>',
+      'Only touch entries that lack titles (format: HH:MMam/pm with no " - " title after)',
+      'Generate titles that are 1-5 words, descriptive, scannable',
+      'Format: HH:MMam/pm - <Short Title>',
+      'Titles should capture the main topic or action (e.g., "MCP Server", "Bug Fix", "Planning Session")',
+      'Use comma-separated titles to capture multiple ideas (e.g., "11:48am - MCP Server, Diff Modal, Bug Fixes")',
       'Do NOT modify entry content',
       'Do NOT add new entries',
       'Do NOT reorder or restructure the log',
-      'If an entry already has a title, leave it alone',
+      'If an entry already has a title (has " - " after time), leave it alone',
     ],
   },
 

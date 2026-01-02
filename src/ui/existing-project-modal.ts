@@ -1,6 +1,6 @@
 // Existing Project Modal - Chat interface for continuing work on existing projects
 
-import { App, Modal, Notice } from 'obsidian'
+import { App, Modal, Notice, TFile } from 'obsidian'
 import type LachesisPlugin from '../main'
 import type { ProjectSnapshot } from '../core/project/snapshot'
 import { buildProjectSnapshot, formatProjectSnapshotForModel, fetchProjectFileContents, formatFileContentsForModel } from '../core/project/snapshot-builder'
@@ -10,6 +10,8 @@ import type { AIProvider, ConversationMessage } from '../ai/providers/types'
 import { buildSystemPrompt } from '../ai/prompts'
 import { getAllWorkflows, getWorkflowDefinition, WORKFLOW_DEFINITIONS } from '../core/workflows/definitions'
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
+import { extractDiffBlocks, applyDiff, containsDiffBlocks, type DiffBlock } from '../utils/diff'
+import { DiffViewerModal, type DiffAction } from './diff-viewer-modal'
 
 // ============================================================================
 // Types
@@ -33,6 +35,7 @@ export class ExistingProjectModal extends Modal {
   private isProcessing = false
   private streamingText = ''
   private activeWorkflow: WorkflowDefinition | null = null
+  private pendingDiffs: DiffBlock[] = []
 
   // DOM Elements
   private messagesContainer: HTMLElement | null = null
@@ -218,20 +221,151 @@ export class ExistingProjectModal extends Modal {
   private finalizeStreamingMessage() {
     if (!this.messagesContainer) return
 
-    const streamingEl = this.messagesContainer.querySelector('.lachesis-message.streaming')
+    const streamingEl = this.messagesContainer.querySelector('.lachesis-message.streaming') as HTMLElement | null
     if (streamingEl) {
       streamingEl.removeClass('streaming')
 
-      // Re-render with hint styling
-      const content = streamingEl.textContent || ''
-      const hintMatch = this.streamingText.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
-      if (hintMatch) {
-        const mainContent = this.streamingText.replace(/\{\{hint\}\}[\s\S]*?\{\{\/hint\}\}/, '').trim()
-        streamingEl.textContent = mainContent
+      // Check if content contains diffs
+      if (containsDiffBlocks(this.streamingText)) {
+        // Clear and re-render with diff blocks
+        streamingEl.empty()
+        this.renderMessageWithDiffs(streamingEl, this.streamingText)
+      } else {
+        // Re-render with hint styling (existing behavior)
+        const hintMatch = this.streamingText.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
+        if (hintMatch) {
+          const mainContent = this.streamingText.replace(/\{\{hint\}\}[\s\S]*?\{\{\/hint\}\}/, '').trim()
+          streamingEl.textContent = mainContent
 
-        const hintEl = streamingEl.createDiv({ cls: 'lachesis-hint' })
-        hintEl.setText(hintMatch[1].trim())
+          const hintEl = streamingEl.createDiv({ cls: 'lachesis-hint' })
+          hintEl.setText(hintMatch[1].trim())
+        }
       }
+    }
+  }
+
+  /**
+   * Render a message that contains diff blocks.
+   * Shows a summary with clickable file links that open the diff viewer modal.
+   */
+  private renderMessageWithDiffs(container: HTMLElement, content: string) {
+    const diffBlocks = extractDiffBlocks(content)
+
+    if (diffBlocks.length === 0) {
+      // No diffs found, render as plain text
+      container.setText(content)
+      return
+    }
+
+    // Store pending diffs
+    this.pendingDiffs = diffBlocks
+
+    // Extract text before first diff block
+    const firstDiffMarker = '```diff\n' + diffBlocks[0].rawDiff + '\n```'
+    const firstIdx = content.indexOf(firstDiffMarker)
+    if (firstIdx > 0) {
+      const textBefore = content.slice(0, firstIdx).trim()
+      if (textBefore) {
+        const textEl = container.createEl('p', { cls: 'lachesis-diff-text' })
+        textEl.setText(textBefore)
+      }
+    }
+
+    // Render summary message
+    const summaryEl = container.createEl('p', { cls: 'lachesis-diff-summary' })
+    summaryEl.setText('Here are the proposed changes:')
+
+    // Render file links list
+    const fileListEl = container.createDiv({ cls: 'lachesis-diff-file-list' })
+
+    for (const diffBlock of diffBlocks) {
+      this.renderDiffFileLink(fileListEl, diffBlock)
+    }
+
+    // Extract text after last diff block
+    const lastDiffBlock = diffBlocks[diffBlocks.length - 1]
+    const lastDiffMarker = '```diff\n' + lastDiffBlock.rawDiff + '\n```'
+    const lastIdx = content.lastIndexOf(lastDiffMarker)
+    if (lastIdx >= 0) {
+      const textAfter = content.slice(lastIdx + lastDiffMarker.length).trim()
+      if (textAfter) {
+        const textEl = container.createEl('p', { cls: 'lachesis-diff-text' })
+        textEl.setText(textAfter)
+      }
+    }
+  }
+
+  /**
+   * Render a clickable file link for a diff block.
+   */
+  private renderDiffFileLink(container: HTMLElement, diffBlock: DiffBlock) {
+    const linkEl = container.createDiv({ cls: 'lachesis-diff-file-link' })
+    diffBlock.element = linkEl
+
+    // File icon
+    const iconEl = linkEl.createSpan({ cls: 'lachesis-diff-file-icon' })
+    iconEl.setText('📄')
+
+    // File name (clickable)
+    const nameEl = linkEl.createEl('a', {
+      text: diffBlock.fileName,
+      cls: 'lachesis-diff-file-name',
+    })
+    nameEl.addEventListener('click', (e) => {
+      e.preventDefault()
+      this.openDiffViewer(diffBlock)
+    })
+
+    // Change summary
+    if (diffBlock.parsed) {
+      let addCount = 0
+      let removeCount = 0
+      for (const hunk of diffBlock.parsed.hunks) {
+        for (const line of hunk.lines) {
+          if (line.type === 'add') addCount++
+          if (line.type === 'remove') removeCount++
+        }
+      }
+      const changeEl = linkEl.createSpan({ cls: 'lachesis-diff-file-changes' })
+      changeEl.setText(`+${addCount} / -${removeCount}`)
+    }
+
+    // Status indicator
+    const statusEl = linkEl.createSpan({ cls: `lachesis-diff-file-status ${diffBlock.status}` })
+    statusEl.setText(diffBlock.status === 'pending' ? 'pending' : diffBlock.status)
+  }
+
+  /**
+   * Open the diff viewer modal for a specific diff block.
+   */
+  private openDiffViewer(diffBlock: DiffBlock) {
+    const modal = new DiffViewerModal(
+      this.app,
+      diffBlock,
+      this.projectPath,
+      (updatedDiff, action) => this.handleDiffAction(updatedDiff, action),
+    )
+    modal.open()
+  }
+
+  /**
+   * Handle when a diff is accepted or rejected from the viewer modal.
+   */
+  private async handleDiffAction(diffBlock: DiffBlock, action: DiffAction) {
+    // Update the file link UI
+    if (diffBlock.element) {
+      const statusEl = diffBlock.element.querySelector('.lachesis-diff-file-status')
+      if (statusEl) {
+        statusEl.removeClass('pending')
+        statusEl.addClass(action)
+        statusEl.setText(action)
+      }
+      diffBlock.element.addClass(action)
+    }
+
+    // Refresh snapshot if changes were applied
+    if (action === 'accepted') {
+      this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
     }
   }
 

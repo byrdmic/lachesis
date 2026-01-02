@@ -149,6 +149,35 @@ LANGUAGE RULES (STRICT):
   // Build workflow section if a workflow is active
   let workflowSection = ''
   if (activeWorkflow && workflowFileContents) {
+    // Add diff format instructions for workflows that need preview/confirm
+    const diffInstructions = activeWorkflow.confirmation !== 'none' ? `
+
+OUTPUT FORMAT FOR CHANGES (CRITICAL):
+When you have changes to propose, output them in unified diff format inside a diff code block.
+Each file change should be in its own diff block with clear file headers.
+
+Example format:
+\`\`\`diff
+--- Log.md
++++ Log.md
+@@ -5,4 +5,4 @@
+ ## 2024-01-15
+
+-11:48am
++11:48am - MCP Server
+ I got the mcp server to actually work...
+\`\`\`
+
+RULES FOR DIFF OUTPUT:
+• Use exact unified diff format with --- and +++ headers
+• Include @@ line number markers (use approximate line numbers)
+• Include 1-2 lines of context around each change
+• Only show the changed sections, not entire files
+• Each file gets its own \`\`\`diff block
+• After showing all diffs, briefly explain what each change does
+• The user will see Accept/Reject buttons for each diff block
+` : ''
+
     workflowSection = `
 ================================================================================
 ACTIVE WORKFLOW: ${activeWorkflow.displayName.toUpperCase()}
@@ -163,7 +192,7 @@ May move between files: ${activeWorkflow.allowsCrossFileMove ? 'yes' : 'no'}
 
 RULES FOR THIS WORKFLOW:
 ${activeWorkflow.rules.map((r) => `• ${r}`).join('\n')}
-
+${diffInstructions}
 FILE CONTENTS (for workflow execution):
 ${workflowFileContents}
 ================================================================================
@@ -193,7 +222,7 @@ AVAILABLE WORKFLOWS:
 1. **Synthesize** - Light polish for clarity and consistency
 2. **Harvest Tasks** - Extract actionable items from Log/Ideas → Tasks
 3. **Triage** - Organize Tasks.md into executable priority order
-4. **Log Digest** - Add titles to untitled log entries
+4. **Refine Log** - Add short titles to log entries
 5. **Align Templates** - Ensure file structure matches current templates
 6. **Archive Pass** - Move completed or cut work to Archive
 

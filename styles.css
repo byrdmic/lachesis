@@ -449,3 +449,301 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ============================================================================
+   Diff Preview Blocks
+   ============================================================================ */
+
+.lachesis-diff-text {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.lachesis-diff-block {
+  margin: 12px 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--background-primary);
+}
+
+.lachesis-diff-header {
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lachesis-diff-filename {
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+}
+
+.lachesis-diff-content {
+  padding: 8px 0;
+  margin: 0;
+  overflow-x: auto;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+  line-height: 1.5;
+  background: var(--background-primary);
+}
+
+.lachesis-diff-hunk-header {
+  padding: 4px 12px;
+  color: var(--text-muted);
+  background: var(--background-primary-alt);
+}
+
+.lachesis-diff-line {
+  padding: 1px 12px;
+  white-space: pre;
+}
+
+.lachesis-diff-add {
+  background: rgba(46, 160, 67, 0.15);
+  color: var(--text-success);
+}
+
+.lachesis-diff-remove {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--text-error);
+}
+
+.lachesis-diff-context {
+  color: var(--text-muted);
+}
+
+.lachesis-diff-buttons {
+  padding: 8px 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.lachesis-diff-accept-btn {
+  padding: 4px 12px;
+  background: var(--interactive-success);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.lachesis-diff-accept-btn:hover {
+  opacity: 0.9;
+}
+
+.lachesis-diff-reject-btn {
+  padding: 4px 12px;
+  background: var(--background-modifier-error);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.lachesis-diff-reject-btn:hover {
+  opacity: 0.9;
+}
+
+.lachesis-diff-status {
+  padding: 8px 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  font-size: 0.85em;
+  text-align: center;
+}
+
+.lachesis-diff-status.accepted {
+  color: var(--text-success);
+  background: rgba(46, 160, 67, 0.1);
+}
+
+.lachesis-diff-status.rejected {
+  color: var(--text-muted);
+  background: var(--background-secondary);
+}
+
+.lachesis-diff-block.accepted {
+  opacity: 0.7;
+}
+
+.lachesis-diff-block.rejected {
+  opacity: 0.5;
+}
+
+/* ============================================================================
+   Diff File Links (in chat message)
+   ============================================================================ */
+
+.lachesis-diff-summary {
+  font-weight: 600;
+  margin: 8px 0;
+}
+
+.lachesis-diff-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.lachesis-diff-file-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.lachesis-diff-file-link:hover {
+  background: var(--background-modifier-hover);
+}
+
+.lachesis-diff-file-link.accepted {
+  border-color: var(--text-success);
+  opacity: 0.8;
+}
+
+.lachesis-diff-file-link.rejected {
+  border-color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.lachesis-diff-file-icon {
+  font-size: 1em;
+}
+
+.lachesis-diff-file-name {
+  flex: 1;
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+  color: var(--text-accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.lachesis-diff-file-name:hover {
+  text-decoration: underline;
+}
+
+.lachesis-diff-file-changes {
+  font-family: var(--font-monospace);
+  font-size: 0.8em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.lachesis-diff-file-status {
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.lachesis-diff-file-status.pending {
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.lachesis-diff-file-status.accepted {
+  background: var(--background-modifier-success);
+  color: var(--text-success);
+}
+
+.lachesis-diff-file-status.rejected {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+}
+
+/* ============================================================================
+   Diff Viewer Modal
+   ============================================================================ */
+
+.lachesis-diff-modal {
+  display: flex;
+  flex-direction: column;
+  height: 70vh;
+  width: 80vw;
+  max-width: 1200px;
+}
+
+.lachesis-diff-modal-header {
+  padding: 0 0 12px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-diff-modal-header h2 {
+  margin: 0 0 4px 0;
+}
+
+.lachesis-diff-modal-filename {
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.lachesis-diff-modal-content {
+  flex: 1;
+  overflow: auto;
+  margin: 12px 0;
+}
+
+.lachesis-diff-modal-pre {
+  margin: 0;
+  padding: 8px 0;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+  line-height: 1.5;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.lachesis-diff-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-diff-modal-accept-btn {
+  padding: 8px 16px;
+}
+
+.lachesis-diff-modal-reject-btn {
+  padding: 8px 16px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.lachesis-diff-modal-reject-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.lachesis-diff-modal-status {
+  padding: 8px 16px;
+  font-weight: 500;
+}
+
+.lachesis-diff-modal-status.accepted {
+  color: var(--text-success);
+}
+
+.lachesis-diff-modal-status.rejected {
+  color: var(--text-muted);
+}

@@ -15,7 +15,7 @@ export const WORKFLOW_NAMES = [
   'synthesize',
   'harvest-tasks',
   'triage',
-  'log-digest',
+  'refine-log',
   'align-templates',
   'archive-pass',
 ] as const
