@@ -11,6 +11,7 @@ import { buildSystemPrompt } from '../ai/prompts'
 import { getAllWorkflows, getWorkflowDefinition, WORKFLOW_DEFINITIONS } from '../core/workflows/definitions'
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 import { extractDiffBlocks, applyDiff, containsDiffBlocks, type DiffBlock } from '../utils/diff'
+import { getTrimmedLogContent, type TrimmedLogResult } from '../utils/log-parser'
 import { DiffViewerModal, type DiffAction } from './diff-viewer-modal'
 
 // ============================================================================
@@ -459,6 +460,7 @@ export class ExistingProjectModal extends Modal {
 
     // Fetch file contents if a workflow is active
     let workflowFileContents: string | undefined
+    let logTrimResult: TrimmedLogResult | null = null
     if (this.activeWorkflow) {
       this.updateStatus(`Fetching files for ${this.activeWorkflow.displayName}...`)
       try {
@@ -467,6 +469,16 @@ export class ExistingProjectModal extends Modal {
           this.projectPath,
           this.activeWorkflow.readFiles,
         )
+
+        // For refine-log workflow, trim large log files to only unsummarized entries
+        if (this.activeWorkflow.name === 'refine-log' && fileContents['Log.md']) {
+          logTrimResult = getTrimmedLogContent(fileContents['Log.md'])
+          if (logTrimResult.wasTrimmed) {
+            fileContents['Log.md'] = logTrimResult.content
+            console.log(`Log trimmed: ${logTrimResult.trimSummary}`)
+          }
+        }
+
         workflowFileContents = formatFileContentsForModel(fileContents)
       } catch (err) {
         console.error('Failed to fetch workflow files:', err)
