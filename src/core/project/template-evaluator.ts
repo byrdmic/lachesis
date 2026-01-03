@@ -152,12 +152,38 @@ function stripPlaceholders(text: string, placeholders: string[]): string {
 }
 
 /**
- * Count how many <placeholder> patterns remain in the text
+ * Count how many <placeholder> patterns remain in the text.
+ * Excludes common non-placeholder patterns like URLs, HTML tags, etc.
  */
 function countUnfilledPlaceholders(text: string): number {
   // Match patterns like <...> that look like placeholders
   const matches = text.match(/<[^>]{2,}>/g)
-  return matches ? matches.length : 0
+  if (!matches) return 0
+
+  // Filter out non-placeholder patterns
+  const placeholderMatches = matches.filter((match) => {
+    const inner = match.slice(1, -1) // Remove < and >
+
+    // Skip URLs (http://, https://, ftp://, etc.)
+    if (/^https?:\/\//i.test(inner) || /^ftp:\/\//i.test(inner)) return false
+
+    // Skip email addresses
+    if (/^[^@]+@[^@]+\.[^@]+$/.test(inner)) return false
+
+    // Skip common HTML tags (opening, closing, self-closing)
+    if (/^\/?\w+(\s+[^>]*)?$/.test(inner) && /^(a|b|i|u|p|br|hr|div|span|img|pre|code|strong|em|ul|ol|li|table|tr|td|th|h[1-6]|script|style|link|meta|head|body|html|input|button|form|label|select|option|textarea|iframe|video|audio|source|canvas|svg|path|circle|rect|line|g|defs|use)/i.test(inner.split(/\s/)[0].replace(/^\//, ''))) return false
+
+    // Skip XML-style self-closing patterns
+    if (/\/$/.test(inner)) return false
+
+    // Skip patterns that look like code/technical content (contains = or : or .)
+    if (/[=:]/.test(inner) && !/^[A-Z][a-z]/.test(inner)) return false
+
+    // This looks like a placeholder (starts with capital letter or is all caps with spaces)
+    return true
+  })
+
+  return placeholderMatches.length
 }
 
 /**

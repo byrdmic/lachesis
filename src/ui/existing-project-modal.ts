@@ -4,7 +4,7 @@ import { App, Modal, Notice, TFile, TFolder } from 'obsidian'
 import * as fs from 'fs'
 import * as path from 'path'
 import type LachesisPlugin from '../main'
-import type { ProjectSnapshot } from '../core/project/snapshot'
+import type { ProjectSnapshot, ExpectedCoreFile } from '../core/project/snapshot'
 import { buildProjectSnapshot, formatProjectSnapshotForModel, fetchProjectFileContents, formatFileContentsForModel } from '../core/project/snapshot-builder'
 import { getProvider } from '../ai/providers/factory'
 import { isProviderAvailable } from '../ai/providers/factory'
@@ -16,12 +16,22 @@ import { extractDiffBlocks, applyDiff, containsDiffBlocks, type DiffBlock } from
 import { getTrimmedLogContent, type TrimmedLogResult } from '../utils/log-parser'
 import { DiffViewerModal, type DiffAction, type DiffViewerOptions } from './diff-viewer-modal'
 import { listChatLogs, loadChatLog, saveChatLog, type ChatLogMetadata } from '../core/chat'
+import { TEMPLATES, type TemplateName } from '../scaffolder/templates'
+import { processTemplateForFile } from '../scaffolder/scaffolder'
 
 // ============================================================================
 // Types
 // ============================================================================
 
 type ModalPhase = 'loading' | 'chat' | 'error'
+
+type ProjectIssue = {
+  file: ExpectedCoreFile
+  type: 'missing' | 'template_only' | 'thin'
+  message: string
+  fixLabel: string
+  fixAction: () => Promise<void>
+}
 
 // ============================================================================
 // Existing Project Modal
@@ -55,6 +65,10 @@ export class ExistingProjectModal extends Modal {
 
   // Filesystem watcher for real-time updates
   private fsWatcher: fs.FSWatcher | null = null
+
+  // Issues dropdown state
+  private issuesDropdown: HTMLElement | null = null
+  private isDropdownOpen = false
 
   constructor(
     app: App,
@@ -101,6 +115,9 @@ export class ExistingProjectModal extends Modal {
   onClose() {
     // Clean up vault event listeners
     this.cleanupVaultListeners()
+
+    // Clean up issues dropdown
+    this.closeIssuesDropdown()
 
     const { contentEl } = this
     contentEl.empty()
@@ -154,10 +171,19 @@ export class ExistingProjectModal extends Modal {
     header.createEl('h2', { text: this.snapshot.projectName })
 
     // Status badge
+    const isReady = this.snapshot.readiness.isReady
     const statusBadge = header.createEl('span', {
-      cls: `lachesis-status-badge ${this.snapshot.readiness.isReady ? 'ready' : 'needs-work'}`,
+      cls: `lachesis-status-badge ${isReady ? 'ready' : 'needs-work'} ${!isReady ? 'clickable' : ''}`,
     })
-    statusBadge.setText(this.snapshot.readiness.isReady ? 'Ready' : 'Needs attention')
+    statusBadge.setText(isReady ? 'Ready' : 'Needs attention')
+
+    // Add click handler for issues dropdown (only when not ready)
+    if (!isReady) {
+      statusBadge.addEventListener('click', (e) => {
+        e.stopPropagation()
+        this.toggleIssuesDropdown(statusBadge)
+      })
+    }
 
     // Workflow buttons bar
     const workflowBar = mainEl.createDiv({ cls: 'lachesis-workflow-bar' })
@@ -864,6 +890,257 @@ export class ExistingProjectModal extends Modal {
     if (this.fsWatcher) {
       this.fsWatcher.close()
       this.fsWatcher = null
+    }
+  }
+
+  // ============================================================================
+  // Issues Dropdown Methods
+  // ============================================================================
+
+  /**
+   * Build the list of issues from the snapshot readiness data.
+   */
+  private buildIssuesList(): ProjectIssue[] {
+    const issues: ProjectIssue[] = []
+
+    for (const fileName of this.snapshot.readiness.prioritizedFiles) {
+      const fileEntry = this.snapshot.files[fileName]
+
+      if (!fileEntry.exists) {
+        issues.push({
+          file: fileName,
+          type: 'missing',
+          message: `${fileName} does not exist`,
+          fixLabel: 'Create File',
+          fixAction: () => this.fixMissingFile(fileName),
+        })
+      } else if (fileEntry.templateStatus === 'template_only') {
+        issues.push({
+          file: fileName,
+          type: 'template_only',
+          message: `${fileName} has not been filled in`,
+          fixLabel: 'Fill with AI',
+          fixAction: () => this.fixTemplateOnlyFile(fileName),
+        })
+      } else if (fileEntry.templateStatus === 'thin') {
+        issues.push({
+          file: fileName,
+          type: 'thin',
+          message: `${fileName} needs more content`,
+          fixLabel: 'Expand with AI',
+          fixAction: () => this.fixThinFile(fileName),
+        })
+      }
+    }
+
+    return issues
+  }
+
+  /**
+   * Toggle the issues dropdown visibility.
+   */
+  private toggleIssuesDropdown(anchorEl: HTMLElement): void {
+    if (this.isDropdownOpen) {
+      this.closeIssuesDropdown()
+    } else {
+      this.openIssuesDropdown(anchorEl)
+    }
+  }
+
+  /**
+   * Open the issues dropdown below the status badge.
+   */
+  private openIssuesDropdown(anchorEl: HTMLElement): void {
+    if (this.issuesDropdown) {
+      this.closeIssuesDropdown()
+    }
+
+    const issues = this.buildIssuesList()
+    if (issues.length === 0) return
+
+    // Create dropdown container
+    this.issuesDropdown = document.createElement('div')
+    this.issuesDropdown.addClass('lachesis-issues-dropdown')
+
+    // Position relative to anchor
+    const rect = anchorEl.getBoundingClientRect()
+    this.issuesDropdown.style.top = `${rect.bottom + 8}px`
+    this.issuesDropdown.style.right = `${window.innerWidth - rect.right}px`
+
+    // Header
+    const header = this.issuesDropdown.createDiv({ cls: 'lachesis-issues-header' })
+    header.setText(`${issues.length} issue${issues.length > 1 ? 's' : ''} to address`)
+
+    // Issues list
+    const listEl = this.issuesDropdown.createDiv({ cls: 'lachesis-issues-list' })
+
+    for (const issue of issues) {
+      this.renderIssueItem(listEl, issue)
+    }
+
+    // Add to modal
+    this.modalEl.appendChild(this.issuesDropdown)
+    this.isDropdownOpen = true
+
+    // Close on outside click (delayed to prevent immediate close)
+    setTimeout(() => {
+      document.addEventListener('click', this.handleOutsideClick)
+    }, 0)
+  }
+
+  /**
+   * Close the issues dropdown.
+   */
+  private closeIssuesDropdown(): void {
+    if (this.issuesDropdown) {
+      this.issuesDropdown.remove()
+      this.issuesDropdown = null
+    }
+    this.isDropdownOpen = false
+    document.removeEventListener('click', this.handleOutsideClick)
+  }
+
+  /**
+   * Handle clicks outside the dropdown.
+   */
+  private handleOutsideClick = (e: MouseEvent): void => {
+    if (this.issuesDropdown && !this.issuesDropdown.contains(e.target as Node)) {
+      this.closeIssuesDropdown()
+    }
+  }
+
+  /**
+   * Render a single issue item in the dropdown.
+   */
+  private renderIssueItem(container: HTMLElement, issue: ProjectIssue): void {
+    const itemEl = container.createDiv({ cls: `lachesis-issue-item lachesis-issue-${issue.type}` })
+
+    // Icon based on type
+    const iconEl = itemEl.createSpan({ cls: 'lachesis-issue-icon' })
+    iconEl.setText(issue.type === 'missing' ? '!' : issue.type === 'template_only' ? '?' : '~')
+
+    // Issue content
+    const contentEl = itemEl.createDiv({ cls: 'lachesis-issue-content' })
+    contentEl.createDiv({ cls: 'lachesis-issue-file', text: issue.file })
+    contentEl.createDiv({ cls: 'lachesis-issue-message', text: issue.message })
+
+    // Fix button
+    const fixBtn = itemEl.createEl('button', {
+      text: issue.fixLabel,
+      cls: 'lachesis-issue-fix-btn',
+    })
+    fixBtn.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      fixBtn.disabled = true
+      fixBtn.setText('Working...')
+      await issue.fixAction()
+    })
+  }
+
+  // ============================================================================
+  // Fix Action Methods
+  // ============================================================================
+
+  /**
+   * Map file names to template names.
+   */
+  private getTemplateName(fileName: ExpectedCoreFile): TemplateName {
+    const mapping: Record<ExpectedCoreFile, TemplateName> = {
+      'Overview.md': 'overview',
+      'Roadmap.md': 'roadmap',
+      'Tasks.md': 'tasks',
+      'Log.md': 'log',
+      'Ideas.md': 'ideas',
+      'Archive.md': 'archive',
+    }
+    return mapping[fileName]
+  }
+
+  /**
+   * Fix a missing file by creating it from template.
+   */
+  private async fixMissingFile(fileName: ExpectedCoreFile): Promise<void> {
+    try {
+      const templateName = this.getTemplateName(fileName)
+      const template = TEMPLATES[templateName]
+      const filePath = `${this.projectPath}/${fileName}`
+
+      // Process template with basic data
+      const projectSlug = this.snapshot.projectName.toLowerCase().replace(/\s+/g, '-')
+      const content = processTemplateForFile(template, {
+        projectName: this.snapshot.projectName,
+        projectSlug,
+      })
+
+      await this.app.vault.create(filePath, content)
+      new Notice(`Created ${fileName}`)
+
+      await this.refreshAfterFix()
+    } catch (err) {
+      new Notice(`Failed to create ${fileName}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Fix a template-only file by initiating an AI chat focused on filling it.
+   */
+  private async fixTemplateOnlyFile(fileName: ExpectedCoreFile): Promise<void> {
+    this.closeIssuesDropdown()
+
+    // Set up the input to trigger a focused conversation
+    if (this.inputEl) {
+      this.inputEl.value = `Help me fill in ${fileName}. It currently only has template placeholders. Let's work through it section by section.`
+      this.handleUserInput()
+    }
+  }
+
+  /**
+   * Fix a thin file by initiating an AI chat to expand it.
+   */
+  private async fixThinFile(fileName: ExpectedCoreFile): Promise<void> {
+    this.closeIssuesDropdown()
+
+    // Set up the input to trigger a focused conversation
+    if (this.inputEl) {
+      this.inputEl.value = `Help me expand ${fileName}. It has some content but needs more detail. Let's review what's there and add more.`
+      this.handleUserInput()
+    }
+  }
+
+  /**
+   * Refresh snapshot and UI after a fix is applied.
+   */
+  private async refreshAfterFix(): Promise<void> {
+    // Rebuild snapshot
+    this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
+
+    // Update badge
+    this.updateStatusBadge()
+
+    // Refresh dropdown if still open
+    if (this.isDropdownOpen && this.issuesDropdown) {
+      const anchorEl = this.modalEl.querySelector('.lachesis-status-badge') as HTMLElement
+      if (anchorEl) {
+        this.closeIssuesDropdown()
+        if (!this.snapshot.readiness.isReady) {
+          this.openIssuesDropdown(anchorEl)
+        }
+      }
+    }
+  }
+
+  /**
+   * Update the status badge based on current snapshot.
+   */
+  private updateStatusBadge(): void {
+    const badge = this.modalEl.querySelector('.lachesis-status-badge')
+    if (badge) {
+      badge.removeClass('ready', 'needs-work', 'clickable')
+      badge.addClass(this.snapshot.readiness.isReady ? 'ready' : 'needs-work')
+      if (!this.snapshot.readiness.isReady) {
+        badge.addClass('clickable')
+      }
+      badge.setText(this.snapshot.readiness.isReady ? 'Ready' : 'Needs attention')
     }
   }
 }

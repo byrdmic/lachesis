@@ -45,6 +45,29 @@ function hasMinimalExtractedData(data: ScaffoldProjectData): boolean {
   return false
 }
 
+/**
+ * Simplified template processing for creating a single file.
+ * Only does basic variable replacements without extracted data logic.
+ * Used when creating missing files from the issues dropdown.
+ */
+export function processTemplateForFile(
+  template: string,
+  data: { projectName: string; projectSlug: string },
+): string {
+  let content = template
+  const today = new Date()
+  const dateStr = today.toISOString().slice(0, 10)
+  const projectId = `${dateStr.replace(/-/g, '')}-${data.projectSlug.toLowerCase().slice(0, 12)}`
+
+  // Basic replacements
+  content = content.replace(/"<Project Name>"/g, `"${data.projectName}"`)
+  content = content.replace(/"<Short Codename>"/g, `"${data.projectSlug}"`)
+  content = content.replace(/"<YYYYMMDD-shortslug>"/g, `"${projectId}"`)
+  content = content.replace(/— <Project Name>/g, `— ${data.projectName}`)
+
+  return content
+}
+
 function processTemplate(
   template: string,
   templateName: TemplateName,

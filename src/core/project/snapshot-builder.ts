@@ -1,6 +1,8 @@
 // Project snapshot builder for Obsidian plugin
-// Uses Obsidian's Vault API instead of Node.js fs
+// Uses Node.js fs directly to avoid Obsidian's caching issues
 
+import * as fs from 'fs'
+import * as path from 'path'
 import type { Vault, TFile, TFolder } from 'obsidian'
 import { parseYaml } from 'obsidian'
 import {
@@ -169,7 +171,8 @@ function buildFileEntry(
 }
 
 /**
- * Build a deterministic project snapshot using Obsidian's Vault API.
+ * Build a deterministic project snapshot using Node.js fs directly.
+ * Bypasses Obsidian's Vault API to avoid caching issues.
  */
 export async function buildProjectSnapshot(
   vault: Vault,
@@ -180,9 +183,12 @@ export async function buildProjectSnapshot(
   const capturedAt = new Date().toISOString()
   const projectName = projectFolderNorm.split('/').pop() || projectFolderNorm
 
-  // Get the project folder
-  const folder = vault.getAbstractFileByPath(projectFolderNorm)
-  if (!folder || !(folder instanceof Object && 'children' in folder)) {
+  // Get the absolute base path from the vault adapter
+  const basePath = (vault.adapter as any).getBasePath() as string
+  const absoluteProjectPath = path.join(basePath, projectFolderNorm)
+
+  // Check if project folder exists using filesystem
+  if (!fs.existsSync(absoluteProjectPath)) {
     // Folder doesn't exist - return snapshot with all files missing
     const files: Record<ExpectedCoreFile, SnapshotFileEntry> = {} as Record<
       ExpectedCoreFile,
@@ -210,20 +216,19 @@ export async function buildProjectSnapshot(
   >
 
   for (const file of EXPECTED_CORE_FILES) {
-    const filePath = `${projectFolderNorm}/${file}`
-    const abstractFile = vault.getAbstractFileByPath(filePath)
+    const absoluteFilePath = path.join(absoluteProjectPath, file)
 
-    if (abstractFile && 'extension' in abstractFile) {
-      // It's a TFile
-      const tfile = abstractFile as TFile
-      try {
-        const content = await vault.read(tfile)
-        const mtime = tfile.stat.mtime
+    try {
+      if (fs.existsSync(absoluteFilePath)) {
+        // Read file directly from filesystem (bypasses Obsidian cache)
+        const content = fs.readFileSync(absoluteFilePath, 'utf-8')
+        const stats = fs.statSync(absoluteFilePath)
+        const mtime = stats.mtimeMs
         files[file] = buildFileEntry(projectFolderNorm, file, true, content, mtime)
-      } catch {
+      } else {
         files[file] = buildFileEntry(projectFolderNorm, file, false, null)
       }
-    } else {
+    } catch {
       files[file] = buildFileEntry(projectFolderNorm, file, false, null)
     }
   }
@@ -244,6 +249,7 @@ export async function buildProjectSnapshot(
 
 /**
  * Fetch file contents for a set of files in a project.
+ * Uses Node.js fs directly to avoid Obsidian's caching issues.
  * Used to provide actual content to the AI for workflow execution.
  */
 export async function fetchProjectFileContents(
@@ -254,18 +260,22 @@ export async function fetchProjectFileContents(
   const projectFolderNorm = projectPath.replace(/\\/g, '/').replace(/\/+$/, '')
   const contents: Record<string, string | null> = {}
 
-  for (const fileName of fileNames) {
-    const filePath = `${projectFolderNorm}/${fileName}`
-    const abstractFile = vault.getAbstractFileByPath(filePath)
+  // Get the absolute base path from the vault adapter
+  const basePath = (vault.adapter as any).getBasePath() as string
+  const absoluteProjectPath = path.join(basePath, projectFolderNorm)
 
-    if (abstractFile && 'extension' in abstractFile) {
-      try {
-        const content = await vault.read(abstractFile as TFile)
+  for (const fileName of fileNames) {
+    const absoluteFilePath = path.join(absoluteProjectPath, fileName)
+
+    try {
+      if (fs.existsSync(absoluteFilePath)) {
+        // Read file directly from filesystem (bypasses Obsidian cache)
+        const content = fs.readFileSync(absoluteFilePath, 'utf-8')
         contents[fileName] = content
-      } catch {
+      } else {
         contents[fileName] = null
       }
-    } else {
+    } catch {
       contents[fileName] = null
     }
   }
