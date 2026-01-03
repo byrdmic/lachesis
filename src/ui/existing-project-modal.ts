@@ -1,6 +1,6 @@
 // Existing Project Modal - Chat interface for continuing work on existing projects
 
-import { App, Modal, Notice, TFile } from 'obsidian'
+import { App, Modal, Notice, TFile, TFolder, EventRef } from 'obsidian'
 import type LachesisPlugin from '../main'
 import type { ProjectSnapshot } from '../core/project/snapshot'
 import { buildProjectSnapshot, formatProjectSnapshotForModel, fetchProjectFileContents, formatFileContentsForModel } from '../core/project/snapshot-builder'
@@ -13,6 +13,7 @@ import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 import { extractDiffBlocks, applyDiff, containsDiffBlocks, type DiffBlock } from '../utils/diff'
 import { getTrimmedLogContent, type TrimmedLogResult } from '../utils/log-parser'
 import { DiffViewerModal, type DiffAction } from './diff-viewer-modal'
+import { listChatLogs, loadChatLog, saveChatLog, type ChatLogMetadata } from '../core/chat'
 
 // ============================================================================
 // Types
@@ -43,6 +44,17 @@ export class ExistingProjectModal extends Modal {
   private inputEl: HTMLInputElement | null = null
   private statusEl: HTMLElement | null = null
 
+  // Chat History State
+  private chatLogs: ChatLogMetadata[] = []
+  private currentChatFilename: string | null = null
+  private sidebarEl: HTMLElement | null = null
+  private chatListEl: HTMLElement | null = null
+
+  // Vault event listeners for real-time updates
+  private vaultCreateRef: EventRef | null = null
+  private vaultModifyRef: EventRef | null = null
+  private vaultDeleteRef: EventRef | null = null
+
   constructor(
     app: App,
     plugin: LachesisPlugin,
@@ -71,6 +83,12 @@ export class ExistingProjectModal extends Modal {
     // Create provider
     this.provider = getProvider(this.plugin.settings)
 
+    // Load chat history
+    await this.loadChatHistory()
+
+    // Set up vault event listeners for real-time sidebar updates
+    this.setupVaultListeners()
+
     // Render chat interface
     this.phase = 'chat'
     this.renderChatPhase()
@@ -80,10 +98,15 @@ export class ExistingProjectModal extends Modal {
   }
 
   onClose() {
+    // Clean up vault event listeners
+    this.cleanupVaultListeners()
+
     const { contentEl } = this
     contentEl.empty()
     this.provider = null
     this.messages = []
+    this.chatLogs = []
+    this.currentChatFilename = null
   }
 
   private renderApiKeyMissing() {
@@ -115,8 +138,18 @@ export class ExistingProjectModal extends Modal {
     const { contentEl } = this
     contentEl.empty()
 
+    // Two-column layout container
+    const layoutEl = contentEl.createDiv({ cls: 'lachesis-modal-layout' })
+
+    // Left sidebar with chat history
+    this.sidebarEl = layoutEl.createDiv({ cls: 'lachesis-sidebar' })
+    this.renderSidebar(this.sidebarEl)
+
+    // Main content area
+    const mainEl = layoutEl.createDiv({ cls: 'lachesis-main-content' })
+
     // Header with project name
-    const header = contentEl.createDiv({ cls: 'lachesis-header' })
+    const header = mainEl.createDiv({ cls: 'lachesis-header' })
     header.createEl('h2', { text: this.snapshot.projectName })
 
     // Status badge
@@ -126,7 +159,7 @@ export class ExistingProjectModal extends Modal {
     statusBadge.setText(this.snapshot.readiness.isReady ? 'Ready' : 'Needs attention')
 
     // Workflow buttons bar
-    const workflowBar = contentEl.createDiv({ cls: 'lachesis-workflow-bar' })
+    const workflowBar = mainEl.createDiv({ cls: 'lachesis-workflow-bar' })
 
     // Start Chat button - triggers the opening message
     const startChatBtn = workflowBar.createEl('button', {
@@ -152,7 +185,7 @@ export class ExistingProjectModal extends Modal {
     }
 
     // Messages container
-    this.messagesContainer = contentEl.createDiv({ cls: 'lachesis-messages' })
+    this.messagesContainer = mainEl.createDiv({ cls: 'lachesis-messages' })
 
     // Render existing messages
     if (this.messages.length === 0) {
@@ -164,7 +197,7 @@ export class ExistingProjectModal extends Modal {
     }
 
     // Input area
-    const inputContainer = contentEl.createDiv({ cls: 'lachesis-input-area' })
+    const inputContainer = mainEl.createDiv({ cls: 'lachesis-input-area' })
 
     this.inputEl = inputContainer.createEl('input', {
       type: 'text',
@@ -190,12 +223,18 @@ export class ExistingProjectModal extends Modal {
     })
 
     // Status bar
-    this.statusEl = contentEl.createDiv({ cls: 'lachesis-status' })
+    this.statusEl = mainEl.createDiv({ cls: 'lachesis-status' })
     this.updateStatus('Ready')
   }
 
   private addMessageToUI(role: 'assistant' | 'user', content: string, isStreaming = false) {
     if (!this.messagesContainer) return
+
+    // Remove empty state if present
+    const emptyState = this.messagesContainer.querySelector('.lachesis-empty-state-wrapper')
+    if (emptyState) {
+      emptyState.remove()
+    }
 
     const messageEl = this.messagesContainer.createDiv({
       cls: `lachesis-message ${role} ${isStreaming ? 'streaming' : ''}`,
@@ -437,6 +476,8 @@ export class ExistingProjectModal extends Modal {
           content: result.content,
           timestamp: new Date().toISOString(),
         })
+        await this.saveCurrentChat()
+        this.highlightCurrentChat()
       }
 
       this.setInputEnabled(true)
@@ -472,6 +513,10 @@ export class ExistingProjectModal extends Modal {
     }
     this.messages.push(userMessage)
     this.addMessageToUI('user', message)
+
+    // Save after user message
+    await this.saveCurrentChat()
+    this.highlightCurrentChat()
 
     // Generate response
     this.setInputEnabled(false)
@@ -538,6 +583,8 @@ export class ExistingProjectModal extends Modal {
           content: result.content,
           timestamp: new Date().toISOString(),
         })
+        await this.saveCurrentChat()
+        this.highlightCurrentChat()
       }
 
       this.setInputEnabled(true)
@@ -602,19 +649,214 @@ export class ExistingProjectModal extends Modal {
     if (!this.messagesContainer) return
 
     const wrapper = this.messagesContainer.createDiv({ cls: 'lachesis-empty-state-wrapper' })
-    
-    wrapper.createEl('div', { 
+
+    wrapper.createEl('div', {
       text: this.snapshot.projectName,
       cls: 'lachesis-empty-state-title'
     })
 
-    const subtitle = this.snapshot.readiness.isReady 
-      ? 'Project is ready for workflows.' 
+    const subtitle = this.snapshot.readiness.isReady
+      ? 'Project is ready for workflows.'
       : 'Project needs attention.'
-    
+
     wrapper.createEl('div', {
       text: subtitle,
       cls: 'lachesis-empty-state-subtitle'
     })
+  }
+
+  // ============================================================================
+  // Chat History Methods
+  // ============================================================================
+
+  /**
+   * Load list of existing chat logs for sidebar.
+   */
+  private async loadChatHistory(): Promise<void> {
+    try {
+      this.chatLogs = await listChatLogs(this.app.vault, this.projectPath)
+    } catch (err) {
+      console.warn('Failed to load chat history:', err)
+      this.chatLogs = []
+    }
+  }
+
+  /**
+   * Start a new chat (clears current conversation).
+   */
+  private startNewChat(): void {
+    this.messages = []
+    this.currentChatFilename = null
+    this.pendingDiffs = []
+    this.activeWorkflow = null
+    this.renderChatPhase()
+  }
+
+  /**
+   * Load an existing chat from file.
+   */
+  private async loadChat(filename: string): Promise<void> {
+    const chatLog = await loadChatLog(this.app.vault, this.projectPath, filename)
+    if (chatLog) {
+      this.messages = chatLog.messages
+      this.currentChatFilename = filename
+      this.pendingDiffs = []
+      this.activeWorkflow = null
+      this.renderChatPhase()
+    }
+  }
+
+  /**
+   * Save current chat to file (called after each message).
+   */
+  private async saveCurrentChat(): Promise<void> {
+    if (this.messages.length === 0) return
+
+    const wasNewChat = !this.currentChatFilename
+
+    const result = await saveChatLog(
+      this.app.vault,
+      this.projectPath,
+      this.messages,
+      this.currentChatFilename
+    )
+
+    if (result.success) {
+      // If this was a new chat, update our filename reference
+      if (wasNewChat) {
+        this.currentChatFilename = result.filename
+      }
+      // Note: Sidebar refresh is handled by vault event listeners
+    }
+  }
+
+  /**
+   * Render the sidebar with chat history.
+   */
+  private renderSidebar(container?: HTMLElement): void {
+    const parent = container ?? this.sidebarEl
+    if (!parent) return
+
+    parent.empty()
+
+    // Sidebar header
+    const header = parent.createDiv({ cls: 'lachesis-sidebar-header' })
+    header.createSpan({ text: 'Chat History' })
+
+    // New Chat button
+    const newChatBtn = parent.createEl('button', {
+      text: '+ New Chat',
+      cls: 'lachesis-new-chat-button',
+    })
+    newChatBtn.addEventListener('click', () => this.startNewChat())
+
+    // Chat list container
+    this.chatListEl = parent.createDiv({ cls: 'lachesis-chat-list' })
+
+    if (this.chatLogs.length === 0) {
+      this.chatListEl.createDiv({
+        text: 'No previous chats',
+        cls: 'lachesis-chat-empty',
+      })
+    } else {
+      for (const log of this.chatLogs) {
+        this.renderChatItem(log)
+      }
+    }
+  }
+
+  /**
+   * Render a single chat item in the sidebar.
+   */
+  private renderChatItem(log: ChatLogMetadata): void {
+    if (!this.chatListEl) return
+
+    const isActive = log.filename === this.currentChatFilename
+    const item = this.chatListEl.createDiv({
+      cls: `lachesis-chat-item ${isActive ? 'active' : ''}`,
+    })
+
+    item.createEl('span', { text: log.displayDate, cls: 'lachesis-chat-date' })
+    item.createEl('span', { text: log.preview, cls: 'lachesis-chat-preview' })
+
+    item.addEventListener('click', () => {
+      if (log.filename !== this.currentChatFilename) {
+        this.loadChat(log.filename)
+      }
+    })
+  }
+
+  /**
+   * Highlight the current chat in the sidebar.
+   */
+  private highlightCurrentChat(): void {
+    if (!this.chatListEl) return
+
+    const items = this.chatListEl.querySelectorAll('.lachesis-chat-item')
+    items.forEach((el, idx) => {
+      const isActive = this.chatLogs[idx]?.filename === this.currentChatFilename
+      el.toggleClass('active', isActive)
+    })
+  }
+
+  // ============================================================================
+  // Vault Event Listeners (Real-time Sidebar Updates)
+  // ============================================================================
+
+  /**
+   * Set up vault event listeners to watch for changes in the .ai/logs folder.
+   */
+  private setupVaultListeners(): void {
+    const logsPath = `${this.projectPath}/.ai/logs`
+
+    // Helper to check if a file is in our logs folder
+    const isInLogsFolder = (path: string): boolean => {
+      return path.startsWith(logsPath + '/') && path.endsWith('.md')
+    }
+
+    // On file create
+    this.vaultCreateRef = this.app.vault.on('create', async (file) => {
+      if (file instanceof TFile && isInLogsFolder(file.path)) {
+        await this.loadChatHistory()
+        this.renderSidebar()
+        this.highlightCurrentChat()
+      }
+    })
+
+    // On file modify
+    this.vaultModifyRef = this.app.vault.on('modify', async (file) => {
+      if (file instanceof TFile && isInLogsFolder(file.path)) {
+        await this.loadChatHistory()
+        this.renderSidebar()
+        this.highlightCurrentChat()
+      }
+    })
+
+    // On file delete
+    this.vaultDeleteRef = this.app.vault.on('delete', async (file) => {
+      if (file instanceof TFile && isInLogsFolder(file.path)) {
+        await this.loadChatHistory()
+        this.renderSidebar()
+        this.highlightCurrentChat()
+      }
+    })
+  }
+
+  /**
+   * Clean up vault event listeners.
+   */
+  private cleanupVaultListeners(): void {
+    if (this.vaultCreateRef) {
+      this.app.vault.offref(this.vaultCreateRef)
+      this.vaultCreateRef = null
+    }
+    if (this.vaultModifyRef) {
+      this.app.vault.offref(this.vaultModifyRef)
+      this.vaultModifyRef = null
+    }
+    if (this.vaultDeleteRef) {
+      this.app.vault.offref(this.vaultDeleteRef)
+      this.vaultDeleteRef = null
+    }
   }
 }
