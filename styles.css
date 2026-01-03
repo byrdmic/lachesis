@@ -451,6 +451,17 @@
 }
 
 /* Diff File Links */
+.lachesis-diff-summary {
+  margin: 14px 0 10px 0; /* extra breathing room above the list */
+}
+
+.lachesis-diff-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* space between pending diffs */
+  margin: 12px 0 16px 0; /* space around the list */
+}
+
 .lachesis-diff-file-link {
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
@@ -465,6 +476,11 @@
 
 .lachesis-diff-file-name {
   color: var(--text-accent);
+  padding: 0 10px;
+}
+
+.lachesis-diff-file-status {
+  padding: 0 10px;
 }
 
 .lachesis-diff-file-status.accepted {

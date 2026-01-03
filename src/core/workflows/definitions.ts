@@ -32,17 +32,19 @@ const ALL_CORE_FILES = Object.values(PROJECT_FILES)
 
 export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
   /**
-   * REFINE LOG: Add short titles to log entries.
+   * REFINE LOG: Add short titles to log entries and optionally extract potential tasks.
    * Low risk, preview confirmation.
    */
   'refine-log': {
     name: 'refine-log',
     displayName: 'Refine Log',
-    description: 'Add short titles to log entries',
+    description: 'Add short titles to log entries and optionally extract potential tasks',
     intent:
-      'Find log entries and add short descriptive titles (1-5 words) after the timestamp. ' +
+      'Find log entries that lack titles and add short descriptive titles (1-5 words) after the timestamp. ' +
       'Format: "11:48am - MCP Server" where the title captures the main topic. ' +
-      'Does NOT change the content of entries - only adds/improves the title after the time.',
+      'Additionally, for entries being touched, extract 0-3 actionable tasks from the entry body and append ' +
+      'them in a standardized "Potential tasks" section at the bottom of the entry (before the next entry). ' +
+      'If no clearly actionable tasks exist, do NOT add a tasks section at all.',
     readFiles: [PROJECT_FILES.log],
     writeFiles: [PROJECT_FILES.log],
     risk: 'low',
@@ -50,15 +52,36 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     allowsDelete: false,
     allowsCrossFileMove: false,
     rules: [
+      // Title rules (existing behavior)
       'Only touch entries that lack titles (format: HH:MMam/pm with no " - " title after)',
       'Generate titles that are 1-5 words, descriptive, scannable',
       'Format: HH:MMam/pm - <Short Title>',
       'Titles should capture the main topic or action (e.g., "MCP Server", "Bug Fix", "Planning Session")',
       'Use comma-separated titles to capture multiple ideas (e.g., "11:48am - MCP Server, Diff Modal, Bug Fixes")',
-      'Do NOT modify entry content',
+      'If an entry already has a title (has " - " after time), leave it alone completely',
+
+      // Content modification rules
+      'Do NOT modify entry body text except to append the AI potential tasks block when applicable',
       'Do NOT add new entries',
       'Do NOT reorder or restructure the log',
-      'If an entry already has a title (has " - " after time), leave it alone',
+
+      // Potential tasks rules (new behavior)
+      'For each entry you touch (entries that lacked titles), extract 0-3 clearly actionable tasks from the entry body',
+      'If NO clearly actionable tasks exist in the entry (reflective/vague content), do NOT add any tasks section',
+      'Maximum 3 tasks per entry - only include the most concrete, actionable items',
+      'Tasks must be directly supported by the entry text - do NOT invent tasks',
+      'Tasks should be short, specific, and phrased as actions',
+
+      // Potential tasks format (exact format required)
+      'Use Obsidian task checkboxes: - [ ] <task>',
+      'Append the tasks section at the BOTTOM of the entry (before the next timestamp or date header)',
+      'Use this EXACT format:\n<!-- AI: potential-tasks start -->\n#### Potential tasks (AI-generated)\n- [ ] <task 1>\n- [ ] <task 2>\n<!-- AI: potential-tasks end -->',
+
+      // Idempotence rules
+      'Before adding a tasks section, check if the entry already contains one',
+      'An entry already has a tasks section if it contains "<!-- AI: potential-tasks" OR a heading with "Potential tasks" (case-insensitive)',
+      'If a tasks section already exists, do NOT add another one - skip that entry for tasks extraction',
+      'NEVER add empty tasks sections or placeholders like "(none)" - simply omit the block entirely if no tasks',
     ],
   },
 }
