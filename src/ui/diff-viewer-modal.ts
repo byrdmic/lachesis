@@ -10,21 +10,28 @@ export type DiffAction = 'accepted' | 'rejected'
 
 export type DiffActionCallback = (diffBlock: DiffBlock, action: DiffAction) => void
 
+export type DiffViewerOptions = {
+  viewOnly?: boolean // When true, only show "Go back" button (for saved conversations)
+}
+
 export class DiffViewerModal extends Modal {
   private diffBlock: DiffBlock
   private projectPath: string
   private onAction: DiffActionCallback
+  private viewOnly: boolean
 
   constructor(
     app: App,
     diffBlock: DiffBlock,
     projectPath: string,
     onAction: DiffActionCallback,
+    options?: DiffViewerOptions,
   ) {
     super(app)
     this.diffBlock = diffBlock
     this.projectPath = projectPath
     this.onAction = onAction
+    this.viewOnly = options?.viewOnly ?? false
   }
 
   onOpen() {
@@ -49,7 +56,14 @@ export class DiffViewerModal extends Modal {
     // Footer with actions
     const footer = contentEl.createDiv({ cls: 'lachesis-diff-modal-footer' })
 
-    if (this.diffBlock.status === 'pending') {
+    if (this.viewOnly) {
+      // View-only mode for saved conversations - just show Go back button
+      const goBackBtn = footer.createEl('button', {
+        text: 'Go back',
+        cls: 'lachesis-diff-modal-back-btn',
+      })
+      goBackBtn.addEventListener('click', () => this.close())
+    } else if (this.diffBlock.status === 'pending') {
       const rejectBtn = footer.createEl('button', {
         text: 'Reject',
         cls: 'lachesis-diff-modal-reject-btn',

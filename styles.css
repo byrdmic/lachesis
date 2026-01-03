@@ -469,7 +469,7 @@
 
 .lachesis-diff-file-status.accepted {
   background: var(--background-modifier-success);
-  color: var(--text-success);
+  color: var(--text-on-accent);
 }
 
 /* Diff Viewer Modal Specifics */
@@ -494,12 +494,26 @@
 
 .lachesis-diff-modal-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 12px;
   padding: 16px 24px;
   border-top: 1px solid var(--background-modifier-border);
   background: var(--background-secondary);
   z-index: 2;
+}
+
+.lachesis-diff-modal-back-btn {
+  padding: 8px 20px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.lachesis-diff-modal-back-btn:hover {
+  background: var(--background-modifier-hover);
 }
 
 .lachesis-diff-modal-accept-btn {

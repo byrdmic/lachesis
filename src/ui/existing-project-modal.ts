@@ -1,6 +1,8 @@
 // Existing Project Modal - Chat interface for continuing work on existing projects
 
-import { App, Modal, Notice, TFile, TFolder, EventRef } from 'obsidian'
+import { App, Modal, Notice, TFile, TFolder } from 'obsidian'
+import * as fs from 'fs'
+import * as path from 'path'
 import type LachesisPlugin from '../main'
 import type { ProjectSnapshot } from '../core/project/snapshot'
 import { buildProjectSnapshot, formatProjectSnapshotForModel, fetchProjectFileContents, formatFileContentsForModel } from '../core/project/snapshot-builder'
@@ -12,7 +14,7 @@ import { getAllWorkflows, getWorkflowDefinition, WORKFLOW_DEFINITIONS } from '..
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 import { extractDiffBlocks, applyDiff, containsDiffBlocks, type DiffBlock } from '../utils/diff'
 import { getTrimmedLogContent, type TrimmedLogResult } from '../utils/log-parser'
-import { DiffViewerModal, type DiffAction } from './diff-viewer-modal'
+import { DiffViewerModal, type DiffAction, type DiffViewerOptions } from './diff-viewer-modal'
 import { listChatLogs, loadChatLog, saveChatLog, type ChatLogMetadata } from '../core/chat'
 
 // ============================================================================
@@ -49,11 +51,10 @@ export class ExistingProjectModal extends Modal {
   private currentChatFilename: string | null = null
   private sidebarEl: HTMLElement | null = null
   private chatListEl: HTMLElement | null = null
+  private isViewingLoadedChat = false // True when viewing a saved chat (diffs are view-only)
 
-  // Vault event listeners for real-time updates
-  private vaultCreateRef: EventRef | null = null
-  private vaultModifyRef: EventRef | null = null
-  private vaultDeleteRef: EventRef | null = null
+  // Filesystem watcher for real-time updates
+  private fsWatcher: fs.FSWatcher | null = null
 
   constructor(
     app: App,
@@ -240,17 +241,22 @@ export class ExistingProjectModal extends Modal {
       cls: `lachesis-message ${role} ${isStreaming ? 'streaming' : ''}`,
     })
 
-    // Parse hint tags and render them specially
-    const hintMatch = content.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
-    if (hintMatch) {
-      const mainContent = content.replace(/\{\{hint\}\}[\s\S]*?\{\{\/hint\}\}/, '').trim()
-      messageEl.setText(mainContent)
-
-      // Add hint as a separate styled element
-      const hintEl = messageEl.createDiv({ cls: 'lachesis-hint' })
-      hintEl.setText(hintMatch[1].trim())
+    // For non-streaming messages, check if content contains diff blocks
+    if (!isStreaming && containsDiffBlocks(content)) {
+      this.renderMessageWithDiffs(messageEl, content)
     } else {
-      messageEl.setText(content)
+      // Parse hint tags and render them specially
+      const hintMatch = content.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
+      if (hintMatch) {
+        const mainContent = content.replace(/\{\{hint\}\}[\s\S]*?\{\{\/hint\}\}/, '').trim()
+        messageEl.setText(mainContent)
+
+        // Add hint as a separate styled element
+        const hintEl = messageEl.createDiv({ cls: 'lachesis-hint' })
+        hintEl.setText(hintMatch[1].trim())
+      } else {
+        messageEl.setText(content)
+      }
     }
 
     // Scroll to bottom
@@ -402,6 +408,7 @@ export class ExistingProjectModal extends Modal {
       diffBlock,
       this.projectPath,
       (updatedDiff, action) => this.handleDiffAction(updatedDiff, action),
+      { viewOnly: this.isViewingLoadedChat },
     )
     modal.open()
   }
@@ -499,6 +506,10 @@ export class ExistingProjectModal extends Modal {
 
     // Clear input
     this.inputEl.value = ''
+
+    // Once user interacts with the chat, it's no longer view-only
+    // (new diffs generated in this session should be actionable)
+    this.isViewingLoadedChat = false
 
     // Detect workflow request from user input (if not already set by button click)
     if (!this.activeWorkflow) {
@@ -689,6 +700,7 @@ export class ExistingProjectModal extends Modal {
     this.currentChatFilename = null
     this.pendingDiffs = []
     this.activeWorkflow = null
+    this.isViewingLoadedChat = false // New chat is not a loaded chat
     this.renderChatPhase()
   }
 
@@ -702,6 +714,7 @@ export class ExistingProjectModal extends Modal {
       this.currentChatFilename = filename
       this.pendingDiffs = []
       this.activeWorkflow = null
+      this.isViewingLoadedChat = true // Mark as viewing saved chat (diffs are view-only)
       this.renderChatPhase()
     }
   }
@@ -800,63 +813,57 @@ export class ExistingProjectModal extends Modal {
   }
 
   // ============================================================================
-  // Vault Event Listeners (Real-time Sidebar Updates)
+  // Filesystem Watcher (Real-time Sidebar Updates)
   // ============================================================================
 
   /**
-   * Set up vault event listeners to watch for changes in the .ai/logs folder.
+   * Set up filesystem watcher for changes in the .ai/logs folder.
+   * Uses Node.js fs.watch instead of Obsidian's vault events to bypass cache.
    */
   private setupVaultListeners(): void {
-    const logsPath = `${this.projectPath}/.ai/logs`
+    // Get absolute path to the logs folder
+    const basePath = (this.app.vault.adapter as any).getBasePath()
+    const logsPath = path.join(basePath, this.projectPath, '.ai', 'logs')
 
-    // Helper to check if a file is in our logs folder
-    const isInLogsFolder = (path: string): boolean => {
-      return path.startsWith(logsPath + '/') && path.endsWith('.md')
+    // Ensure the directory exists before watching
+    if (!fs.existsSync(logsPath)) {
+      try {
+        fs.mkdirSync(logsPath, { recursive: true })
+      } catch (err) {
+        console.warn('Could not create logs directory for watching:', err)
+        return
+      }
     }
 
-    // On file create
-    this.vaultCreateRef = this.app.vault.on('create', async (file) => {
-      if (file instanceof TFile && isInLogsFolder(file.path)) {
-        await this.loadChatHistory()
-        this.renderSidebar()
-        this.highlightCurrentChat()
-      }
-    })
+    try {
+      // Watch the logs directory for any changes
+      this.fsWatcher = fs.watch(logsPath, { persistent: false }, async (eventType, filename) => {
+        // Only react to .md file changes
+        if (filename && filename.endsWith('.md')) {
+          console.log(`File system change detected: ${eventType} ${filename}`)
+          await this.loadChatHistory()
+          this.renderSidebar()
+          this.highlightCurrentChat()
+        }
+      })
 
-    // On file modify
-    this.vaultModifyRef = this.app.vault.on('modify', async (file) => {
-      if (file instanceof TFile && isInLogsFolder(file.path)) {
-        await this.loadChatHistory()
-        this.renderSidebar()
-        this.highlightCurrentChat()
-      }
-    })
+      this.fsWatcher.on('error', (err) => {
+        console.warn('File watcher error:', err)
+      })
 
-    // On file delete
-    this.vaultDeleteRef = this.app.vault.on('delete', async (file) => {
-      if (file instanceof TFile && isInLogsFolder(file.path)) {
-        await this.loadChatHistory()
-        this.renderSidebar()
-        this.highlightCurrentChat()
-      }
-    })
+      console.log(`Watching for chat log changes: ${logsPath}`)
+    } catch (err) {
+      console.warn('Could not set up file watcher:', err)
+    }
   }
 
   /**
-   * Clean up vault event listeners.
+   * Clean up filesystem watcher.
    */
   private cleanupVaultListeners(): void {
-    if (this.vaultCreateRef) {
-      this.app.vault.offref(this.vaultCreateRef)
-      this.vaultCreateRef = null
-    }
-    if (this.vaultModifyRef) {
-      this.app.vault.offref(this.vaultModifyRef)
-      this.vaultModifyRef = null
-    }
-    if (this.vaultDeleteRef) {
-      this.app.vault.offref(this.vaultDeleteRef)
-      this.vaultDeleteRef = null
+    if (this.fsWatcher) {
+      this.fsWatcher.close()
+      this.fsWatcher = null
     }
   }
 }

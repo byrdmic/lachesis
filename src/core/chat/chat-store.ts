@@ -1,6 +1,6 @@
 // Chat Store - File-based persistence for chat history
 
-import { TFile, TFolder, Vault } from 'obsidian'
+import { Vault } from 'obsidian'
 import type { ConversationMessage } from '../../ai/providers/types'
 import type { ChatLog, ChatLogMetadata } from './types'
 
@@ -55,30 +55,35 @@ export function generateChatFilename(): string {
 
 /**
  * List all chat logs for a project, sorted by date (newest first).
+ * Uses vault.adapter directly to bypass cache.
  */
 export async function listChatLogs(
   vault: Vault,
   projectPath: string
 ): Promise<ChatLogMetadata[]> {
   const logsPath = `${projectPath}/${AI_FOLDER}/${LOGS_FOLDER}`
-  const folder = vault.getAbstractFileByPath(logsPath)
 
-  if (!folder || !(folder instanceof TFolder)) {
+  // Check if folder exists using adapter
+  const folderExists = await vault.adapter.exists(logsPath)
+  if (!folderExists) {
     return []
   }
 
+  // List files using adapter
+  const listing = await vault.adapter.list(logsPath)
   const logs: ChatLogMetadata[] = []
 
-  for (const child of folder.children) {
-    if (child instanceof TFile && child.extension === 'md') {
+  for (const filePath of listing.files) {
+    if (filePath.endsWith('.md')) {
       try {
-        const content = await vault.read(child)
-        const metadata = parseMetadataFromContent(content, child.name)
+        const content = await vault.adapter.read(filePath)
+        const filename = filePath.split('/').pop() || filePath
+        const metadata = parseMetadataFromContent(content, filename)
         if (metadata) {
           logs.push(metadata)
         }
       } catch (err) {
-        console.warn(`Failed to read chat log ${child.path}:`, err)
+        console.warn(`Failed to read chat log ${filePath}:`, err)
       }
     }
   }
@@ -91,6 +96,7 @@ export async function listChatLogs(
 
 /**
  * Load a specific chat log by filename.
+ * Uses vault.adapter directly to bypass cache.
  */
 export async function loadChatLog(
   vault: Vault,
@@ -98,14 +104,15 @@ export async function loadChatLog(
   filename: string
 ): Promise<ChatLog | null> {
   const filePath = `${projectPath}/${AI_FOLDER}/${LOGS_FOLDER}/${filename}`
-  const file = vault.getAbstractFileByPath(filePath)
 
-  if (!file || !(file instanceof TFile)) {
+  // Check if file exists using adapter
+  const fileExists = await vault.adapter.exists(filePath)
+  if (!fileExists) {
     return null
   }
 
   try {
-    const content = await vault.read(file)
+    const content = await vault.adapter.read(filePath)
     return parseChatLogContent(content, filename)
   } catch (err) {
     console.error(`Failed to load chat log ${filePath}:`, err)
@@ -149,6 +156,7 @@ export async function saveChatLog(
 
 /**
  * Delete a chat log file.
+ * Uses vault.adapter directly to bypass cache.
  */
 export async function deleteChatLog(
   vault: Vault,
@@ -156,14 +164,15 @@ export async function deleteChatLog(
   filename: string
 ): Promise<boolean> {
   const filePath = `${projectPath}/${AI_FOLDER}/${LOGS_FOLDER}/${filename}`
-  const file = vault.getAbstractFileByPath(filePath)
 
-  if (!file || !(file instanceof TFile)) {
+  // Check if file exists using adapter
+  const fileExists = await vault.adapter.exists(filePath)
+  if (!fileExists) {
     return false
   }
 
   try {
-    await vault.delete(file)
+    await vault.adapter.remove(filePath)
     return true
   } catch (err) {
     console.error(`Failed to delete chat log ${filePath}:`, err)
@@ -305,7 +314,13 @@ function parseMessages(content: string): ConversationMessage[] {
   const body = content.replace(/^---[\s\S]*?---\r?\n/, '')
 
   // Split by message headers: ## HH:MM - role
-  const messageRegex = /## (\d{2}:\d{2}) - (assistant|user)\r?\n([\s\S]*?)(?=\r?\n---|\r?\n## \d{2}:\d{2} - |$)/g
+  // The lookahead must match:
+  // 1. \r?\n---\r?\n or \r?\n---$ (separator line - just "---" on its own line)
+  // 2. \r?\n## HH:MM - (next message header)
+  // 3. End of string
+  // Note: We use ---\s*\r?\n to match "---" followed by optional whitespace then newline,
+  // which distinguishes separators from diff headers like "--- Log.md"
+  const messageRegex = /## (\d{2}:\d{2}) - (assistant|user)\r?\n([\s\S]*?)(?=\r?\n---\s*\r?\n|\r?\n---\s*$|\r?\n## \d{2}:\d{2} - |$)/g
   let match: RegExpExecArray | null
 
   while ((match = messageRegex.exec(body)) !== null) {
@@ -320,10 +335,11 @@ function parseMessages(content: string): ConversationMessage[] {
 }
 
 /**
- * Extract preview text from first assistant message.
+ * Extract preview text from the first message (user or assistant).
  */
 function extractPreview(content: string): string {
-  const match = content.match(/## \d{2}:\d{2} - assistant\r?\n([\s\S]*?)(?:\r?\n---|$)/)
+  // Match the first message (either user or assistant)
+  const match = content.match(/## \d{2}:\d{2} - (?:assistant|user)\r?\n([\s\S]*?)(?:\r?\n---|$)/)
   if (!match) {
     return ''
   }
