@@ -276,11 +276,28 @@ export async function scaffoldProject(
     // Create project folder
     await vault.createFolder(projectPath)
 
+    // Create .ai folder for AI config
+    const aiConfigFolder = `${projectPath}/.ai`
+    await vault.createFolder(aiConfigFolder)
+
     // Default project data if not provided
     const data: ScaffoldProjectData = projectData ?? {
       projectName: projectSlug,
       projectSlug,
     }
+
+    // Create .ai/config.json with GitHub repo if provided
+    const githubRepo = data.extracted?.config?.githubRepo || ''
+    const aiConfig: Record<string, unknown> = {
+      $schema: 'https://lachesis.dev/schemas/ai-config.json',
+      github_repo: githubRepo,
+    }
+    // Only add notes if repo is not configured
+    if (!githubRepo) {
+      aiConfig.notes =
+        'Add your GitHub repo URL (e.g., "github.com/user/repo") to enable commit analysis for task tracking.'
+    }
+    await vault.create(`${aiConfigFolder}/config.json`, JSON.stringify(aiConfig, null, 2))
 
     // Create all template files
     const files: Array<{ path: string; template: TemplateName }> = [

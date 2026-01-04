@@ -37,6 +37,8 @@ export type SnapshotHealth = {
     status: Exclude<TemplateStatus, 'filled' | 'missing'>
     reasons: string[]
   }[]
+  /** Issues with .ai/config.json */
+  configIssues: string[]
 }
 
 /**
@@ -54,6 +56,16 @@ export type ProjectReadinessAssessment = {
   gatingSummary: string
 }
 
+/**
+ * Project-level AI configuration stored in .ai/config.json
+ */
+export type ProjectAIConfig = {
+  /** GitHub repository URL (e.g., "github.com/user/repo" or full URL) */
+  github_repo?: string
+  /** Any other project-specific AI settings */
+  [key: string]: unknown
+}
+
 export type ProjectSnapshot = {
   projectName: string
   projectPath: string
@@ -63,4 +75,8 @@ export type ProjectSnapshot = {
   health: SnapshotHealth
   /** Readiness assessment for workflow gating */
   readiness: ProjectReadinessAssessment
+  /** Project AI config from .ai/config.json (if exists) */
+  aiConfig?: ProjectAIConfig
+  /** Recently completed items extracted from Archive.md (last 10) */
+  recentlyCompleted?: string[]
 }

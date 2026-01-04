@@ -1,6 +1,6 @@
 // Existing Project Modal - Chat interface for continuing work on existing projects
 
-import { App, Modal, Notice, TFile, TFolder } from 'obsidian'
+import { App, Modal, Notice, TFile, TFolder, MarkdownRenderer, Component } from 'obsidian'
 import * as fs from 'fs'
 import * as path from 'path'
 import type LachesisPlugin from '../main'
@@ -42,6 +42,7 @@ export class ExistingProjectModal extends Modal {
   private projectPath: string
   private snapshot: ProjectSnapshot
   private provider: AIProvider | null = null
+  private renderComponent: Component
 
   // UI State
   private phase: ModalPhase = 'loading'
@@ -49,6 +50,7 @@ export class ExistingProjectModal extends Modal {
   private isProcessing = false
   private streamingText = ''
   private activeWorkflow: WorkflowDefinition | null = null
+  private focusedFile: ExpectedCoreFile | null = null // File being filled via "Fill with AI"
   private pendingDiffs: DiffBlock[] = []
 
   // DOM Elements
@@ -80,6 +82,7 @@ export class ExistingProjectModal extends Modal {
     this.plugin = plugin
     this.projectPath = projectPath
     this.snapshot = snapshot
+    this.renderComponent = new Component()
   }
 
   async onOpen() {
@@ -88,6 +91,7 @@ export class ExistingProjectModal extends Modal {
     // Style hook: Obsidian sizes modals via the root `.modal` element
     this.modalEl.addClass('lachesis-modal-root')
     contentEl.addClass('lachesis-modal')
+    this.renderComponent.load()
 
     // Check if provider is configured
     if (!isProviderAvailable(this.plugin.settings.provider, this.plugin.settings)) {
@@ -121,6 +125,7 @@ export class ExistingProjectModal extends Modal {
 
     const { contentEl } = this
     contentEl.empty()
+    this.renderComponent.unload()
     this.provider = null
     this.messages = []
     this.chatLogs = []
@@ -275,13 +280,20 @@ export class ExistingProjectModal extends Modal {
       const hintMatch = content.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
       if (hintMatch) {
         const mainContent = content.replace(/\{\{hint\}\}[\s\S]*?\{\{\/hint\}\}/, '').trim()
-        messageEl.setText(mainContent)
+        if (mainContent) {
+          this.renderMarkdown(mainContent, messageEl)
+        }
 
         // Add hint as a separate styled element
         const hintEl = messageEl.createDiv({ cls: 'lachesis-hint' })
-        hintEl.setText(hintMatch[1].trim())
+        const hintContent = hintMatch[1].trim()
+        if (hintContent) {
+          this.renderMarkdown(hintContent, hintEl)
+        }
       } else {
-        messageEl.setText(content)
+        if (content) {
+          this.renderMarkdown(content, messageEl)
+        }
       }
     }
 
@@ -296,13 +308,23 @@ export class ExistingProjectModal extends Modal {
 
     const streamingEl = this.messagesContainer.querySelector('.lachesis-message.streaming')
     if (streamingEl) {
-      // Parse hint tags for display
+      // Parse hint tags for display (only if fully present)
       const hintMatch = content.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
+      ;(streamingEl as HTMLElement).empty()
       if (hintMatch) {
         const mainContent = content.replace(/\{\{hint\}\}[\s\S]*?\{\{\/hint\}\}/, '').trim()
-        streamingEl.textContent = mainContent
+        if (mainContent) {
+          this.renderMarkdown(mainContent, streamingEl as HTMLElement)
+        }
+        const hintEl = (streamingEl as HTMLElement).createDiv({ cls: 'lachesis-hint' })
+        const hintContent = hintMatch[1].trim()
+        if (hintContent) {
+          this.renderMarkdown(hintContent, hintEl)
+        }
       } else {
-        streamingEl.textContent = content
+        if (content) {
+          this.renderMarkdown(content, streamingEl as HTMLElement)
+        }
       }
       this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight
     }
@@ -321,14 +343,22 @@ export class ExistingProjectModal extends Modal {
         streamingEl.empty()
         this.renderMessageWithDiffs(streamingEl, this.streamingText)
       } else {
-        // Re-render with hint styling (existing behavior)
+        // Re-render with markdown + hint styling
+        streamingEl.empty()
         const hintMatch = this.streamingText.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
         if (hintMatch) {
           const mainContent = this.streamingText.replace(/\{\{hint\}\}[\s\S]*?\{\{\/hint\}\}/, '').trim()
-          streamingEl.textContent = mainContent
+          if (mainContent) {
+            this.renderMarkdown(mainContent, streamingEl)
+          }
 
           const hintEl = streamingEl.createDiv({ cls: 'lachesis-hint' })
-          hintEl.setText(hintMatch[1].trim())
+          const hintContent = hintMatch[1].trim()
+          if (hintContent) {
+            this.renderMarkdown(hintContent, hintEl)
+          }
+        } else if (this.streamingText) {
+          this.renderMarkdown(this.streamingText, streamingEl)
         }
       }
     }
@@ -343,7 +373,7 @@ export class ExistingProjectModal extends Modal {
 
     if (diffBlocks.length === 0) {
       // No diffs found, render as plain text
-      container.setText(content)
+      this.renderMarkdown(content, container)
       return
     }
 
@@ -356,8 +386,8 @@ export class ExistingProjectModal extends Modal {
     if (firstIdx > 0) {
       const textBefore = content.slice(0, firstIdx).trim()
       if (textBefore) {
-        const textEl = container.createEl('p', { cls: 'lachesis-diff-text' })
-        textEl.setText(textBefore)
+        const textEl = container.createDiv({ cls: 'lachesis-diff-text' })
+        this.renderMarkdown(textBefore, textEl)
       }
     }
 
@@ -379,10 +409,20 @@ export class ExistingProjectModal extends Modal {
     if (lastIdx >= 0) {
       const textAfter = content.slice(lastIdx + lastDiffMarker.length).trim()
       if (textAfter) {
-        const textEl = container.createEl('p', { cls: 'lachesis-diff-text' })
-        textEl.setText(textAfter)
+        const textEl = container.createDiv({ cls: 'lachesis-diff-text' })
+        this.renderMarkdown(textAfter, textEl)
       }
     }
+  }
+
+  private renderMarkdown(content: string, container: HTMLElement) {
+    MarkdownRenderer.render(
+      this.app,
+      content,
+      container,
+      '',
+      this.renderComponent,
+    )
   }
 
   /**
@@ -585,6 +625,36 @@ export class ExistingProjectModal extends Modal {
       }
     }
 
+    // Fetch file contents if filling a focused file (via "Fill with AI" button)
+    let focusedFileContents: string | undefined
+    const currentFocusedFile = this.focusedFile // Capture before clearing
+    if (currentFocusedFile) {
+      this.updateStatus(`Fetching ${currentFocusedFile} and context files...`)
+      try {
+        // Determine which context files to include
+        const filesToFetch: string[] = [currentFocusedFile]
+
+        // Always include Overview.md for project context (unless that's the focused file)
+        if (currentFocusedFile !== 'Overview.md') {
+          filesToFetch.push('Overview.md')
+        }
+
+        // For Tasks.md, also include Roadmap.md for milestone context
+        if (currentFocusedFile === 'Tasks.md') {
+          filesToFetch.push('Roadmap.md')
+        }
+
+        const fileContents = await fetchProjectFileContents(
+          this.app.vault,
+          this.projectPath,
+          filesToFetch,
+        )
+        focusedFileContents = formatFileContentsForModel(fileContents)
+      } catch (err) {
+        console.error('Failed to fetch focused file contents:', err)
+      }
+    }
+
     this.updateStatus('Lachesis is thinking...')
     this.addMessageToUI('assistant', '', true)
 
@@ -597,10 +667,13 @@ export class ExistingProjectModal extends Modal {
       snapshotSummary,
       activeWorkflow: this.activeWorkflow ?? undefined,
       workflowFileContents,
+      focusedFile: currentFocusedFile ?? undefined,
+      focusedFileContents,
     })
 
-    // Clear active workflow after use (it was included in this request)
+    // Clear active workflow and focused file after use (they were included in this request)
     this.activeWorkflow = null
+    this.focusedFile = null
 
     try {
       const result = await this.provider.streamText(
@@ -1087,6 +1160,9 @@ export class ExistingProjectModal extends Modal {
   private async fixTemplateOnlyFile(fileName: ExpectedCoreFile): Promise<void> {
     this.closeIssuesDropdown()
 
+    // Set the focused file so handleUserInput will fetch its contents
+    this.focusedFile = fileName
+
     // Set up the input to trigger a focused conversation
     if (this.inputEl) {
       this.inputEl.value = `Help me fill in ${fileName}. It currently only has template placeholders. Let's work through it section by section.`
@@ -1099,6 +1175,9 @@ export class ExistingProjectModal extends Modal {
    */
   private async fixThinFile(fileName: ExpectedCoreFile): Promise<void> {
     this.closeIssuesDropdown()
+
+    // Set the focused file so handleUserInput will fetch its contents
+    this.focusedFile = fileName
 
     // Set up the input to trigger a focused conversation
     if (this.inputEl) {

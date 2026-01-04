@@ -12,6 +12,7 @@ import {
   type ProjectReadinessAssessment,
   type SnapshotFileEntry,
   type SnapshotHealth,
+  type ProjectAIConfig,
 } from './snapshot'
 import { evaluateTemplateStatus } from './template-evaluator'
 
@@ -29,11 +30,60 @@ function extractFrontmatter(content: string): Record<string, unknown> {
   }
 }
 
+/**
+ * Read .ai/config.json if it exists.
+ */
+function readAIConfig(absoluteProjectPath: string): ProjectAIConfig | undefined {
+  const configPath = path.join(absoluteProjectPath, '.ai', 'config.json')
+  try {
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf-8')
+      return JSON.parse(content) as ProjectAIConfig
+    }
+  } catch {
+    // Config doesn't exist or is invalid - that's fine
+  }
+  return undefined
+}
+
+/**
+ * Extract recently completed items from Archive.md.
+ * Looks for completed vertical slices and other archived items.
+ * Returns up to 10 most recent items.
+ */
+function extractRecentlyCompleted(archiveContent: string | null): string[] | undefined {
+  if (!archiveContent) return undefined
+
+  const completed: string[] = []
+
+  // Look for completed vertical slice headers: ### YYYY-MM-DD — VS# — Name
+  const slicePattern = /^### (\d{4}-\d{2}-\d{2}) — (VS\d+) — (.+)$/gm
+  let match
+  while ((match = slicePattern.exec(archiveContent)) !== null) {
+    const [, date, vsId, name] = match
+    completed.push(`${date}: ${vsId} — ${name}`)
+  }
+
+  // Also look for recently completed task items: - [x] ...
+  const completedTaskPattern = /^- \[x\] (.+)$/gm
+  while ((match = completedTaskPattern.exec(archiveContent)) !== null) {
+    const task = match[1].trim()
+    if (task.length > 0 && task.length < 100) {
+      completed.push(`Task: ${task}`)
+    }
+  }
+
+  // Return last 10 items (most recent assumed to be at top of Archive)
+  return completed.length > 0 ? completed.slice(0, 10) : undefined
+}
+
 function deriveHealth(
   files: Record<ExpectedCoreFile, SnapshotFileEntry>,
+  aiConfig?: ProjectAIConfig,
 ): SnapshotHealth {
   const missingFiles: ExpectedCoreFile[] = []
   const thinOrTemplateFiles: SnapshotHealth['thinOrTemplateFiles'] = []
+  const configIssues: string[] = []
 
   for (const file of EXPECTED_CORE_FILES) {
     const entry = files[file]
@@ -50,7 +100,14 @@ function deriveHealth(
     }
   }
 
-  return { missingFiles, thinOrTemplateFiles }
+  // Check for AI config issues
+  if (!aiConfig) {
+    configIssues.push('.ai/config.json is missing')
+  } else if (!aiConfig.github_repo || aiConfig.github_repo.trim() === '') {
+    configIssues.push('GitHub repository not configured in .ai/config.json')
+  }
+
+  return { missingFiles, thinOrTemplateFiles, configIssues }
 }
 
 /**
@@ -197,7 +254,8 @@ export async function buildProjectSnapshot(
     for (const file of EXPECTED_CORE_FILES) {
       files[file] = buildFileEntry(projectFolderNorm, file, false, null)
     }
-    const health = deriveHealth(files)
+    // No config possible if folder doesn't exist
+    const health = deriveHealth(files, undefined)
     const readiness = assessReadiness(files, health)
     return {
       projectName,
@@ -215,6 +273,9 @@ export async function buildProjectSnapshot(
     SnapshotFileEntry
   >
 
+  // Track archive content for extracting recently completed items
+  let archiveContent: string | null = null
+
   for (const file of EXPECTED_CORE_FILES) {
     const absoluteFilePath = path.join(absoluteProjectPath, file)
 
@@ -225,6 +286,11 @@ export async function buildProjectSnapshot(
         const stats = fs.statSync(absoluteFilePath)
         const mtime = stats.mtimeMs
         files[file] = buildFileEntry(projectFolderNorm, file, true, content, mtime)
+
+        // Keep archive content for later extraction
+        if (file === 'Archive.md') {
+          archiveContent = content
+        }
       } else {
         files[file] = buildFileEntry(projectFolderNorm, file, false, null)
       }
@@ -233,8 +299,14 @@ export async function buildProjectSnapshot(
     }
   }
 
-  const health = deriveHealth(files)
+  // Read AI config from .ai/config.json (before deriveHealth so we can check it)
+  const aiConfig = readAIConfig(absoluteProjectPath)
+
+  const health = deriveHealth(files, aiConfig)
   const readiness = assessReadiness(files, health)
+
+  // Extract recently completed items from Archive.md
+  const recentlyCompleted = extractRecentlyCompleted(archiveContent)
 
   return {
     projectName,
@@ -244,6 +316,8 @@ export async function buildProjectSnapshot(
     files,
     health,
     readiness,
+    aiConfig,
+    recentlyCompleted,
   }
 }
 
@@ -317,6 +391,21 @@ export function formatProjectSnapshotForModel(snapshot: ProjectSnapshot): string
   lines.push(`PATH: ${snapshot.projectPath}`)
   lines.push(`CAPTURED: ${snapshot.capturedAt}`)
 
+  // AI Config (GitHub repo, etc.)
+  if (snapshot.aiConfig) {
+    lines.push('')
+    lines.push('AI CONFIG (.ai/config.json):')
+    if (snapshot.aiConfig.github_repo) {
+      lines.push(`- GitHub repo: ${snapshot.aiConfig.github_repo}`)
+    } else {
+      lines.push('- GitHub repo: NOT CONFIGURED')
+    }
+  } else {
+    lines.push('')
+    lines.push('AI CONFIG: No .ai/config.json found')
+    lines.push('  → To enable commit analysis, create .ai/config.json with: { "github_repo": "github.com/user/repo" }')
+  }
+
   // Readiness assessment (for workflow gating)
   lines.push('')
   lines.push(`READINESS: ${snapshot.readiness.isReady ? 'READY for workflows' : 'NOT READY - basics needed'}`)
@@ -345,6 +434,24 @@ export function formatProjectSnapshotForModel(snapshot: ProjectSnapshot): string
     lines.push('NEEDS FILLING:')
     for (const weak of snapshot.health.thinOrTemplateFiles) {
       lines.push(`- ${weak.file}: ${weak.status} (${weak.reasons.join('; ')})`)
+    }
+  }
+
+  if (snapshot.health.configIssues.length > 0) {
+    lines.push('')
+    lines.push('NEEDS ATTENTION (config):')
+    for (const issue of snapshot.health.configIssues) {
+      lines.push(`- ${issue}`)
+    }
+    lines.push('  → Ask the user for their GitHub repo URL to configure .ai/config.json')
+  }
+
+  // Recently completed items from Archive.md
+  if (snapshot.recentlyCompleted && snapshot.recentlyCompleted.length > 0) {
+    lines.push('')
+    lines.push('RECENTLY COMPLETED (from Archive.md):')
+    for (const item of snapshot.recentlyCompleted) {
+      lines.push(`- ${item}`)
     }
   }
 

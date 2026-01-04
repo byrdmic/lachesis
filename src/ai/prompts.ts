@@ -50,6 +50,15 @@ export type SystemPromptOptions = {
    * File contents for the active workflow (actual content of readFiles).
    */
   workflowFileContents?: string
+  /**
+   * File being filled in (when user clicks "Fill with AI").
+   * This triggers special handling to provide context files.
+   */
+  focusedFile?: string
+  /**
+   * File contents for the focused file and related context files.
+   */
+  focusedFileContents?: string
 }
 
 // ============================================================================
@@ -106,10 +115,12 @@ type ExistingProjectPromptOptions = {
   snapshotSummary: string
   activeWorkflow?: WorkflowDefinition
   workflowFileContents?: string
+  focusedFile?: string
+  focusedFileContents?: string
 }
 
 function buildExistingProjectPrompt(options: ExistingProjectPromptOptions): string {
-  const { projectName, timeGreeting, isFirstMessage, snapshotSummary, activeWorkflow, workflowFileContents } = options
+  const { projectName, timeGreeting, isFirstMessage, snapshotSummary, activeWorkflow, workflowFileContents, focusedFile, focusedFileContents } = options
 
   const openingInstructions = isFirstMessage
     ? `OPENING MESSAGE (CRITICAL - FOLLOW EXACTLY):
@@ -118,12 +129,17 @@ Your first message MUST include:
 2. A brief status summary (1-2 lines) based on the PROJECT SNAPSHOT below:
    - If project is READY: mention it's in good shape, note any areas that could use attention
    - If project is NOT READY: mention what needs work (use the GATING line)
-3. Ask what they'd like to work on today
+3. If "NEEDS ATTENTION (config)" shows GitHub repo is not configured:
+   - Mention this specifically and ask for their GitHub repo URL
+   - Example: "I also notice the GitHub repository isn't configured. What's the repo URL, sir? (e.g., github.com/username/project)"
+4. Ask what they'd like to work on today
 
 Example structure:
 "${timeGreeting}. Welcome back to ${projectName || 'your project'}.
 
 [Brief status: e.g., "The project is in good shape—all core files are filled in." OR "Overview and Tasks need some attention before we can run workflows."]
+
+[If GitHub not configured: "I notice the GitHub repository isn't set up yet. What's the repo URL, sir?"]
 
 What shall we focus on today, sir?"
 
@@ -226,6 +242,95 @@ ${workflowFileContents}
 `
   }
 
+  // Build focused file section (when user clicks "Fill with AI" on a file)
+  let focusedFileSection = ''
+  if (focusedFile && focusedFileContents) {
+    // Special handling for Tasks.md - distinguish Create vs Refine
+    const isTasksFile = focusedFile.toLowerCase() === 'tasks.md'
+
+    const tasksSpecificGuidance = isTasksFile ? `
+TASKS.MD SPECIFIC GUIDANCE:
+
+Determine the MODE based on current Tasks.md state:
+
+**CREATE MODE** (Tasks.md is template_only or mostly placeholder text):
+- This is the first time populating Tasks.md with real content
+- CRITICAL: Check Roadmap.md for MVP/v0.1 milestones or any defined milestones
+- If Roadmap.md lacks milestones (is template_only or has no concrete M1/M2 definitions):
+  → Mention this gap: "I notice Roadmap.md doesn't have defined milestones yet, sir.
+    We can still generate an initial task list, but without an MVP target or v0.1
+    milestone, we're working somewhat blind. The tasks I generate will be my best
+    guess based on the Overview, but you may want to flesh out the Roadmap first
+    for a more complete picture."
+  → Still proceed to generate tasks if user wants, but note the incompleteness
+- Populate "Future Tasks" section with any loose items from Log.md or Ideas.md
+- Ask about immediate priorities for "Next 1-3 Actions"
+
+**REFINE MODE** (Tasks.md already has real content):
+- User has done work and wants to update/refine the task list
+- Check Log.md and Ideas.md for new items that should become tasks
+- Look for entries with keywords: "need to", "should", "TODO", "don't forget", "fix", "add"
+- Add new items to "Future Tasks" section (not directly to active slices)
+
+GitHub Repo Check (see AI CONFIG section in snapshot):
+- Look for github_repo in .ai/config.json (shown in snapshot as "AI CONFIG")
+- If github_repo is empty or missing:
+  "I notice the GitHub repository isn't configured yet, sir. You can add it to
+  .ai/config.json in your project folder. Without commit history, I'll need you
+  to tell me which tasks have been completed so I can update their status."
+- If github_repo IS configured:
+  "I see the GitHub repo is configured. However, I can't directly access commits.
+  Could you tell me what you've completed since we last updated Tasks.md?"
+
+Archive.md Check (see RECENTLY COMPLETED in snapshot):
+- The snapshot includes recently completed items extracted from Archive.md
+- Use this list to understand what work has already been done
+- Don't suggest tasks that are already archived as complete
+- If Archive.md has relevant completions, acknowledge them:
+  "I can see from Archive.md that you've completed [items]. Let me focus on what's remaining."
+
+- Ask user what they've completed before marking things done
+- Move completed items to "Recently Completed" section
+
+For BOTH modes:
+- Never invent tasks - only extract from existing project content
+- Keep "Next 1-3 Actions" to genuinely small, concrete steps (15-60 min each)
+- Vertical slices should link back to Roadmap milestones when possible
+` : ''
+
+    focusedFileSection = `
+================================================================================
+FILLING FILE: ${focusedFile.toUpperCase()}
+================================================================================
+The user wants help filling in ${focusedFile}. You have access to the file contents below.
+
+PREREQUISITE CHECK (CRITICAL - DO THIS FIRST):
+Before helping fill ${focusedFile}, assess the project state from the snapshot above:
+
+1. If ${focusedFile} is Tasks.md or Roadmap.md:
+   - Check if Overview.md is "filled" status
+   - If Overview.md is "template_only" or "thin", REDIRECT the user:
+     "Before we fill in ${focusedFile}, I notice Overview.md needs attention first, sir.
+     A solid overview helps us understand what we're building before we can plan tasks
+     or milestones. Shall we start there instead?"
+
+2. If ${focusedFile} is Tasks.md:
+   - Also check if Roadmap.md has content
+   - If both Overview.md and Roadmap.md are sparse, suggest filling them first
+   - Tasks flow from knowing WHAT we're building (Overview) and WHERE we're going (Roadmap)
+
+3. If prerequisites ARE met, proceed to help fill the file:
+   - Review the current file contents below
+   - Ask clarifying questions if needed
+   - Work through it section by section with the user
+   - Do NOT ask the user to paste file contents - you already have them below
+${tasksSpecificGuidance}
+FILE CONTENTS (for filling):
+${focusedFileContents}
+================================================================================
+`
+  }
+
   return `You are Lachesis, a project coach helping someone continue work on an existing project.
 
 ================================================================================
@@ -233,7 +338,7 @@ PROJECT SNAPSHOT (CURRENT STATE)
 ================================================================================
 ${snapshotSummary || 'No snapshot available.'}
 ================================================================================
-${workflowSection}
+${workflowSection}${focusedFileSection}
 ${voiceSection}
 
 ${openingInstructions}
@@ -244,6 +349,14 @@ YOUR ROLE FOR EXISTING PROJECTS:
 - Answer questions about the project state
 - Help fill in gaps in thin or template-only files
 - Keep the project documentation healthy and actionable
+
+HANDLING GITHUB REPO CONFIGURATION:
+When the user provides a GitHub repo URL (e.g., "github.com/user/repo" or "https://github.com/user/repo"):
+1. Acknowledge receipt: "Noted, sir. I'll remember that for tracking purposes."
+2. Tell the user: "To persist this, you can update .ai/config.json in your project folder with:
+   { \"github_repo\": \"<the URL they provided>\" }"
+3. For the rest of this conversation, treat the repo as configured
+4. Note: You cannot directly modify files - guide the user to update the config manually
 
 AVAILABLE WORKFLOWS:
 1. **Synthesize** - Light polish for clarity and consistency
@@ -284,6 +397,8 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
       snapshotSummary,
       activeWorkflow: options.activeWorkflow,
       workflowFileContents: options.workflowFileContents,
+      focusedFile: options.focusedFile,
+      focusedFileContents: options.focusedFileContents,
     })
   }
 
@@ -384,7 +499,14 @@ Here are the sections and what information they need:
    → Operational: Privacy, offline, etc.?
    Example question: "Any constraints I should know about—time, tech, budget?"
 
-These 6 areas are your guide. You don't need to cover all of them—adapt to the
+**7. GITHUB REPOSITORY** (ask before wrapping up)
+   → Does this project have or will it have a GitHub repo?
+   → This helps with task tracking and commit analysis later
+   Example question: "Will this project live in a GitHub repository? If so, what's the URL or planned repo name?"
+   → Accept formats like: "github.com/user/repo", "https://github.com/user/repo", or "user/repo"
+   → If they don't have one yet, that's fine - note it can be added later to .ai/config.json
+
+These 7 areas are your guide. You don't need to cover all of them—adapt to the
 user's pace and what they've already said. Skip what's already answered.
 ================================================================================
 

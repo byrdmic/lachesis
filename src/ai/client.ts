@@ -55,6 +55,14 @@ const ExtractedProjectDataSchema = z.object({
     suggestedFirstMove: z.string().optional().describe('Suggested first step if discussed'),
     techStack: z.string().optional().describe('Technology preferences if mentioned'),
   }),
+  config: z
+    .object({
+      githubRepo: z
+        .string()
+        .optional()
+        .describe('GitHub repository URL if mentioned (e.g., github.com/user/repo)'),
+    })
+    .optional(),
 })
 
 export type ExtractedProjectData = z.infer<typeof ExtractedProjectDataSchema>
