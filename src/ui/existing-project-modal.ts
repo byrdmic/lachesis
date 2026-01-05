@@ -26,8 +26,8 @@ import { processTemplateForFile } from '../scaffolder/scaffolder'
 type ModalPhase = 'loading' | 'chat' | 'error'
 
 type ProjectIssue = {
-  file: ExpectedCoreFile
-  type: 'missing' | 'template_only' | 'thin'
+  file: ExpectedCoreFile | '.ai/config.json'
+  type: 'missing' | 'template_only' | 'thin' | 'config'
   message: string
   fixLabel: string
   fixAction: () => Promise<void>
@@ -976,6 +976,20 @@ export class ExistingProjectModal extends Modal {
   private buildIssuesList(): ProjectIssue[] {
     const issues: ProjectIssue[] = []
 
+    // Check for config issues first (higher priority)
+    if (this.snapshot.health.configIssues.length > 0) {
+      const configMissing = !this.snapshot.aiConfig
+      issues.push({
+        file: '.ai/config.json',
+        type: 'config',
+        message: configMissing
+          ? 'AI config file is missing'
+          : 'GitHub repository not configured',
+        fixLabel: configMissing ? 'Create Config' : 'Configure',
+        fixAction: () => this.fixMissingConfig(),
+      })
+    }
+
     for (const fileName of this.snapshot.readiness.prioritizedFiles) {
       const fileEntry = this.snapshot.files[fileName]
 
@@ -1090,7 +1104,13 @@ export class ExistingProjectModal extends Modal {
 
     // Icon based on type
     const iconEl = itemEl.createSpan({ cls: 'lachesis-issue-icon' })
-    iconEl.setText(issue.type === 'missing' ? '!' : issue.type === 'template_only' ? '?' : '~')
+    const iconMap: Record<ProjectIssue['type'], string> = {
+      missing: '!',
+      template_only: '?',
+      thin: '~',
+      config: '⚙',
+    }
+    iconEl.setText(iconMap[issue.type])
 
     // Issue content
     const contentEl = itemEl.createDiv({ cls: 'lachesis-issue-content' })
@@ -1183,6 +1203,51 @@ export class ExistingProjectModal extends Modal {
     if (this.inputEl) {
       this.inputEl.value = `Help me expand ${fileName}. It has some content but needs more detail. Let's review what's there and add more.`
       this.handleUserInput()
+    }
+  }
+
+  /**
+   * Fix missing or incomplete .ai/config.json by creating it and prompting for GitHub repo.
+   */
+  private async fixMissingConfig(): Promise<void> {
+    this.closeIssuesDropdown()
+
+    try {
+      const configFolderPath = `${this.projectPath}/.ai`
+      const configFilePath = `${configFolderPath}/config.json`
+
+      // Check if .ai folder exists, create if not
+      const folderExists = this.app.vault.getAbstractFileByPath(configFolderPath)
+      if (!folderExists) {
+        await this.app.vault.createFolder(configFolderPath)
+      }
+
+      // Check if config file exists
+      const configExists = this.app.vault.getAbstractFileByPath(configFilePath)
+
+      if (!configExists) {
+        // Create new config file with empty github_repo
+        const aiConfig = {
+          $schema: 'https://lachesis.dev/schemas/ai-config.json',
+          github_repo: '',
+          notes:
+            'Add your GitHub repo URL (e.g., "github.com/user/repo") to enable commit analysis for task tracking.',
+        }
+        await this.app.vault.create(configFilePath, JSON.stringify(aiConfig, null, 2))
+        new Notice('Created .ai/config.json')
+      }
+
+      // Refresh to update the snapshot
+      await this.refreshAfterFix()
+
+      // Now prompt the user to provide GitHub repo via chat
+      if (this.inputEl) {
+        this.inputEl.value =
+          "I've just created the .ai/config.json file. What's the GitHub repository URL for this project?"
+        this.handleUserInput()
+      }
+    } catch (err) {
+      new Notice(`Failed to create config: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 
