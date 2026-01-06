@@ -12,7 +12,8 @@
  * The core workflow names used in UI and conversation.
  */
 export const WORKFLOW_NAMES = [
-  'refine-log',
+  'title-entries',
+  'generate-tasks',
   // TODO: Re-enable as they're refined
   // 'synthesize',
   // 'harvest-tasks',

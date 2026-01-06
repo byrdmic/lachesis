@@ -63,6 +63,7 @@ export class ExistingProjectModal extends Modal {
   private pendingDiffs: DiffBlock[] = []
   private pendingPotentialTasks: PotentialTask[] = []
   private parsedPotentialTasks: ParsedPotentialTasks | null = null
+  private lastUsedWorkflowName: WorkflowName | null = null // Track workflow for post-diff processing
 
   // DOM Elements
   private messagesContainer: HTMLElement | null = null
@@ -413,9 +414,9 @@ export class ExistingProjectModal extends Modal {
       this.renderDiffFileLink(fileListEl, diffBlock)
     }
 
-    // Check for potential tasks if Log.md was modified
+    // Check for potential tasks if Log.md was modified by generate-tasks workflow
     const logDiff = diffBlocks.find((d) => d.fileName === 'Log.md')
-    if (logDiff && !this.isViewingLoadedChat) {
+    if (logDiff && !this.isViewingLoadedChat && this.lastUsedWorkflowName === 'generate-tasks') {
       this.checkForPotentialTasksLink(fileListEl)
     }
 
@@ -756,8 +757,9 @@ export class ExistingProjectModal extends Modal {
           this.activeWorkflow.readFiles,
         )
 
-        // For refine-log workflow, trim large log files to only unsummarized entries
-        if (this.activeWorkflow.name === 'refine-log' && fileContents['Log.md']) {
+        // For log-focused workflows, trim large log files to only unsummarized entries
+        const logWorkflows: WorkflowName[] = ['title-entries', 'generate-tasks']
+        if (logWorkflows.includes(this.activeWorkflow.name) && fileContents['Log.md']) {
           logTrimResult = getTrimmedLogContent(fileContents['Log.md'])
           if (logTrimResult.wasTrimmed) {
             fileContents['Log.md'] = logTrimResult.content
@@ -817,7 +819,8 @@ export class ExistingProjectModal extends Modal {
       focusedFileContents,
     })
 
-    // Clear active workflow and focused file after use (they were included in this request)
+    // Store workflow name for post-diff processing, then clear active workflow
+    this.lastUsedWorkflowName = this.activeWorkflow?.name ?? null
     this.activeWorkflow = null
     this.focusedFile = null
 
@@ -859,6 +862,29 @@ export class ExistingProjectModal extends Modal {
    * Returns the workflow definition if detected, null otherwise.
    */
   private detectWorkflowFromMessage(message: string): WorkflowDefinition | null {
+    const lowerMessage = message.toLowerCase()
+
+    // Check for specific workflow keywords first
+    // Title Entries workflow
+    if (
+      lowerMessage.includes('title entries') ||
+      lowerMessage.includes('add titles') ||
+      lowerMessage.includes('summarize log') ||
+      lowerMessage.includes('title the log')
+    ) {
+      return getWorkflowDefinition('title-entries')
+    }
+
+    // Generate Tasks workflow
+    if (
+      lowerMessage.includes('generate tasks') ||
+      lowerMessage.includes('extract tasks') ||
+      lowerMessage.includes('potential tasks') ||
+      lowerMessage.includes('find tasks')
+    ) {
+      return getWorkflowDefinition('generate-tasks')
+    }
+
     // Check for common workflow trigger patterns
     const workflowPatterns = [
       /run\s+(?:the\s+)?(\w+(?:[- ]\w+)?)\s+workflow/i,
@@ -945,6 +971,7 @@ export class ExistingProjectModal extends Modal {
     this.currentChatFilename = null
     this.pendingDiffs = []
     this.activeWorkflow = null
+    this.lastUsedWorkflowName = null
     this.isViewingLoadedChat = false // New chat is not a loaded chat
     this.renderChatPhase()
   }
@@ -959,6 +986,7 @@ export class ExistingProjectModal extends Modal {
       this.currentChatFilename = filename
       this.pendingDiffs = []
       this.activeWorkflow = null
+      this.lastUsedWorkflowName = null
       this.isViewingLoadedChat = true // Mark as viewing saved chat (diffs are view-only)
       this.renderChatPhase()
     }
