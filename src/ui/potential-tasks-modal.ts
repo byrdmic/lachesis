@@ -30,6 +30,7 @@ export class PotentialTasksModal extends Modal {
   private projectPath: string
   private onAction: PotentialTasksActionCallback
   private selections: Map<string, TaskAction> = new Map()
+  private expandedGroups: Set<string> = new Set()
 
   constructor(
     app: App,
@@ -113,6 +114,7 @@ export class PotentialTasksModal extends Modal {
 
   private renderTaskGroup(container: HTMLElement, groupKey: string, tasks: PotentialTask[]) {
     const [datePart, headerPart] = groupKey.split('|||')
+    const entryContent = tasks[0]?.logEntryContent || null
 
     const groupEl = container.createDiv({ cls: 'lachesis-task-group' })
 
@@ -124,18 +126,53 @@ export class PotentialTasksModal extends Modal {
       })
     }
 
-    // Entry header
+    // Entry header (clickable if there's content)
     if (headerPart && headerPart !== 'Unknown Entry') {
-      groupEl.createEl('div', {
-        text: headerPart,
-        cls: 'lachesis-task-group-entry',
-      })
+      const headerEl = groupEl.createDiv({ cls: 'lachesis-task-group-entry' })
+
+      if (entryContent) {
+        headerEl.addClass('lachesis-clickable')
+
+        // Toggle icon
+        const toggleIcon = headerEl.createSpan({ cls: 'lachesis-entry-toggle' })
+        toggleIcon.setText('▶')
+
+        // Header text
+        headerEl.createSpan({ text: headerPart })
+
+        // Content accordion (hidden by default)
+        const contentEl = groupEl.createDiv({ cls: 'lachesis-entry-content collapsed' })
+        contentEl.setText(entryContent)
+
+        // Click handler
+        headerEl.addEventListener('click', () => {
+          this.toggleGroupContent(groupKey, toggleIcon, contentEl)
+        })
+      } else {
+        headerEl.setText(headerPart)
+      }
     }
 
     // Tasks list
     const tasksEl = groupEl.createDiv({ cls: 'lachesis-task-list' })
     for (const task of tasks) {
       this.renderTaskItem(tasksEl, task)
+    }
+  }
+
+  private toggleGroupContent(groupKey: string, toggleIcon: HTMLElement, contentEl: HTMLElement) {
+    const isExpanded = this.expandedGroups.has(groupKey)
+
+    if (isExpanded) {
+      this.expandedGroups.delete(groupKey)
+      toggleIcon.setText('▶')
+      toggleIcon.removeClass('expanded')
+      contentEl.addClass('collapsed')
+    } else {
+      this.expandedGroups.add(groupKey)
+      toggleIcon.setText('▼')
+      toggleIcon.addClass('expanded')
+      contentEl.removeClass('collapsed')
     }
   }
 

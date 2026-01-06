@@ -13,8 +13,10 @@ export interface PotentialTask {
   id: string // Unique ID (blockIndex-lineNumber)
   text: string // Task text (without checkbox prefix)
   isStrikethrough: boolean // Whether task is crossed out (~~task~~)
+  isCompleted: boolean // Whether task is checked off ([x] or has ✅)
   logEntryHeader: string | null // Log entry header (e.g., "11:48am - Title")
   logEntryDate: string | null // Date header (e.g., "## 2024-01-15")
+  logEntryContent: string | null // Body text of the log entry (between header and AI block)
   blockStartLine: number // Line number where the block starts (0-indexed)
   blockEndLine: number // Line number where the block ends (0-indexed)
   taskLineNumber: number // Line number of this specific task (0-indexed)
@@ -26,6 +28,7 @@ export interface PotentialTasksBlock {
   tasks: PotentialTask[]
   logEntryHeader: string | null
   logEntryDate: string | null
+  logEntryContent: string | null // Body text of the log entry
 }
 
 export interface ParsedPotentialTasks {
@@ -43,7 +46,8 @@ const BLOCK_START_MARKER = '<!-- AI: potential-tasks start -->'
 const BLOCK_END_MARKER = '<!-- AI: potential-tasks end -->'
 
 // Matches task lines: - [ ] task text or - [x] task text
-const TASK_LINE_REGEX = /^-\s*\[[ x]\]\s*(.+)$/i
+// Captures: [1] = checkbox content (space or x), [2] = task text
+const TASK_LINE_REGEX = /^-\s*\[([ x])\]\s*(.+)$/i
 
 // Matches strikethrough: ~~text~~
 const STRIKETHROUGH_REGEX = /^~~(.+)~~$/
@@ -91,6 +95,7 @@ export function parsePotentialTasks(content: string): ParsedPotentialTasks {
             tasks,
             logEntryHeader: context.header,
             logEntryDate: context.date,
+            logEntryContent: context.content,
           })
           break
         }
@@ -98,15 +103,21 @@ export function parsePotentialTasks(content: string): ParsedPotentialTasks {
         // Check if this is a task line
         const taskMatch = currentLine.match(TASK_LINE_REGEX)
         if (taskMatch) {
-          const rawTaskText = taskMatch[1].trim()
+          const checkboxContent = taskMatch[1] // space or 'x'
+          const rawTaskText = taskMatch[2].trim()
           const { text, isStrikethrough } = parseTaskText(rawTaskText)
+
+          // Task is completed if checkbox has 'x' or text contains ✅
+          const isCompleted = checkboxContent.toLowerCase() === 'x' || rawTaskText.includes('✅')
 
           tasks.push({
             id: `${blocks.length}-${i}`,
             text,
             isStrikethrough,
+            isCompleted,
             logEntryHeader: context.header,
             logEntryDate: context.date,
+            logEntryContent: context.content,
             blockStartLine,
             blockEndLine: -1, // Will be set when block ends
             taskLineNumber: i,
@@ -127,8 +138,8 @@ export function parsePotentialTasks(content: string): ParsedPotentialTasks {
     i++
   }
 
-  // Filter to only actionable (non-strikethrough) tasks
-  const allTasks = blocks.flatMap((b) => b.tasks).filter((t) => !t.isStrikethrough)
+  // Filter to only actionable tasks (not strikethrough, not completed)
+  const allTasks = blocks.flatMap((b) => b.tasks).filter((t) => !t.isStrikethrough && !t.isCompleted)
 
   return {
     blocks,
@@ -151,13 +162,14 @@ export function hasActionablePotentialTasks(content: string): boolean {
 // ============================================================================
 
 /**
- * Look backwards from a block to find the log entry header and date.
+ * Look backwards from a block to find the log entry header, date, and body content.
  */
 function findLogEntryContext(
   lines: string[],
   blockStartLine: number,
-): { header: string | null; date: string | null } {
+): { header: string | null; date: string | null; content: string | null } {
   let header: string | null = null
+  let headerLineIndex: number | null = null
   let date: string | null = null
 
   // Look backwards to find the timestamp header and date
@@ -170,6 +182,7 @@ function findLogEntryContext(
       if (entryMatch) {
         // Include the full line as the header
         header = line
+        headerLineIndex = i
       }
     }
 
@@ -188,7 +201,29 @@ function findLogEntryContext(
     if (line === BLOCK_END_MARKER || line === BLOCK_START_MARKER) break
   }
 
-  return { header, date }
+  // Extract content between header and block start
+  let content: string | null = null
+  if (headerLineIndex !== null) {
+    const contentLines: string[] = []
+    for (let i = headerLineIndex + 1; i < blockStartLine; i++) {
+      const line = lines[i]
+      // Skip the potential-tasks heading if present
+      if (line.trim().match(/^#{1,6}\s*potential\s+tasks/i)) continue
+      contentLines.push(line)
+    }
+    // Trim empty lines at start and end
+    while (contentLines.length > 0 && contentLines[0].trim() === '') {
+      contentLines.shift()
+    }
+    while (contentLines.length > 0 && contentLines[contentLines.length - 1].trim() === '') {
+      contentLines.pop()
+    }
+    if (contentLines.length > 0) {
+      content = contentLines.join('\n')
+    }
+  }
+
+  return { header, date, content }
 }
 
 /**

@@ -1025,6 +1025,65 @@
   border-left: 2px solid var(--interactive-accent);
 }
 
+/* Clickable Entry Header (when content available) */
+.lachesis-task-group-entry.lachesis-clickable {
+  cursor: pointer;
+  transition: background 0.15s ease;
+  padding: 6px 8px;
+  margin-left: -8px;
+  border-radius: 4px;
+  user-select: none;
+}
+
+.lachesis-task-group-entry.lachesis-clickable:hover {
+  background: var(--background-modifier-hover);
+}
+
+/* Toggle Icon */
+.lachesis-entry-toggle {
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 0.75em;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.lachesis-entry-toggle.expanded {
+  transform: rotate(90deg);
+}
+
+/* Accordion Content */
+.lachesis-entry-content {
+  margin: 8px 0 12px 8px;
+  padding: 12px 14px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  font-size: 0.85em;
+  line-height: 1.6;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.lachesis-entry-content.collapsed {
+  display: none;
+}
+
+.lachesis-entry-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.lachesis-entry-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lachesis-entry-content::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 2px;
+}
+
 /* Task List */
 .lachesis-task-list {
   display: flex;
