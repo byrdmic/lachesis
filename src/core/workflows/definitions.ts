@@ -37,7 +37,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
    */
   'title-entries': {
     name: 'title-entries',
-    displayName: 'Title Entries',
+    displayName: 'Log: Title Entries',
     description: 'Add short titles to log entries that lack them',
     intent:
       'Find log entries that lack titles and add short descriptive titles (1-5 words) after the timestamp. ' +
@@ -75,7 +75,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
    */
   'generate-tasks': {
     name: 'generate-tasks',
-    displayName: 'Generate Tasks',
+    displayName: 'Log: Generate Tasks',
     description: 'Extract potential tasks from log entries',
     intent:
       'Scan log entries and extract 0-3 actionable tasks from each entry. ' +
@@ -122,7 +122,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
    */
   'groom-tasks': {
     name: 'groom-tasks',
-    displayName: 'Groom Tasks',
+    displayName: 'Log: Groom Tasks',
     description: 'Review and process existing potential tasks from log',
     intent:
       'Parse Log.md for existing AI-generated potential tasks blocks and open a review modal ' +
