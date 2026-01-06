@@ -277,3 +277,83 @@ export function shouldTrimLogForWorkflow(
 ): boolean {
   return content.length > threshold
 }
+
+export interface FilteredLogResult {
+  /** The content to send to the AI (only unsummarized entries) */
+  content: string
+  /** Number of entries that were already summarized and excluded */
+  excludedEntryCount: number
+  /** Number of unsummarized entries included */
+  includedEntryCount: number
+  /** Whether all entries are already summarized (nothing to do) */
+  allSummarized: boolean
+}
+
+/**
+ * Filter log content to only include entries that lack titles.
+ * This is specifically for the title-entries workflow to ensure
+ * the AI only sees entries that actually need titles.
+ *
+ * Unlike getTrimmedLogContent (which only trims large files),
+ * this function ALWAYS filters out summarized entries regardless of file size.
+ */
+export function getFilteredLogForTitleEntries(content: string): FilteredLogResult {
+  const parsed = parseLogEntries(content)
+  const lines = content.split('\n')
+
+  const summarizedEntries = parsed.entries.filter((e) => e.isSummarized)
+  const unsummarizedEntries = parsed.entries.filter((e) => !e.isSummarized)
+
+  // If no unsummarized entries, return early
+  if (unsummarizedEntries.length === 0) {
+    return {
+      content: '[All entries in this log already have titles. No action needed.]',
+      excludedEntryCount: summarizedEntries.length,
+      includedEntryCount: 0,
+      allSummarized: true,
+    }
+  }
+
+  // Build filtered content with only unsummarized entries
+  const filteredLines: string[] = []
+
+  // Include frontmatter
+  for (let i = 0; i < parsed.frontmatterEndLine; i++) {
+    filteredLines.push(lines[i])
+  }
+
+  // Add context header
+  if (summarizedEntries.length > 0) {
+    filteredLines.push('')
+    filteredLines.push('<!-- NOTE: Entries that already have titles have been excluded -->')
+    filteredLines.push(`<!-- ${summarizedEntries.length} titled entries were removed from this view -->`)
+    filteredLines.push('')
+  }
+
+  // Group unsummarized entries by their date header
+  let currentDateHeader: string | null = null
+
+  for (const entry of unsummarizedEntries) {
+    // Add date header if this entry is under a different date
+    if (entry.dateHeader && entry.dateHeader !== currentDateHeader) {
+      if (currentDateHeader !== null) {
+        filteredLines.push('') // Add blank line between date sections
+      }
+      filteredLines.push(`## ${entry.dateHeader}`)
+      filteredLines.push('')
+      currentDateHeader = entry.dateHeader
+    }
+
+    // Include all lines of this entry
+    for (let i = entry.startLine; i < entry.endLine; i++) {
+      filteredLines.push(lines[i])
+    }
+  }
+
+  return {
+    content: filteredLines.join('\n'),
+    excludedEntryCount: summarizedEntries.length,
+    includedEntryCount: unsummarizedEntries.length,
+    allSummarized: false,
+  }
+}

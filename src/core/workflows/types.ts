@@ -14,6 +14,7 @@
 export const WORKFLOW_NAMES = [
   'title-entries',
   'generate-tasks',
+  'groom-tasks',
   // TODO: Re-enable as they're refined
   // 'synthesize',
   // 'harvest-tasks',
@@ -63,6 +64,8 @@ export type WorkflowDefinition = {
   allowsCrossFileMove: boolean
   /** Specific rules for this workflow */
   rules: string[]
+  /** Whether this workflow uses AI (false = local-only processing) */
+  usesAI: boolean
 }
 
 /**

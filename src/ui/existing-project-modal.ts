@@ -13,7 +13,7 @@ import { buildSystemPrompt } from '../ai/prompts'
 import { getAllWorkflows, getWorkflowDefinition, WORKFLOW_DEFINITIONS } from '../core/workflows/definitions'
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 import { extractDiffBlocks, applyDiff, containsDiffBlocks, type DiffBlock } from '../utils/diff'
-import { getTrimmedLogContent, type TrimmedLogResult } from '../utils/log-parser'
+import { getTrimmedLogContent, getFilteredLogForTitleEntries, type TrimmedLogResult, type FilteredLogResult } from '../utils/log-parser'
 import {
   parsePotentialTasks,
   updateLogWithTaskActions,
@@ -414,11 +414,8 @@ export class ExistingProjectModal extends Modal {
       this.renderDiffFileLink(fileListEl, diffBlock)
     }
 
-    // Check for potential tasks if Log.md was modified by generate-tasks workflow
-    const logDiff = diffBlocks.find((d) => d.fileName === 'Log.md')
-    if (logDiff && !this.isViewingLoadedChat && this.lastUsedWorkflowName === 'generate-tasks') {
-      this.checkForPotentialTasksLink(fileListEl)
-    }
+    // Note: Potential tasks review is now a separate workflow (groom-tasks)
+    // The generate-tasks workflow only generates tasks - grooming is done separately
 
     // Extract text after last diff block
     const lastDiffBlock = diffBlocks[diffBlocks.length - 1]
@@ -726,7 +723,16 @@ export class ExistingProjectModal extends Modal {
 
     // Detect workflow request from user input (if not already set by button click)
     if (!this.activeWorkflow) {
-      this.activeWorkflow = this.detectWorkflowFromMessage(message)
+      const detectedWorkflow = this.detectWorkflowFromMessage(message)
+      if (detectedWorkflow) {
+        // Check if this is a non-AI workflow
+        if (!detectedWorkflow.usesAI) {
+          // Handle non-AI workflow directly (no AI call needed)
+          await this.handleNonAIWorkflow(detectedWorkflow)
+          return
+        }
+        this.activeWorkflow = detectedWorkflow
+      }
     }
 
     // Add user message
@@ -748,6 +754,7 @@ export class ExistingProjectModal extends Modal {
     // Fetch file contents if a workflow is active
     let workflowFileContents: string | undefined
     let logTrimResult: TrimmedLogResult | null = null
+    let logFilterResult: FilteredLogResult | null = null
     if (this.activeWorkflow) {
       this.updateStatus(`Fetching files for ${this.activeWorkflow.displayName}...`)
       try {
@@ -757,13 +764,21 @@ export class ExistingProjectModal extends Modal {
           this.activeWorkflow.readFiles,
         )
 
-        // For log-focused workflows, trim large log files to only unsummarized entries
-        const logWorkflows: WorkflowName[] = ['title-entries', 'generate-tasks']
-        if (logWorkflows.includes(this.activeWorkflow.name) && fileContents['Log.md']) {
-          logTrimResult = getTrimmedLogContent(fileContents['Log.md'])
-          if (logTrimResult.wasTrimmed) {
-            fileContents['Log.md'] = logTrimResult.content
-            console.log(`Log trimmed: ${logTrimResult.trimSummary}`)
+        // Handle log file processing based on workflow type
+        if (fileContents['Log.md']) {
+          if (this.activeWorkflow.name === 'title-entries') {
+            // For title-entries: ALWAYS filter out already-titled entries
+            // This prevents the AI from proposing changes to entries that already have titles
+            logFilterResult = getFilteredLogForTitleEntries(fileContents['Log.md'])
+            fileContents['Log.md'] = logFilterResult.content
+            console.log(`Log filtered for title-entries: ${logFilterResult.includedEntryCount} entries need titles, ${logFilterResult.excludedEntryCount} already have titles`)
+          } else if (this.activeWorkflow.name === 'generate-tasks') {
+            // For generate-tasks: trim large files but include all entries (need full context)
+            logTrimResult = getTrimmedLogContent(fileContents['Log.md'])
+            if (logTrimResult.wasTrimmed) {
+              fileContents['Log.md'] = logTrimResult.content
+              console.log(`Log trimmed: ${logTrimResult.trimSummary}`)
+            }
           }
         }
 
@@ -879,10 +894,20 @@ export class ExistingProjectModal extends Modal {
     if (
       lowerMessage.includes('generate tasks') ||
       lowerMessage.includes('extract tasks') ||
-      lowerMessage.includes('potential tasks') ||
       lowerMessage.includes('find tasks')
     ) {
       return getWorkflowDefinition('generate-tasks')
+    }
+
+    // Groom Tasks workflow
+    if (
+      lowerMessage.includes('groom tasks') ||
+      lowerMessage.includes('review tasks') ||
+      lowerMessage.includes('review potential tasks') ||
+      lowerMessage.includes('potential tasks') ||
+      lowerMessage.includes('process tasks')
+    ) {
+      return getWorkflowDefinition('groom-tasks')
     }
 
     // Check for common workflow trigger patterns
@@ -919,12 +944,82 @@ export class ExistingProjectModal extends Modal {
 
     // Find the workflow by display name
     const workflow = getAllWorkflows().find(w => w.displayName === workflowDisplayName)
-    if (workflow) {
-      this.activeWorkflow = workflow
+    if (!workflow) return
+
+    // Check if this is a non-AI workflow
+    if (!workflow.usesAI) {
+      this.handleNonAIWorkflow(workflow)
+      return
     }
 
+    // Standard AI workflow handling
+    this.activeWorkflow = workflow
     this.inputEl.value = `Run the ${workflowDisplayName} workflow`
     this.handleUserInput()
+  }
+
+  /**
+   * Handle workflows that don't require AI processing.
+   * These workflows perform local operations immediately.
+   */
+  private async handleNonAIWorkflow(workflow: WorkflowDefinition): Promise<void> {
+    if (workflow.name === 'groom-tasks') {
+      await this.handleGroomTasksWorkflow()
+    }
+    // Future non-AI workflows can be added here
+  }
+
+  /**
+   * Handle the Groom Tasks workflow.
+   * Parses Log.md for existing potential tasks and opens the review modal.
+   */
+  private async handleGroomTasksWorkflow(): Promise<void> {
+    try {
+      this.setInputEnabled(false)
+      this.updateStatus('Scanning Log.md for potential tasks...')
+
+      // Read Log.md content
+      const logPath = `${this.projectPath}/Log.md`
+      const logFile = this.app.vault.getAbstractFileByPath(logPath)
+
+      if (!logFile || !(logFile instanceof TFile)) {
+        this.updateStatus('Log.md not found')
+        this.setInputEnabled(true)
+        new Notice('Log.md not found in project')
+        return
+      }
+
+      const content = await this.app.vault.read(logFile)
+      const parsed = parsePotentialTasks(content)
+
+      if (parsed.actionableTaskCount === 0) {
+        this.updateStatus('No potential tasks found')
+        this.setInputEnabled(true)
+        new Notice('No actionable potential tasks found in Log.md. Run "Generate Tasks" first to create some.')
+        return
+      }
+
+      // Store parsed data for modal callback
+      this.pendingPotentialTasks = parsed.allTasks
+      this.parsedPotentialTasks = parsed
+
+      // Add a message to the UI indicating what we're doing
+      this.addMessageToUI(
+        'assistant',
+        `Found ${parsed.actionableTaskCount} potential task${parsed.actionableTaskCount > 1 ? 's' : ''} in Log.md. Opening review modal...`,
+      )
+
+      // Open the modal directly
+      this.openPotentialTasksModal()
+
+      this.updateStatus('Ready')
+      this.setInputEnabled(true)
+    } catch (err) {
+      console.error('Failed to run Groom Tasks workflow:', err)
+      this.updateStatus('Error scanning for tasks')
+      this.setInputEnabled(true)
+      new Notice(`Failed to scan for tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
   private renderEmptyState() {

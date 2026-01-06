@@ -14,6 +14,7 @@ export interface PotentialTask {
   text: string // Task text (without checkbox prefix)
   isStrikethrough: boolean // Whether task is crossed out (~~task~~)
   isCompleted: boolean // Whether task is checked off ([x] or has ✅)
+  isMoved: boolean // Whether task was moved to Tasks.md (has ➡️)
   logEntryHeader: string | null // Log entry header (e.g., "11:48am - Title")
   logEntryDate: string | null // Date header (e.g., "## 2024-01-15")
   logEntryContent: string | null // Body text of the log entry (between header and AI block)
@@ -44,6 +45,9 @@ export interface ParsedPotentialTasks {
 
 const BLOCK_START_MARKER = '<!-- AI: potential-tasks start -->'
 const BLOCK_END_MARKER = '<!-- AI: potential-tasks end -->'
+
+// Emoji used to mark tasks that were moved to Tasks.md
+export const MOVED_TASK_EMOJI = '➡️'
 
 // Matches task lines: - [ ] task text or - [x] task text
 // Captures: [1] = checkbox content (space or x), [2] = task text
@@ -105,7 +109,7 @@ export function parsePotentialTasks(content: string): ParsedPotentialTasks {
         if (taskMatch) {
           const checkboxContent = taskMatch[1] // space or 'x'
           const rawTaskText = taskMatch[2].trim()
-          const { text, isStrikethrough } = parseTaskText(rawTaskText)
+          const { text, isStrikethrough, isMoved } = parseTaskText(rawTaskText)
 
           // Task is completed if checkbox has 'x' or text contains ✅
           const isCompleted = checkboxContent.toLowerCase() === 'x' || rawTaskText.includes('✅')
@@ -115,6 +119,7 @@ export function parsePotentialTasks(content: string): ParsedPotentialTasks {
             text,
             isStrikethrough,
             isCompleted,
+            isMoved,
             logEntryHeader: context.header,
             logEntryDate: context.date,
             logEntryContent: context.content,
@@ -138,8 +143,8 @@ export function parsePotentialTasks(content: string): ParsedPotentialTasks {
     i++
   }
 
-  // Filter to only actionable tasks (not strikethrough, not completed)
-  const allTasks = blocks.flatMap((b) => b.tasks).filter((t) => !t.isStrikethrough && !t.isCompleted)
+  // Filter to only actionable tasks (not strikethrough, not completed, not moved)
+  const allTasks = blocks.flatMap((b) => b.tasks).filter((t) => !t.isStrikethrough && !t.isCompleted && !t.isMoved)
 
   return {
     blocks,
@@ -227,21 +232,30 @@ function findLogEntryContext(
 }
 
 /**
- * Parse task text to extract actual text and strikethrough status.
+ * Parse task text to extract actual text, strikethrough status, and moved status.
  */
-function parseTaskText(rawText: string): { text: string; isStrikethrough: boolean } {
+function parseTaskText(rawText: string): { text: string; isStrikethrough: boolean; isMoved: boolean } {
+  let text = rawText
+  let isStrikethrough = false
+  let isMoved = false
+
+  // Check for moved emoji at the start of the text
+  if (text.startsWith(MOVED_TASK_EMOJI)) {
+    isMoved = true
+    text = text.slice(MOVED_TASK_EMOJI.length).trim()
+  }
+
   // Check if entire text is wrapped in strikethrough
-  const strikeMatch = rawText.match(STRIKETHROUGH_REGEX)
+  const strikeMatch = text.match(STRIKETHROUGH_REGEX)
   if (strikeMatch) {
-    return {
-      text: strikeMatch[1].trim(),
-      isStrikethrough: true,
-    }
+    text = strikeMatch[1].trim()
+    isStrikethrough = true
   }
 
   return {
-    text: rawText,
-    isStrikethrough: false,
+    text,
+    isStrikethrough,
+    isMoved,
   }
 }
 
@@ -263,8 +277,8 @@ export interface LogUpdateResult {
 
 /**
  * Update Log.md content based on task actions.
- * - reject: Apply strikethrough to task
- * - move-to-future: Remove task line from log
+ * - reject: Apply strikethrough to task (~~task~~)
+ * - move-to-future: Add ➡️ emoji to mark task as moved to Tasks.md
  * - keep: No changes
  */
 export function updateLogWithTaskActions(
@@ -277,8 +291,8 @@ export function updateLogWithTaskActions(
 
   let tasksRejected = 0
   let tasksMoved = 0
-  const linesToRemove = new Set<number>()
   const linesToStrikethrough = new Set<number>()
+  const linesToMarkMoved = new Set<number>()
 
   // Process each task
   for (const block of parsedTasks.blocks) {
@@ -290,13 +304,13 @@ export function updateLogWithTaskActions(
         linesToStrikethrough.add(task.taskLineNumber)
         tasksRejected++
       } else if (action === 'move-to-future') {
-        linesToRemove.add(task.taskLineNumber)
+        linesToMarkMoved.add(task.taskLineNumber)
         tasksMoved++
       }
     }
   }
 
-  // Apply strikethroughs first
+  // Apply strikethroughs
   for (const lineNum of linesToStrikethrough) {
     const line = lines[lineNum]
     // Transform `- [ ] task text` to `- [ ] ~~task text~~`
@@ -311,48 +325,29 @@ export function updateLogWithTaskActions(
     }
   }
 
-  // Check which blocks should be completely removed (all tasks removed/moved)
-  const blocksToRemove: PotentialTasksBlock[] = []
-  for (const block of parsedTasks.blocks) {
-    const remainingTasks = block.tasks.filter((t) => {
-      const action = actionMap.get(t.id)
-      // Task remains if: action is keep, reject, or no action
-      // Task is removed if: action is move-to-future
-      return action !== 'move-to-future'
-    })
-
-    // Also check if all remaining tasks are strikethrough (nothing actionable left)
-    const actionableRemaining = remainingTasks.filter((t) => {
-      const action = actionMap.get(t.id)
-      // After this update, will this task be strikethrough?
-      const willBeStrikethrough = t.isStrikethrough || action === 'reject'
-      return !willBeStrikethrough
-    })
-
-    if (actionableRemaining.length === 0 && remainingTasks.length === 0) {
-      // All tasks moved, remove entire block
-      blocksToRemove.push(block)
-      for (let i = block.startLine; i <= block.endLine; i++) {
-        linesToRemove.add(i)
-      }
-      // Also remove the heading line if it's immediately before the block
-      if (block.startLine > 0) {
-        const headingLine = lines[block.startLine - 1].trim()
-        if (headingLine.match(/^#{1,6}\s*potential\s+tasks/i)) {
-          linesToRemove.add(block.startLine - 1)
-        }
+  // Apply moved emoji
+  for (const lineNum of linesToMarkMoved) {
+    const line = lines[lineNum]
+    // Transform `- [ ] task text` to `- [ ] ➡️ task text`
+    const match = line.match(/^(\s*-\s*\[[ x]\]\s*)(.+)$/i)
+    if (match) {
+      const prefix = match[1]
+      const taskText = match[2]
+      // Don't double-mark
+      if (!taskText.startsWith(MOVED_TASK_EMOJI)) {
+        lines[lineNum] = `${prefix}${MOVED_TASK_EMOJI} ${taskText}`
       }
     }
   }
 
-  // Build new content, skipping removed lines
-  const newLines = lines.filter((_, idx) => !linesToRemove.has(idx))
+  // Build new content (no lines are removed anymore - they stay with markers)
+  const newLines = lines
 
   return {
     newContent: newLines.join('\n'),
     tasksRejected,
     tasksMoved,
-    blocksRemoved: blocksToRemove.length,
+    blocksRemoved: 0, // Blocks are no longer removed - tasks stay with markers
   }
 }
 

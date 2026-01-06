@@ -43,9 +43,18 @@ export class PotentialTasksModal extends Modal {
     this.projectPath = projectPath
     this.onAction = onAction
 
-    // Initialize all selections to 'keep' (default)
+    // Initialize selections based on task state (for history viewing)
     for (const task of tasks) {
-      this.selections.set(task.id, 'keep')
+      if (task.isStrikethrough) {
+        // Task was rejected (strikethrough)
+        this.selections.set(task.id, 'reject')
+      } else if (task.isMoved) {
+        // Task was moved to Tasks.md
+        this.selections.set(task.id, 'move-to-future')
+      } else {
+        // Task is pending or was kept
+        this.selections.set(task.id, 'keep')
+      }
     }
   }
 
@@ -180,6 +189,9 @@ export class PotentialTasksModal extends Modal {
     const itemEl = container.createDiv({ cls: 'lachesis-task-item' })
     itemEl.dataset.taskId = task.id
 
+    // Get the initial selection state
+    const initialAction = this.selections.get(task.id) || 'keep'
+
     // Task content (checkbox icon + text)
     const contentEl = itemEl.createDiv({ cls: 'lachesis-task-content' })
 
@@ -189,24 +201,32 @@ export class PotentialTasksModal extends Modal {
     const textEl = contentEl.createSpan({ cls: 'lachesis-task-text' })
     textEl.setText(task.text)
 
-    // Action buttons
+    // Apply visual styling based on task state
+    if (task.isStrikethrough) {
+      textEl.addClass('lachesis-task-strikethrough')
+    }
+    if (task.isMoved) {
+      textEl.addClass('lachesis-task-moved')
+    }
+
+    // Action buttons - initialize based on selection state
     const actionsEl = itemEl.createDiv({ cls: 'lachesis-task-actions' })
 
     const rejectBtn = actionsEl.createEl('button', {
       text: 'Reject',
-      cls: 'lachesis-task-action-btn reject',
+      cls: `lachesis-task-action-btn reject${initialAction === 'reject' ? ' selected' : ''}`,
     })
     rejectBtn.addEventListener('click', () => this.selectAction(task.id, 'reject'))
 
     const keepBtn = actionsEl.createEl('button', {
       text: 'Keep',
-      cls: 'lachesis-task-action-btn keep selected', // Default selected
+      cls: `lachesis-task-action-btn keep${initialAction === 'keep' ? ' selected' : ''}`,
     })
     keepBtn.addEventListener('click', () => this.selectAction(task.id, 'keep'))
 
     const moveBtn = actionsEl.createEl('button', {
       text: 'Move to Future',
-      cls: 'lachesis-task-action-btn move',
+      cls: `lachesis-task-action-btn move${initialAction === 'move-to-future' ? ' selected' : ''}`,
     })
     moveBtn.addEventListener('click', () => this.selectAction(task.id, 'move-to-future'))
   }

@@ -1128,6 +1128,21 @@
   word-break: break-word;
 }
 
+/* Task state visual styling */
+.lachesis-task-strikethrough {
+  text-decoration: line-through;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.lachesis-task-moved {
+  color: var(--color-blue);
+}
+
+.lachesis-task-moved::before {
+  content: '➡️ ';
+}
+
 /* Task Action Buttons */
 .lachesis-task-actions {
   display: flex;
