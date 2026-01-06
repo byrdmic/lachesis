@@ -561,6 +561,57 @@
   color: var(--text-normal);
 }
 
+.lachesis-diff-modal-accept-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Per-Hunk Selection */
+.lachesis-diff-hunk-container {
+  margin-bottom: 16px;
+}
+
+.lachesis-diff-hunk-container:last-child {
+  margin-bottom: 0;
+}
+
+.lachesis-diff-hunk-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--background-secondary-alt);
+  border: 1px solid var(--background-modifier-border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+}
+
+.lachesis-diff-hunk-checkbox-row + .lachesis-diff-modal-pre {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.lachesis-diff-hunk-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--interactive-accent);
+}
+
+.lachesis-diff-hunk-checkbox-row .lachesis-diff-hunk-header {
+  background: transparent;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+}
+
+.lachesis-diff-hunk-deselected {
+  opacity: 0.4;
+}
+
+.lachesis-diff-hunk-deselected .lachesis-diff-hunk-checkbox-row {
+  background: var(--background-secondary);
+}
+
 /* Project Picker */
 .lachesis-project-item {
   background: var(--background-secondary);
@@ -832,4 +883,277 @@
 .lachesis-status-badge.clickable:hover {
   filter: brightness(1.1);
   transform: scale(1.02);
+}
+
+/* ============================================================================
+   Potential Tasks Modal & Link
+   ============================================================================ */
+
+/* Potential Tasks Link (in diff file list) */
+.lachesis-potential-tasks-link {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 3px solid var(--interactive-accent);
+}
+
+.lachesis-potential-tasks-link:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+.lachesis-potential-tasks-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 0.75em;
+  font-weight: 600;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 12px;
+}
+
+/* Potential Tasks Modal Container */
+.modal.lachesis-potential-tasks-modal-root {
+  --modal-width: 700px;
+  --modal-max-width: 90vw;
+  width: 700px !important;
+  max-width: 90vw !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.modal.lachesis-potential-tasks-modal-root .modal-close-button {
+  z-index: 10;
+  color: var(--text-muted);
+  top: 28px;
+  right: 18px;
+}
+
+.lachesis-potential-tasks-modal {
+  display: flex;
+  flex-direction: column;
+  height: 70vh;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(var(--interactive-accent-rgb), 0.15) 0%, transparent 60%),
+    radial-gradient(circle at 100% 0%, rgba(var(--interactive-accent-rgb), 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(var(--interactive-accent-rgb), 0.05) 0%, transparent 50%),
+    linear-gradient(145deg, var(--background-primary) 0%, var(--background-secondary) 100%);
+  background-color: var(--background-primary);
+  border-radius: var(--radius-l);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px var(--background-modifier-border);
+  overflow: hidden;
+  font-family: var(--lachesis-font-ui);
+  position: relative;
+  border: 1px solid var(--background-modifier-border);
+}
+
+/* Potential Tasks Header */
+.lachesis-potential-tasks-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: rgba(var(--background-secondary-rgb), 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.lachesis-potential-tasks-header h2 {
+  margin: 0 0 4px 0;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-normal);
+  text-transform: uppercase;
+  font-size: 1.1em;
+}
+
+.lachesis-potential-tasks-subtitle {
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+/* Potential Tasks Content (Scrollable) */
+.lachesis-potential-tasks-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.lachesis-potential-tasks-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lachesis-potential-tasks-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lachesis-potential-tasks-content::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 3px;
+}
+
+/* Task Groups */
+.lachesis-task-group {
+  margin-bottom: 24px;
+}
+
+.lachesis-task-group:last-child {
+  margin-bottom: 0;
+}
+
+.lachesis-task-group-date {
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-task-group-entry {
+  font-size: 0.9em;
+  font-weight: 500;
+  color: var(--text-normal);
+  margin-bottom: 12px;
+  padding-left: 8px;
+  border-left: 2px solid var(--interactive-accent);
+}
+
+/* Task List */
+.lachesis-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Individual Task Item */
+.lachesis-task-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.lachesis-task-item:hover {
+  background: var(--background-secondary);
+}
+
+.lachesis-task-content {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.lachesis-task-checkbox {
+  color: var(--text-muted);
+  font-size: 1em;
+  flex-shrink: 0;
+}
+
+.lachesis-task-text {
+  color: var(--text-normal);
+  font-size: 0.9em;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* Task Action Buttons */
+.lachesis-task-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.lachesis-task-action-btn {
+  padding: 6px 12px;
+  font-size: 0.75em;
+  font-weight: 500;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lachesis-task-action-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* Selected states */
+.lachesis-task-action-btn.selected {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.lachesis-task-action-btn.reject.selected {
+  background: var(--background-modifier-error);
+  border-color: var(--background-modifier-error);
+}
+
+.lachesis-task-action-btn.keep.selected {
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+}
+
+.lachesis-task-action-btn.move.selected {
+  background: var(--color-blue);
+  border-color: var(--color-blue);
+}
+
+/* Potential Tasks Footer */
+.lachesis-potential-tasks-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.lachesis-potential-tasks-cancel-btn {
+  padding: 8px 20px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.lachesis-potential-tasks-cancel-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.lachesis-potential-tasks-confirm-btn {
+  padding: 8px 20px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: all 0.15s ease;
+}
+
+.lachesis-potential-tasks-confirm-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
 }

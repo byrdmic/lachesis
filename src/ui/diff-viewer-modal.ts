@@ -19,6 +19,8 @@ export class DiffViewerModal extends Modal {
   private projectPath: string
   private onAction: DiffActionCallback
   private viewOnly: boolean
+  private hunkSelections: Map<number, boolean> = new Map()
+  private acceptBtn: HTMLButtonElement | null = null
 
   constructor(
     app: App,
@@ -40,6 +42,13 @@ export class DiffViewerModal extends Modal {
     // Style hook: Obsidian sizes modals via the root `.modal` element
     this.modalEl.addClass('lachesis-diff-modal-root')
     contentEl.addClass('lachesis-diff-modal')
+
+    // Initialize all hunks as selected by default
+    if (this.diffBlock.parsed) {
+      this.diffBlock.parsed.hunks.forEach((_, idx) => {
+        this.hunkSelections.set(idx, true)
+      })
+    }
 
     // Header
     const header = contentEl.createDiv({ cls: 'lachesis-diff-modal-header' })
@@ -70,11 +79,12 @@ export class DiffViewerModal extends Modal {
       })
       rejectBtn.addEventListener('click', () => this.handleReject())
 
-      const acceptBtn = footer.createEl('button', {
+      this.acceptBtn = footer.createEl('button', {
         text: 'Accept Changes',
         cls: 'lachesis-diff-modal-accept-btn mod-cta',
       })
-      acceptBtn.addEventListener('click', () => this.handleAccept())
+      this.acceptBtn.addEventListener('click', () => this.handleAccept())
+      this.updateAcceptButton()
     } else {
       const statusText = this.diffBlock.status === 'accepted' ? 'Changes applied' : 'Changes rejected'
       footer.createEl('span', {
@@ -91,15 +101,41 @@ export class DiffViewerModal extends Modal {
   }
 
   private renderDiffContent(container: HTMLElement) {
-    const pre = container.createEl('pre', { cls: 'lachesis-diff-modal-pre' })
-
     if (this.diffBlock.parsed) {
-      for (const hunk of this.diffBlock.parsed.hunks) {
-        // Hunk header
-        pre.createEl('div', {
-          cls: 'lachesis-diff-hunk-header',
-          text: `@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@`,
-        })
+      const hunks = this.diffBlock.parsed.hunks
+      const showCheckboxes = !this.viewOnly && this.diffBlock.status === 'pending' && hunks.length > 1
+
+      for (let idx = 0; idx < hunks.length; idx++) {
+        const hunk = hunks[idx]
+        const hunkContainer = container.createDiv({ cls: 'lachesis-diff-hunk-container' })
+
+        // Checkbox row (only show if multiple hunks and not view-only)
+        if (showCheckboxes) {
+          const checkboxRow = hunkContainer.createDiv({ cls: 'lachesis-diff-hunk-checkbox-row' })
+          const checkbox = checkboxRow.createEl('input', {
+            type: 'checkbox',
+            cls: 'lachesis-diff-hunk-checkbox',
+          })
+          checkbox.checked = this.hunkSelections.get(idx) ?? true
+          checkbox.dataset.hunkIdx = String(idx)
+          checkbox.addEventListener('change', () => this.handleHunkToggle(idx, checkbox.checked, hunkContainer))
+
+          checkboxRow.createEl('span', {
+            cls: 'lachesis-diff-hunk-header',
+            text: `@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@`,
+          })
+        }
+
+        // Diff content
+        const pre = hunkContainer.createEl('pre', { cls: 'lachesis-diff-modal-pre' })
+
+        // Hunk header (only if not already shown with checkbox)
+        if (!showCheckboxes) {
+          pre.createEl('div', {
+            cls: 'lachesis-diff-hunk-header',
+            text: `@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@`,
+          })
+        }
 
         // Diff lines
         for (const line of hunk.lines) {
@@ -112,13 +148,44 @@ export class DiffViewerModal extends Modal {
       }
     } else {
       // Fallback: show raw diff if parsing failed
+      const pre = container.createEl('pre', { cls: 'lachesis-diff-modal-pre' })
       pre.setText(this.diffBlock.rawDiff)
     }
+  }
+
+  private handleHunkToggle(idx: number, checked: boolean, container: HTMLElement) {
+    this.hunkSelections.set(idx, checked)
+    container.toggleClass('lachesis-diff-hunk-deselected', !checked)
+    this.updateAcceptButton()
+  }
+
+  private updateAcceptButton() {
+    if (!this.acceptBtn || !this.diffBlock.parsed) return
+
+    const total = this.diffBlock.parsed.hunks.length
+    const selected = Array.from(this.hunkSelections.values()).filter(Boolean).length
+
+    if (total > 1) {
+      this.acceptBtn.textContent = `Accept Selected (${selected}/${total})`
+    } else {
+      this.acceptBtn.textContent = 'Accept Changes'
+    }
+    this.acceptBtn.disabled = selected === 0
   }
 
   private async handleAccept() {
     if (!this.diffBlock.parsed) {
       new Notice('Cannot apply diff: parsing failed')
+      return
+    }
+
+    // Filter to only selected hunks
+    const selectedHunks = this.diffBlock.parsed.hunks.filter(
+      (_, idx) => this.hunkSelections.get(idx)
+    )
+
+    if (selectedHunks.length === 0) {
+      new Notice('No changes selected')
       return
     }
 
@@ -135,8 +202,12 @@ export class DiffViewerModal extends Modal {
       // Read current content
       const currentContent = await this.app.vault.read(abstractFile)
 
-      // Apply the diff
-      const newContent = applyDiff(currentContent, this.diffBlock.parsed)
+      // Apply only the selected hunks
+      const filteredDiff: ParsedDiff = {
+        fileName: this.diffBlock.parsed.fileName,
+        hunks: selectedHunks,
+      }
+      const newContent = applyDiff(currentContent, filteredDiff)
 
       // Write back to file
       await this.app.vault.modify(abstractFile, newContent)
@@ -145,7 +216,10 @@ export class DiffViewerModal extends Modal {
       this.diffBlock.status = 'accepted'
       this.onAction(this.diffBlock, 'accepted')
 
-      new Notice(`Applied changes to ${this.diffBlock.fileName}`)
+      const countMsg = selectedHunks.length < this.diffBlock.parsed.hunks.length
+        ? ` (${selectedHunks.length}/${this.diffBlock.parsed.hunks.length} changes)`
+        : ''
+      new Notice(`Applied changes to ${this.diffBlock.fileName}${countMsg}`)
       this.close()
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to apply diff'

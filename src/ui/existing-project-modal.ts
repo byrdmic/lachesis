@@ -14,7 +14,16 @@ import { getAllWorkflows, getWorkflowDefinition, WORKFLOW_DEFINITIONS } from '..
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 import { extractDiffBlocks, applyDiff, containsDiffBlocks, type DiffBlock } from '../utils/diff'
 import { getTrimmedLogContent, type TrimmedLogResult } from '../utils/log-parser'
+import {
+  parsePotentialTasks,
+  updateLogWithTaskActions,
+  appendToFutureTasksSection,
+  type PotentialTask,
+  type ParsedPotentialTasks,
+  type TaskUpdateAction,
+} from '../utils/potential-tasks-parser'
 import { DiffViewerModal, type DiffAction, type DiffViewerOptions } from './diff-viewer-modal'
+import { PotentialTasksModal, type TaskSelection } from './potential-tasks-modal'
 import { listChatLogs, loadChatLog, saveChatLog, type ChatLogMetadata } from '../core/chat'
 import { TEMPLATES, type TemplateName } from '../scaffolder/templates'
 import { processTemplateForFile } from '../scaffolder/scaffolder'
@@ -52,6 +61,8 @@ export class ExistingProjectModal extends Modal {
   private activeWorkflow: WorkflowDefinition | null = null
   private focusedFile: ExpectedCoreFile | null = null // File being filled via "Fill with AI"
   private pendingDiffs: DiffBlock[] = []
+  private pendingPotentialTasks: PotentialTask[] = []
+  private parsedPotentialTasks: ParsedPotentialTasks | null = null
 
   // DOM Elements
   private messagesContainer: HTMLElement | null = null
@@ -402,6 +413,12 @@ export class ExistingProjectModal extends Modal {
       this.renderDiffFileLink(fileListEl, diffBlock)
     }
 
+    // Check for potential tasks if Log.md was modified
+    const logDiff = diffBlocks.find((d) => d.fileName === 'Log.md')
+    if (logDiff && !this.isViewingLoadedChat) {
+      this.checkForPotentialTasksLink(fileListEl)
+    }
+
     // Extract text after last diff block
     const lastDiffBlock = diffBlocks[diffBlocks.length - 1]
     const lastDiffMarker = '```diff\n' + lastDiffBlock.rawDiff + '\n```'
@@ -497,6 +514,135 @@ export class ExistingProjectModal extends Modal {
     // Refresh snapshot if changes were applied
     if (action === 'accepted') {
       this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
+    }
+  }
+
+  // ============================================================================
+  // Potential Tasks Methods
+  // ============================================================================
+
+  /**
+   * Check if Log.md has potential tasks and render a link if so.
+   */
+  private async checkForPotentialTasksLink(fileListContainer: HTMLElement): Promise<void> {
+    try {
+      // Read Log.md content
+      const logPath = `${this.projectPath}/Log.md`
+      const logFile = this.app.vault.getAbstractFileByPath(logPath)
+      if (!logFile || !(logFile instanceof TFile)) return
+
+      const content = await this.app.vault.read(logFile)
+      const parsed = parsePotentialTasks(content)
+
+      if (parsed.actionableTaskCount > 0) {
+        this.pendingPotentialTasks = parsed.allTasks
+        this.parsedPotentialTasks = parsed
+        this.renderPotentialTasksLink(fileListContainer, parsed.actionableTaskCount)
+      }
+    } catch (err) {
+      console.error('Failed to check for potential tasks:', err)
+    }
+  }
+
+  /**
+   * Render the "Potential Tasks Generated" link in the diff file list.
+   */
+  private renderPotentialTasksLink(container: HTMLElement, taskCount: number): void {
+    const linkEl = container.createDiv({ cls: 'lachesis-potential-tasks-link' })
+
+    // Icon
+    const iconEl = linkEl.createSpan({ cls: 'lachesis-diff-file-icon' })
+    iconEl.setText('📋')
+
+    // Link text
+    const nameEl = linkEl.createEl('a', {
+      text: 'Potential Tasks Generated',
+      cls: 'lachesis-diff-file-name',
+    })
+    nameEl.addEventListener('click', (e) => {
+      e.preventDefault()
+      this.openPotentialTasksModal()
+    })
+
+    // Badge with count
+    const badgeEl = linkEl.createSpan({ cls: 'lachesis-potential-tasks-badge' })
+    badgeEl.setText(`${taskCount} task${taskCount > 1 ? 's' : ''}`)
+  }
+
+  /**
+   * Open the potential tasks review modal.
+   */
+  private openPotentialTasksModal(): void {
+    const modal = new PotentialTasksModal(
+      this.app,
+      this.pendingPotentialTasks,
+      this.projectPath,
+      (selections, confirmed) => this.handlePotentialTasksAction(selections, confirmed),
+    )
+    modal.open()
+  }
+
+  /**
+   * Handle actions from the potential tasks modal.
+   */
+  private async handlePotentialTasksAction(
+    selections: TaskSelection[],
+    confirmed: boolean,
+  ): Promise<void> {
+    if (!confirmed || !this.parsedPotentialTasks) return
+
+    // Group selections by action
+    const rejects = selections.filter((s) => s.action === 'reject')
+    const moves = selections.filter((s) => s.action === 'move-to-future')
+    // 'keep' actions require no file changes
+
+    // Convert to TaskUpdateAction format
+    const actions: TaskUpdateAction[] = selections.map((s) => ({
+      taskId: s.taskId,
+      action: s.action,
+    }))
+
+    try {
+      // Process Log.md updates if there are any rejections or moves
+      if (rejects.length > 0 || moves.length > 0) {
+        const logPath = `${this.projectPath}/Log.md`
+        const logFile = this.app.vault.getAbstractFileByPath(logPath)
+
+        if (logFile && logFile instanceof TFile) {
+          const logContent = await this.app.vault.read(logFile)
+          const result = updateLogWithTaskActions(logContent, actions, this.parsedPotentialTasks)
+          await this.app.vault.modify(logFile, result.newContent)
+        }
+      }
+
+      // Process Tasks.md additions if there are any moves
+      if (moves.length > 0) {
+        const tasksPath = `${this.projectPath}/Tasks.md`
+        const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+        if (tasksFile && tasksFile instanceof TFile) {
+          const tasksContent = await this.app.vault.read(tasksFile)
+
+          // Get task details for moved tasks
+          const movedTasks = moves.map((m) => {
+            const task = this.pendingPotentialTasks.find((t) => t.id === m.taskId)
+            return {
+              text: task?.text || '',
+              sourceDate: task?.logEntryDate || null,
+            }
+          })
+
+          const newTasksContent = appendToFutureTasksSection(tasksContent, movedTasks)
+          await this.app.vault.modify(tasksFile, newTasksContent)
+        }
+      }
+
+      // Clear pending tasks and refresh
+      this.pendingPotentialTasks = []
+      this.parsedPotentialTasks = null
+      this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
+    } catch (err) {
+      console.error('Failed to apply potential task actions:', err)
     }
   }
 
