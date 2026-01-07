@@ -499,11 +499,26 @@ OVERVIEW.MD IS THE 40,000-FOOT VIEW (CRITICAL):
 
 HANDLING GITHUB REPO CONFIGURATION:
 When the user provides a GitHub repo URL (e.g., "github.com/user/repo" or "https://github.com/user/repo"):
-1. Acknowledge receipt: "Noted, sir. I'll remember that for tracking purposes."
-2. Tell the user: "To persist this, you can update .ai/config.json in your project folder with:
-   { \"github_repo\": \"<the URL they provided>\" }"
-3. For the rest of this conversation, treat the repo as configured
-4. Note: You cannot directly modify files - guide the user to update the config manually
+1. Acknowledge receipt and immediately propose a diff to update .ai/config.json
+2. Output a unified diff to update the github_repo field
+
+Example - user says "github.com/myuser/myproject":
+\`\`\`diff
+--- .ai/config.json
++++ .ai/config.json
+@@ -1,5 +1,5 @@
+ {
+   "$schema": "https://lachesis.dev/schemas/ai-config.json",
+-  "github_repo": "",
++  "github_repo": "github.com/myuser/myproject",
+   "notes": "Add your GitHub repo URL..."
+ }
+\`\`\`
+
+Rules for config.json diffs:
+- Always use the exact format shown above
+- Normalize URLs: strip "https://" prefix if present, keep just "github.com/user/repo"
+- The user will see an Accept/Reject button for the change
 
 AVAILABLE WORKFLOWS:
 1. **Synthesize** - Light polish for clarity and consistency

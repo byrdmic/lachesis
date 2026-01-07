@@ -1559,7 +1559,9 @@ export class ExistingProjectModal extends Modal {
   }
 
   /**
-   * Fix missing or incomplete .ai/config.json by creating it and prompting for GitHub repo.
+   * Fix missing or incomplete .ai/config.json.
+   * - If config doesn't exist: create it and ask AI for help
+   * - If config exists but github_repo is empty: ask AI to help configure it
    */
   private async fixMissingConfig(): Promise<void> {
     this.closeIssuesDropdown()
@@ -1568,34 +1570,58 @@ export class ExistingProjectModal extends Modal {
       const configFolderPath = `${this.projectPath}/.ai`
       const configFilePath = `${configFolderPath}/config.json`
 
-      // Check if .ai folder exists, create if not
-      const folderExists = this.app.vault.getAbstractFileByPath(configFolderPath)
-      if (!folderExists) {
-        await this.app.vault.createFolder(configFolderPath)
-      }
+      // Check if config file already exists (use filesystem directly for reliability)
+      const basePath = (this.app.vault.adapter as any).getBasePath() as string
+      const fullConfigPath = path.join(basePath, configFilePath)
+      const configExists = fs.existsSync(fullConfigPath)
 
-      // Check if config file exists
-      const configExists = this.app.vault.getAbstractFileByPath(configFilePath)
-
-      if (!configExists) {
-        // Create new config file with empty github_repo
-        const aiConfig = {
-          $schema: 'https://lachesis.dev/schemas/ai-config.json',
-          github_repo: '',
-          notes:
-            'Add your GitHub repo URL (e.g., "github.com/user/repo") to enable commit analysis for task tracking.',
+      if (configExists) {
+        // Config exists but needs github_repo configured
+        // Start a conversation with the AI to help configure it
+        if (this.inputEl) {
+          this.inputEl.value = 'Help me configure my .ai/config.json - I need to set up the GitHub repository.'
+          this.handleUserInput()
         }
-        await this.app.vault.create(configFilePath, JSON.stringify(aiConfig, null, 2))
-        new Notice('Created .ai/config.json')
+        return
       }
+
+      // Config doesn't exist - need to create it first
+      // Ensure .ai folder exists
+      const fullFolderPath = path.join(basePath, configFolderPath)
+      if (!fs.existsSync(fullFolderPath)) {
+        // Try vault API first, fall back to fs
+        try {
+          await this.app.vault.createFolder(configFolderPath)
+        } catch {
+          // Vault API failed, try fs directly
+          fs.mkdirSync(fullFolderPath, { recursive: true })
+        }
+      }
+
+      // Create new config file with empty github_repo
+      const aiConfig = {
+        $schema: 'https://lachesis.dev/schemas/ai-config.json',
+        github_repo: '',
+        notes:
+          'Add your GitHub repo URL (e.g., "github.com/user/repo") to enable commit analysis for task tracking.',
+      }
+
+      // Try vault API first, fall back to fs
+      try {
+        await this.app.vault.create(configFilePath, JSON.stringify(aiConfig, null, 2))
+      } catch {
+        // Vault API failed, write directly
+        fs.writeFileSync(fullConfigPath, JSON.stringify(aiConfig, null, 2), 'utf-8')
+      }
+
+      new Notice('Created .ai/config.json')
 
       // Refresh to update the snapshot
       await this.refreshAfterFix()
 
-      // Now prompt the user to provide GitHub repo via chat
+      // Now start a conversation with the AI to configure it
       if (this.inputEl) {
-        this.inputEl.value =
-          "I've just created the .ai/config.json file. What's the GitHub repository URL for this project?"
+        this.inputEl.value = 'Help me configure my .ai/config.json - I need to set up the GitHub repository.'
         this.handleUserInput()
       }
     } catch (err) {

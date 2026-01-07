@@ -2,6 +2,8 @@
  * Diff Viewer Modal - Displays a single file diff with accept/reject actions
  */
 
+import * as fs from 'fs'
+import * as path from 'path'
 import { App, Modal, Notice, TFile } from 'obsidian'
 import type { DiffBlock, ParsedDiff } from '../utils/diff'
 import { applyDiff } from '../utils/diff'
@@ -190,17 +192,36 @@ export class DiffViewerModal extends Modal {
     }
 
     try {
-      // Get the file from vault
       const filePath = `${this.projectPath}/${this.diffBlock.fileName}`
-      const abstractFile = this.app.vault.getAbstractFileByPath(filePath)
 
-      if (!abstractFile || !(abstractFile instanceof TFile)) {
-        new Notice(`File not found: ${this.diffBlock.fileName}`)
-        return
+      // Check if this is a hidden folder file (like .ai/config.json)
+      // Obsidian's vault API doesn't handle hidden folders well
+      const isHiddenPath = this.diffBlock.fileName.startsWith('.')
+
+      let currentContent: string
+
+      if (isHiddenPath) {
+        // Use filesystem directly for hidden paths
+        const basePath = (this.app.vault.adapter as any).getBasePath() as string
+        const absolutePath = path.join(basePath, filePath)
+
+        if (!fs.existsSync(absolutePath)) {
+          new Notice(`File not found: ${this.diffBlock.fileName}`)
+          return
+        }
+
+        currentContent = fs.readFileSync(absolutePath, 'utf-8')
+      } else {
+        // Use Obsidian vault API for normal files
+        const abstractFile = this.app.vault.getAbstractFileByPath(filePath)
+
+        if (!abstractFile || !(abstractFile instanceof TFile)) {
+          new Notice(`File not found: ${this.diffBlock.fileName}`)
+          return
+        }
+
+        currentContent = await this.app.vault.read(abstractFile)
       }
-
-      // Read current content
-      const currentContent = await this.app.vault.read(abstractFile)
 
       // Apply only the selected hunks
       const filteredDiff: ParsedDiff = {
@@ -209,8 +230,16 @@ export class DiffViewerModal extends Modal {
       }
       const newContent = applyDiff(currentContent, filteredDiff)
 
-      // Write back to file
-      await this.app.vault.modify(abstractFile, newContent)
+      if (isHiddenPath) {
+        // Write using filesystem for hidden paths
+        const basePath = (this.app.vault.adapter as any).getBasePath() as string
+        const absolutePath = path.join(basePath, filePath)
+        fs.writeFileSync(absolutePath, newContent, 'utf-8')
+      } else {
+        // Write using Obsidian vault API for normal files
+        const abstractFile = this.app.vault.getAbstractFileByPath(filePath) as TFile
+        await this.app.vault.modify(abstractFile, newContent)
+      }
 
       // Update status
       this.diffBlock.status = 'accepted'

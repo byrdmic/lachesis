@@ -399,6 +399,11 @@ export function formatProjectSnapshotForModel(snapshot: ProjectSnapshot): string
       lines.push(`- GitHub repo: ${snapshot.aiConfig.github_repo}`)
     } else {
       lines.push('- GitHub repo: NOT CONFIGURED')
+      // Include the raw config content so AI can generate accurate diff
+      lines.push('- Current file content:')
+      lines.push('```json')
+      lines.push(JSON.stringify(snapshot.aiConfig, null, 2))
+      lines.push('```')
     }
   } else {
     lines.push('')
