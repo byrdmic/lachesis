@@ -145,6 +145,38 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     ],
     usesAI: false,
   },
+
+  /**
+   * ROADMAP DESIGN: Interactive session to flesh out project milestones.
+   * AI-guided conversation with incremental diffs.
+   */
+  'roadmap-design': {
+    name: 'roadmap-design',
+    displayName: 'Roadmap: Design Session',
+    description: 'Interactive session to flesh out project milestones',
+    intent:
+      'Guide the user through designing or refining their project roadmap. ' +
+      'Analyze all project files to understand current state, then lead a structured ' +
+      'conversation to clarify milestones, definitions of done, and priorities. ' +
+      'Propose incremental changes as decisions are made.',
+    readFiles: ALL_CORE_FILES,
+    writeFiles: [PROJECT_FILES.roadmap],
+    risk: 'low',
+    confirmation: 'preview',
+    allowsDelete: false,
+    allowsCrossFileMove: false,
+    rules: [
+      'Start by analyzing all files and summarizing current roadmap state',
+      'Identify gaps: unclear milestones, missing definitions of done, unordered priorities',
+      'Mine Log.md and Ideas.md for signals about what matters to the user',
+      'Ask clarifying questions before proposing any changes',
+      'Guide user through phases: Analysis → Milestones → DoD → Prioritization → Focus',
+      'Propose small, incremental diffs after each decision - not one big diff at the end',
+      'Keep conversation focused on strategic outcomes, not tactical tasks',
+      'Milestones should be vertical (demo-able) not horizontal (layers/components)',
+    ],
+    usesAI: true,
+  },
 }
 
 // ============================================================================

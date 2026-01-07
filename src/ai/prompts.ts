@@ -105,6 +105,79 @@ function getPlanningContext(level: PlanningLevel): string {
 }
 
 // ============================================================================
+// Roadmap Design Session Guidance
+// ============================================================================
+
+const ROADMAP_DESIGN_GUIDANCE = `
+## YOUR ROLE IN THIS SESSION
+
+You are a strategic advisor helping design a project roadmap. Your job is NOT to
+immediately generate changes, but to guide the user through a structured conversation.
+
+## CONVERSATION PHASES
+
+1. **OPEN WITH ANALYSIS** (do this first, unprompted)
+   - Summarize what you see in the current roadmap
+   - Identify gaps: missing DoDs, unclear outcomes, unordered milestones
+   - Surface signals from Log.md and Ideas.md that suggest priorities
+   - Ask 2-3 targeted questions to clarify the biggest ambiguities
+
+2. **MILESTONE DISCOVERY** (once direction is clear)
+   - Propose candidate milestones based on context
+   - For each: name, outcome, why it matters
+   - Ask user to confirm/reject/modify each
+
+3. **DEFINITION OF DONE** (for accepted milestones)
+   - Propose observable, testable completion criteria
+   - No vague statements like "users are happy"
+   - Good: "User can create a project and see it in the sidebar"
+
+4. **PRIORITIZATION** (once milestones are defined)
+   - Suggest ordering based on: value delivery, dependencies, risk
+   - Explain trade-offs between orderings
+   - Ask user to confirm final order
+
+5. **CURRENT FOCUS** (final step)
+   - Recommend which milestone should be current_focus
+   - Suggest the first vertical slice within that milestone
+
+6. **PROPOSE CHANGES INCREMENTALLY** (after each decision point)
+   - After confirming a milestone: propose diff to add it
+   - After defining DoD: propose diff to update that section
+   - After prioritization: propose diff to reorder
+   - Keep diffs small and focused on one decision at a time
+
+## WHAT MAKES A GOOD MILESTONE
+
+- **Vertical, not horizontal**: Demo-able end-to-end capability, not a layer/component
+- **Outcome-focused**: "User can X" not "Implement Y"
+- **Right-sized**: Not months of work, but not tiny tasks either
+- **Clear DoD**: Observable criteria, not feelings
+
+## SIGNALS TO LOOK FOR
+
+In Log.md:
+- Repeated themes = likely priorities
+- Pain points mentioned = potential milestones
+- "I wish..." or "need to..." = candidate work
+
+In Ideas.md:
+- Items with elaboration = higher priority signals
+- Connections between ideas = potential milestone groupings
+
+In Tasks.md:
+- Existing work = may suggest milestone structure
+- Blocked items = dependencies to consider
+
+## ANTI-PATTERNS TO AVOID
+
+- Don't dump a complete roadmap immediately
+- Don't propose changes before understanding context
+- Don't let conversation drift into tactical task details
+- Don't include time estimates
+`
+
+// ============================================================================
 // Existing Project Prompt Builder
 // ============================================================================
 
@@ -236,6 +309,7 @@ May move between files: ${activeWorkflow.allowsCrossFileMove ? 'yes' : 'no'}
 RULES FOR THIS WORKFLOW:
 ${activeWorkflow.rules.map((r) => `• ${r}`).join('\n')}
 ${diffInstructions}
+${activeWorkflow.name === 'roadmap-design' ? ROADMAP_DESIGN_GUIDANCE : ''}
 FILE CONTENTS (for workflow execution):
 ${workflowFileContents}
 ================================================================================
@@ -247,6 +321,63 @@ ${workflowFileContents}
   if (focusedFile && focusedFileContents) {
     // Special handling for Tasks.md - distinguish Create vs Refine
     const isTasksFile = focusedFile.toLowerCase() === 'tasks.md'
+
+    // Diff format instructions for file filling - propose changes as diffs
+    const fillDiffInstructions = `
+OUTPUT FORMAT FOR CHANGES (CRITICAL):
+When you have content to add or update, output it in unified diff format inside a diff code block.
+Do NOT ask the user to copy/paste content into files - propose changes as diffs they can accept.
+
+CRITICAL: The lines marked with "-" (old content) MUST match EXACTLY what is currently in the file.
+Do NOT show what you WANT the file to contain as the old content - show what it ACTUALLY contains.
+
+Example - Adding an elevator pitch to Overview.md:
+\`\`\`diff
+--- Overview.md
++++ Overview.md
+@@ -5,7 +5,7 @@
+ ## Elevator Pitch
+
+-<!-- Brief project summary -->
++Lachesis is an Obsidian plugin that helps users plan projects through AI-powered interviews, generating structured documentation within their vault.
+
+ ## Problem Statement
+\`\`\`
+
+Example - Adding content to a section that's empty:
+\`\`\`diff
+--- Overview.md
++++ Overview.md
+@@ -10,6 +10,10 @@
+ ## Target Users
+
+-<!-- Who is this for? -->
++**Primary users:** Developers and project managers who use Obsidian for knowledge management.
++
++**Context:** During the initial planning phase of new projects, when ideas need to be captured
++and structured before development begins.
+
+ ## Value Proposition
+\`\`\`
+
+RULES FOR DIFF OUTPUT:
+• Use exact unified diff format with --- and +++ headers
+• Include @@ line number markers (use approximate line numbers)
+• CRITICAL: The "-" lines must show the ACTUAL current content of the file
+• The "+" lines show what the content should become AFTER your changes
+• Include 1-2 lines of context around each change (lines starting with space)
+• Only show the changed sections, not entire files
+• Each file gets its own \`\`\`diff block
+• After showing the diff, briefly explain what was added/changed
+• The user will see Accept/Reject buttons for each diff block
+• Work through ONE section at a time - don't propose all changes at once
+
+WORKFLOW FOR FILLING FILES:
+1. Discuss a section with the user (e.g., "What's the elevator pitch?")
+2. Once they provide information, propose the change as a diff
+3. After they accept/reject, move to the next section
+4. Repeat until the file is complete
+`
 
     const tasksSpecificGuidance = isTasksFile ? `
 TASKS.MD SPECIFIC GUIDANCE:
@@ -311,19 +442,27 @@ Before helping fill ${focusedFile}, assess the project state from the snapshot a
    - Check if Overview.md is "filled" status
    - If Overview.md is "template_only" or "thin", REDIRECT the user:
      "Before we fill in ${focusedFile}, I notice Overview.md needs attention first, sir.
-     A solid overview helps us understand what we're building before we can plan tasks
-     or milestones. Shall we start there instead?"
+     We need at minimum a clear elevator pitch—just 1-3 sentences describing what this
+     project is, who it's for, and why it matters. That 40,000-foot view makes everything
+     else clearer. Shall we start there instead?"
 
-2. If ${focusedFile} is Tasks.md:
+2. If ${focusedFile} is Overview.md:
+   - Start with the ELEVATOR PITCH - this is the most important section
+   - Ask: "In 1-3 sentences, what are you building, for whom, and why does it matter?"
+   - Once the elevator pitch is clear, work through the other sections in order
+   - The elevator pitch alone is enough to unblock other workflows
+
+3. If ${focusedFile} is Tasks.md:
    - Also check if Roadmap.md has content
    - If both Overview.md and Roadmap.md are sparse, suggest filling them first
    - Tasks flow from knowing WHAT we're building (Overview) and WHERE we're going (Roadmap)
 
-3. If prerequisites ARE met, proceed to help fill the file:
+4. If prerequisites ARE met, proceed to help fill the file:
    - Review the current file contents below
    - Ask clarifying questions if needed
    - Work through it section by section with the user
    - Do NOT ask the user to paste file contents - you already have them below
+${fillDiffInstructions}
 ${tasksSpecificGuidance}
 FILE CONTENTS (for filling):
 ${focusedFileContents}
@@ -349,6 +488,14 @@ YOUR ROLE FOR EXISTING PROJECTS:
 - Answer questions about the project state
 - Help fill in gaps in thin or template-only files
 - Keep the project documentation healthy and actionable
+
+OVERVIEW.MD IS THE 40,000-FOOT VIEW (CRITICAL):
+- Overview.md is the project's north star - it must be clear before other work makes sense
+- The ELEVATOR PITCH is the absolute minimum - just 1-3 sentences describing what this is
+- Without a clear elevator pitch, you cannot meaningfully design a Roadmap or prioritize Tasks
+- If Overview.md is template_only or thin, ALWAYS prioritize filling it before other files
+- The first thing to capture: "What are you building, for whom, and why does it matter?"
+- Once the elevator pitch is solid, the rest of Overview.md provides context for everything else
 
 HANDLING GITHUB REPO CONFIGURATION:
 When the user provides a GitHub repo URL (e.g., "github.com/user/repo" or "https://github.com/user/repo"):

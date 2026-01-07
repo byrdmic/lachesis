@@ -27,6 +27,7 @@ import { PotentialTasksModal, type TaskSelection } from './potential-tasks-modal
 import { listChatLogs, loadChatLog, saveChatLog, type ChatLogMetadata } from '../core/chat'
 import { TEMPLATES, type TemplateName } from '../scaffolder/templates'
 import { processTemplateForFile } from '../scaffolder/scaffolder'
+import { validateOverviewHeadings, fixOverviewHeadings } from '../core/project/template-evaluator'
 
 // ============================================================================
 // Types
@@ -36,7 +37,7 @@ type ModalPhase = 'loading' | 'chat' | 'error'
 
 type ProjectIssue = {
   file: ExpectedCoreFile | '.ai/config.json'
-  type: 'missing' | 'template_only' | 'thin' | 'config'
+  type: 'missing' | 'template_only' | 'thin' | 'config' | 'headings_invalid'
   message: string
   fixLabel: string
   fixAction: () => Promise<void>
@@ -732,6 +733,7 @@ export class ExistingProjectModal extends Modal {
           return
         }
         this.activeWorkflow = detectedWorkflow
+        this.focusedFile = null  // Clear any active "fill file" mode - workflow takes precedence
       }
     }
 
@@ -836,8 +838,12 @@ export class ExistingProjectModal extends Modal {
 
     // Store workflow name for post-diff processing, then clear active workflow
     this.lastUsedWorkflowName = this.activeWorkflow?.name ?? null
+    // Only clear focusedFile if a workflow was active (workflow takes precedence over fill mode)
+    // Otherwise, keep focusedFile set so diff instructions persist across the conversation
+    if (this.activeWorkflow) {
+      this.focusedFile = null
+    }
     this.activeWorkflow = null
-    this.focusedFile = null
 
     try {
       const result = await this.provider.streamText(
@@ -954,6 +960,7 @@ export class ExistingProjectModal extends Modal {
 
     // Standard AI workflow handling
     this.activeWorkflow = workflow
+    this.focusedFile = null  // Clear any active "fill file" mode - workflow takes precedence
     this.inputEl.value = `Run the ${workflowDisplayName} workflow`
     this.handleUserInput()
   }
@@ -1066,6 +1073,7 @@ export class ExistingProjectModal extends Modal {
     this.currentChatFilename = null
     this.pendingDiffs = []
     this.activeWorkflow = null
+    this.focusedFile = null  // Clear any active "fill file" mode
     this.lastUsedWorkflowName = null
     this.isViewingLoadedChat = false // New chat is not a loaded chat
     this.renderChatPhase()
@@ -1081,6 +1089,7 @@ export class ExistingProjectModal extends Modal {
       this.currentChatFilename = filename
       this.pendingDiffs = []
       this.activeWorkflow = null
+      this.focusedFile = null  // Clear any active "fill file" mode
       this.lastUsedWorkflowName = null
       this.isViewingLoadedChat = true // Mark as viewing saved chat (diffs are view-only)
       this.renderChatPhase()
@@ -1289,7 +1298,54 @@ export class ExistingProjectModal extends Modal {
       }
     }
 
+    // Check Overview.md headings validation (only if file exists and isn't already flagged as missing/template_only)
+    const overviewEntry = this.snapshot.files['Overview.md']
+    if (overviewEntry?.exists && overviewEntry.templateStatus !== 'missing') {
+      // Don't duplicate if Overview.md is already in issues as template_only
+      const alreadyHasOverviewIssue = issues.some(
+        (i) => i.file === 'Overview.md' && (i.type === 'missing' || i.type === 'template_only')
+      )
+      if (!alreadyHasOverviewIssue) {
+        // Read file synchronously using fs to check headings
+        const headingIssue = this.checkOverviewHeadingsSync()
+        if (headingIssue) {
+          issues.push(headingIssue)
+        }
+      }
+    }
+
     return issues
+  }
+
+  /**
+   * Synchronously check Overview.md heading validation using filesystem.
+   * Returns an issue if headings are invalid, null otherwise.
+   */
+  private checkOverviewHeadingsSync(): ProjectIssue | null {
+    try {
+      const basePath = (this.app.vault.adapter as any).getBasePath() as string
+      const overviewPath = path.join(basePath, this.projectPath, 'Overview.md')
+
+      if (!fs.existsSync(overviewPath)) return null
+
+      const content = fs.readFileSync(overviewPath, 'utf-8')
+      const validation = validateOverviewHeadings(content)
+
+      if (!validation.isValid) {
+        return {
+          file: 'Overview.md',
+          type: 'headings_invalid',
+          message: `Missing ${validation.missingHeadings.length} heading(s)`,
+          fixLabel: 'Fix Headings',
+          fixAction: () => this.fixInvalidHeadings(),
+        }
+      }
+
+      return null
+    } catch (err) {
+      console.warn('Failed to validate Overview.md headings:', err)
+      return null
+    }
   }
 
   /**
@@ -1378,6 +1434,7 @@ export class ExistingProjectModal extends Modal {
       template_only: '?',
       thin: '~',
       config: '⚙',
+      headings_invalid: '☰',
     }
     iconEl.setText(iconMap[issue.type])
 
@@ -1472,6 +1529,32 @@ export class ExistingProjectModal extends Modal {
     if (this.inputEl) {
       this.inputEl.value = `Help me expand ${fileName}. It has some content but needs more detail. Let's review what's there and add more.`
       this.handleUserInput()
+    }
+  }
+
+  /**
+   * Fix Overview.md headings by adding missing sections with placeholders.
+   * This is a structural fix that doesn't require AI.
+   */
+  private async fixInvalidHeadings(): Promise<void> {
+    try {
+      const overviewPath = `${this.projectPath}/Overview.md`
+      const overviewFile = this.app.vault.getAbstractFileByPath(overviewPath)
+
+      if (!overviewFile || !(overviewFile instanceof TFile)) {
+        new Notice('Overview.md not found')
+        return
+      }
+
+      const content = await this.app.vault.read(overviewFile)
+      const fixedContent = fixOverviewHeadings(content, this.snapshot.projectName)
+
+      await this.app.vault.modify(overviewFile, fixedContent)
+      new Notice('Fixed Overview.md headings')
+
+      await this.refreshAfterFix()
+    } catch (err) {
+      new Notice(`Failed to fix headings: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 
