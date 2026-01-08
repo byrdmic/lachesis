@@ -1363,3 +1363,16 @@
   margin-top: 6px;
   padding-left: 60px;
 }
+
+.lachesis-git-log-description {
+  margin-top: 8px;
+  margin-left: 60px;
+  padding: 10px 12px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  color: var(--text-muted);
+  line-height: 1.5;
+}

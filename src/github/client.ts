@@ -230,27 +230,40 @@ export async function fetchAllCommits(
  */
 export function formatCommitLog(
   commits: CommitLogEntry[],
-  options: { includeDate?: boolean; includeFull?: boolean } = {}
+  options: { includeDate?: boolean; includeFull?: boolean; includeDescription?: boolean } = {}
 ): string {
-  const { includeDate = false, includeFull = false } = options
+  const { includeDate = false, includeFull = false, includeDescription = false } = options
 
   return commits
     .map((commit) => {
-      const firstLine = commit.message.split('\n')[0]
+      const [firstLine, ...descriptionLines] = commit.message.split('\n')
+      const description = descriptionLines.join('\n').trim()
 
       if (includeFull) {
         const dateStr = commit.date.toISOString().split('T')[0]
         return `commit ${commit.sha}\nAuthor: ${commit.author} <${commit.authorEmail}>\nDate:   ${dateStr}\n\n    ${commit.message.split('\n').join('\n    ')}\n`
       }
 
+      let line: string
       if (includeDate) {
         const dateStr = commit.date.toISOString().split('T')[0]
-        return `${commit.shortSha} ${dateStr} ${firstLine}`
+        line = `${commit.shortSha} ${dateStr} ${firstLine}`
+      } else {
+        line = `${commit.shortSha} ${firstLine}`
       }
 
-      return `${commit.shortSha} ${firstLine}`
+      // Add description if requested and present
+      if (includeDescription && description) {
+        const indentedDescription = description
+          .split('\n')
+          .map((l) => `    ${l}`)
+          .join('\n')
+        line += `\n${indentedDescription}`
+      }
+
+      return line
     })
-    .join(includeFull ? '\n' : '\n')
+    .join(includeDescription ? '\n\n' : '\n')
 }
 
 /**

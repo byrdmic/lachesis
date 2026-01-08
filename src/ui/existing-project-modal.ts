@@ -701,7 +701,7 @@ export class ExistingProjectModal extends Modal {
 
     if (result.data.length === 0) return undefined
 
-    return formatCommitLog(result.data, { includeDate: true })
+    return formatCommitLog(result.data, { includeDate: true, includeDescription: true })
   }
 
   private async generateOpeningMessage() {

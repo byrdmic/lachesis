@@ -103,14 +103,14 @@ export class GitLogModal extends Modal {
     for (const commit of this.commits) {
       const commitEl = listEl.createDiv({ cls: 'lachesis-git-log-entry' })
 
-      // First line: sha and message
+      // First line: sha and message title
       const mainLine = commitEl.createDiv({ cls: 'lachesis-git-log-main' })
       mainLine.createEl('span', {
         text: commit.shortSha,
         cls: 'lachesis-git-log-sha',
       })
 
-      const firstLine = commit.message.split('\n')[0]
+      const [firstLine, ...descLines] = commit.message.split('\n')
       mainLine.createEl('span', {
         text: firstLine,
         cls: 'lachesis-git-log-message',
@@ -124,6 +124,13 @@ export class GitLogModal extends Modal {
         day: 'numeric',
       })
       metaLine.setText(`${commit.author} • ${dateStr}`)
+
+      // Description (if present)
+      const description = descLines.join('\n').trim()
+      if (description) {
+        const descEl = commitEl.createDiv({ cls: 'lachesis-git-log-description' })
+        descEl.setText(description)
+      }
     }
   }
 
