@@ -24,7 +24,16 @@ import {
 } from '../utils/potential-tasks-parser'
 import { DiffViewerModal, type DiffAction, type DiffViewerOptions } from './diff-viewer-modal'
 import { PotentialTasksModal, type TaskSelection } from './potential-tasks-modal'
+import { HarvestTasksModal } from './harvest-tasks-modal'
 import { GitLogModal } from './git-log-modal'
+import {
+  parseHarvestResponse,
+  parseTasksStructure,
+  applyHarvestSelections,
+  type HarvestedTask,
+  type HarvestTaskSelection,
+  type ParsedTasksStructure,
+} from '../utils/harvest-tasks-parser'
 import { fetchCommits, formatCommitLog } from '../github'
 import { listChatLogs, loadChatLog, saveChatLog, type ChatLogMetadata } from '../core/chat'
 import { TEMPLATES, type TemplateName } from '../scaffolder/templates'
@@ -72,6 +81,8 @@ export class ExistingProjectModal extends Modal {
   private pendingPotentialTasks: PotentialTask[] = []
   private parsedPotentialTasks: ParsedPotentialTasks | null = null
   private lastUsedWorkflowName: WorkflowName | null = null // Track workflow for post-diff processing
+  private pendingHarvestedTasks: HarvestedTask[] = []
+  private harvestTasksStructure: ParsedTasksStructure | null = null
 
   // DOM Elements
   private messagesContainer: HTMLElement | null = null
@@ -908,6 +919,11 @@ export class ExistingProjectModal extends Modal {
       this.finalizeStreamingMessage()
 
       if (result.success && result.content) {
+        // Check if this was a harvest-tasks workflow - handle specially
+        if (this.lastUsedWorkflowName === 'harvest-tasks') {
+          await this.handleHarvestTasksResponse(result.content)
+        }
+
         this.messages.push({
           role: 'assistant',
           content: result.content,
@@ -964,6 +980,16 @@ export class ExistingProjectModal extends Modal {
       lowerMessage.includes('process tasks')
     ) {
       return getWorkflowDefinition('groom-tasks')
+    }
+
+    // Harvest Tasks workflow
+    if (
+      lowerMessage.includes('harvest tasks') ||
+      lowerMessage.includes('find new tasks') ||
+      lowerMessage.includes('discover tasks') ||
+      lowerMessage.includes('suggest tasks')
+    ) {
+      return getWorkflowDefinition('harvest-tasks')
     }
 
     // Check for common workflow trigger patterns
@@ -1103,6 +1129,111 @@ export class ExistingProjectModal extends Modal {
       this.updateStatus('Error scanning for tasks')
       this.setInputEnabled(true)
       new Notice(`Failed to scan for tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  // ============================================================================
+  // Harvest Tasks Workflow Methods
+  // ============================================================================
+
+  /**
+   * Handle the AI response from the harvest-tasks workflow.
+   * Parses the JSON response and opens the review modal.
+   */
+  private async handleHarvestTasksResponse(content: string): Promise<void> {
+    try {
+      // Parse the AI response as harvested tasks
+      const harvestedTasks = parseHarvestResponse(content)
+
+      if (harvestedTasks.length === 0) {
+        new Notice('No new tasks found to harvest.')
+        return
+      }
+
+      // Read Tasks.md to get structure for destination options
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (!tasksFile || !(tasksFile instanceof TFile)) {
+        new Notice('Tasks.md not found in project')
+        return
+      }
+
+      const tasksContent = await this.app.vault.read(tasksFile)
+      this.harvestTasksStructure = parseTasksStructure(tasksContent)
+      this.pendingHarvestedTasks = harvestedTasks
+
+      // Open the harvest tasks modal
+      this.openHarvestTasksModal()
+    } catch (err) {
+      console.error('Failed to process harvest tasks response:', err)
+      new Notice(`Failed to process tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Open the harvest tasks review modal.
+   */
+  private openHarvestTasksModal(): void {
+    if (!this.harvestTasksStructure) return
+
+    const modal = new HarvestTasksModal(
+      this.app,
+      this.pendingHarvestedTasks,
+      this.projectPath,
+      this.harvestTasksStructure,
+      (selections, confirmed) => this.handleHarvestTasksAction(selections, confirmed),
+    )
+    modal.open()
+  }
+
+  /**
+   * Handle actions from the harvest tasks modal.
+   */
+  private async handleHarvestTasksAction(
+    selections: HarvestTaskSelection[],
+    confirmed: boolean,
+  ): Promise<void> {
+    if (!confirmed) return
+
+    // Filter out discarded tasks
+    const tasksToApply = selections.filter((s) => s.destination !== 'discard')
+
+    if (tasksToApply.length === 0) {
+      new Notice('No tasks selected to add.')
+      return
+    }
+
+    try {
+      // Read current Tasks.md content
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (!tasksFile || !(tasksFile instanceof TFile)) {
+        new Notice('Tasks.md not found')
+        return
+      }
+
+      const tasksContent = await this.app.vault.read(tasksFile)
+
+      // Apply the selections to Tasks.md
+      const newContent = applyHarvestSelections(
+        tasksContent,
+        tasksToApply,
+        this.pendingHarvestedTasks,
+      )
+
+      await this.app.vault.modify(tasksFile, newContent)
+
+      new Notice(`Added ${tasksToApply.length} task${tasksToApply.length > 1 ? 's' : ''} to Tasks.md`)
+
+      // Clear pending state and refresh snapshot
+      this.pendingHarvestedTasks = []
+      this.harvestTasksStructure = null
+      this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
+    } catch (err) {
+      console.error('Failed to apply harvest task selections:', err)
+      new Notice(`Failed to add tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 

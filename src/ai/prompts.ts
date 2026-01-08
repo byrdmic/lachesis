@@ -428,8 +428,96 @@ LANGUAGE RULES (STRICT):
   // Build workflow section if a workflow is active
   let workflowSection = ''
   if (activeWorkflow && workflowFileContents) {
-    // Add diff format instructions for workflows that need preview/confirm
-    const diffInstructions = activeWorkflow.confirmation !== 'none' ? `
+    // Special handling for harvest-tasks workflow - outputs JSON, not diffs
+    if (activeWorkflow.name === 'harvest-tasks') {
+      workflowSection = `
+================================================================================
+ACTIVE WORKFLOW: TASKS: HARVEST TASKS
+================================================================================
+Intent: ${activeWorkflow.intent}
+
+You are scanning ALL project files to find actionable work that should become tasks.
+
+**YOUR GOALS:**
+1. Find implicit TODOs and action items in Log.md and Ideas.md
+2. Identify gaps between Roadmap milestones and current Tasks.md
+3. De-duplicate against existing tasks in Tasks.md
+4. Suggest appropriate destinations for each item
+
+**WHAT TO LOOK FOR:**
+
+In Log.md:
+- Phrases like "need to", "should", "TODO", "don't forget", "fix", "add", "refactor"
+- Blockers mentioned that need resolution
+- Decisions that imply follow-up work
+
+In Ideas.md:
+- Concrete ideas that are ready to become tasks (not vague)
+- Questions that have clear answers and lead to action
+
+In Overview.md / Roadmap.md:
+- Gaps between stated goals and current tasks
+- Success criteria not yet addressed
+- Constraints that need implementation
+
+**WHAT TO SKIP:**
+- Items already in Tasks.md (check task descriptions for matches)
+- Vague musings ("maybe we could...")
+- Questions without clear paths forward
+- Completed work mentioned in Archive.md context
+
+**OUTPUT FORMAT (CRITICAL - OUTPUT ONLY JSON):**
+Return ONLY a JSON object with this exact structure (no markdown, no explanation before or after):
+
+\`\`\`json
+{
+  "tasks": [
+    {
+      "text": "Concise, actionable task description",
+      "sourceFile": "Log.md",
+      "sourceContext": "Brief quote from source (max 100 chars)",
+      "sourceDate": "2024-01-15",
+      "suggestedDestination": "future-tasks",
+      "suggestedVSName": null,
+      "reasoning": "Why this is actionable (1 sentence)",
+      "existingSimilar": null
+    }
+  ],
+  "summary": {
+    "totalFound": 5,
+    "fromLog": 3,
+    "fromIdeas": 2,
+    "fromOther": 0,
+    "duplicatesSkipped": 2
+  }
+}
+\`\`\`
+
+**DESTINATION OPTIONS:**
+- "discard": Not actually actionable or already done
+- "future-tasks": Actionable but not urgent, add to Future Tasks section
+- "active-vs": Fits an existing active vertical slice (user will pick which one)
+- "next-actions": Urgent, small (15-60 min), can start immediately
+- "new-planned-slice": Could be a new coherent piece of work (suggest a name in suggestedVSName)
+- "existing-planned-slice": Fits an existing planned slice (user will pick)
+
+**FIELD REQUIREMENTS:**
+- text: Required. Concise task description (1-2 sentences max)
+- sourceFile: Required. Which file this came from (Log.md, Ideas.md, Overview.md, Roadmap.md)
+- sourceContext: Required. Brief quote showing where you found this (helps user verify)
+- sourceDate: Optional. Date if from Log.md (format: YYYY-MM-DD)
+- suggestedDestination: Required. One of the destination options above
+- suggestedVSName: Only required if destination is "new-planned-slice"
+- reasoning: Required. Why this is actionable
+- existingSimilar: Optional. If you found a similar existing task, note it here
+
+FILE CONTENTS (for analysis):
+${workflowFileContents}
+================================================================================
+`
+    } else {
+      // Add diff format instructions for workflows that need preview/confirm
+      const diffInstructions = activeWorkflow.confirmation !== 'none' ? `
 
 OUTPUT FORMAT FOR CHANGES (CRITICAL):
 When you have changes to propose, output them in unified diff format inside a diff code block.
@@ -503,6 +591,7 @@ FILE CONTENTS (for workflow execution):
 ${workflowFileContents}
 ================================================================================
 `
+    }
   }
 
   // Build focused file section (when user clicks "Fill with AI" on a file)

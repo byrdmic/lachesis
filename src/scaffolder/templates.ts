@@ -251,6 +251,14 @@ tags: ["project/tasks"]
 - [ ] <Task>
 - [ ] <Task>
 
+## Planned Slices (queued for activation)
+<!-- Vertical slices identified but not yet active -->
+<!-- When ready to start, move to Active Vertical Slices and expand tasks -->
+
+### PS1 — <Planned Slice Name>
+**Brief:** <What this slice would deliver>
+**Why queued:** <Dependency or priority reason>
+
 ## Recently Completed (keep short; archive the rest)
 - [x] <Item> (details in [[Archive]])
 `,
