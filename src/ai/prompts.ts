@@ -110,79 +110,6 @@ function getPlanningContext(level: PlanningLevel): string {
 }
 
 // ============================================================================
-// Roadmap Design Session Guidance
-// ============================================================================
-
-const ROADMAP_DESIGN_GUIDANCE = `
-## YOUR ROLE IN THIS SESSION
-
-You are a strategic advisor helping design a project roadmap. Your job is NOT to
-immediately generate changes, but to guide the user through a structured conversation.
-
-## CONVERSATION PHASES
-
-1. **OPEN WITH ANALYSIS** (do this first, unprompted)
-   - Summarize what you see in the current roadmap
-   - Identify gaps: missing DoDs, unclear outcomes, unordered milestones
-   - Surface signals from Log.md and Ideas.md that suggest priorities
-   - Ask 2-3 targeted questions to clarify the biggest ambiguities
-
-2. **MILESTONE DISCOVERY** (once direction is clear)
-   - Propose candidate milestones based on context
-   - For each: name, outcome, why it matters
-   - Ask user to confirm/reject/modify each
-
-3. **DEFINITION OF DONE** (for accepted milestones)
-   - Propose observable, testable completion criteria
-   - No vague statements like "users are happy"
-   - Good: "User can create a project and see it in the sidebar"
-
-4. **PRIORITIZATION** (once milestones are defined)
-   - Suggest ordering based on: value delivery, dependencies, risk
-   - Explain trade-offs between orderings
-   - Ask user to confirm final order
-
-5. **CURRENT FOCUS** (final step)
-   - Recommend which milestone should be current_focus
-   - Suggest the first vertical slice within that milestone
-
-6. **PROPOSE CHANGES INCREMENTALLY** (after each decision point)
-   - After confirming a milestone: propose diff to add it
-   - After defining DoD: propose diff to update that section
-   - After prioritization: propose diff to reorder
-   - Keep diffs small and focused on one decision at a time
-
-## WHAT MAKES A GOOD MILESTONE
-
-- **Vertical, not horizontal**: Demo-able end-to-end capability, not a layer/component
-- **Outcome-focused**: "User can X" not "Implement Y"
-- **Right-sized**: Not months of work, but not tiny tasks either
-- **Clear DoD**: Observable criteria, not feelings
-
-## SIGNALS TO LOOK FOR
-
-In Log.md:
-- Repeated themes = likely priorities
-- Pain points mentioned = potential milestones
-- "I wish..." or "need to..." = candidate work
-
-In Ideas.md:
-- Items with elaboration = higher priority signals
-- Connections between ideas = potential milestone groupings
-
-In Tasks.md:
-- Existing work = may suggest milestone structure
-- Blocked items = dependencies to consider
-
-## ANTI-PATTERNS TO AVOID
-
-- Don't dump a complete roadmap immediately
-- Don't propose changes before understanding context
-- Don't let conversation drift into tactical task details
-- Don't include time estimates
-`
-
-// ============================================================================
 // Roadmap Fill Session Guidance (for empty/template-only Roadmap.md)
 // ============================================================================
 
@@ -562,7 +489,6 @@ May move between files: ${activeWorkflow.allowsCrossFileMove ? 'yes' : 'no'}
 RULES FOR THIS WORKFLOW:
 ${activeWorkflow.rules.map((r) => `• ${r}`).join('\n')}
 ${diffInstructions}
-${activeWorkflow.name === 'roadmap-design' ? ROADMAP_DESIGN_GUIDANCE : ''}
 FILE CONTENTS (for workflow execution):
 ${workflowFileContents}
 ================================================================================

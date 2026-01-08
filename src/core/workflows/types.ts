@@ -15,7 +15,6 @@ export const WORKFLOW_NAMES = [
   'title-entries',
   'generate-tasks',
   'groom-tasks',
-  'roadmap-design',
   'fill-overview',
   'roadmap-fill',
   'tasks-fill',

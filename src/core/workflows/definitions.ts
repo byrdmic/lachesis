@@ -147,40 +147,6 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
   },
 
   /**
-   * ROADMAP REFINE: Explore integrating new ideas into the existing roadmap.
-   * AI-guided conversation with incremental diffs.
-   */
-  'roadmap-design': {
-    name: 'roadmap-design',
-    displayName: 'Roadmap: Refine',
-    description: 'Explore integrating a new idea into your existing roadmap',
-    intent:
-      'Help the user explore how a new idea or change could fit into their existing roadmap. ' +
-      'Analyze all project files (Overview, Roadmap, Ideas, Log) to understand current state, ' +
-      'then guide a conversation about where the idea fits, what it affects, and how to integrate it. ' +
-      'Propose incremental changes as decisions are made.',
-    readFiles: ALL_CORE_FILES,
-    writeFiles: [PROJECT_FILES.roadmap],
-    risk: 'low',
-    confirmation: 'preview',
-    allowsDelete: false,
-    allowsCrossFileMove: false,
-    rules: [
-      'Start by asking what idea or change the user wants to explore',
-      'Analyze all files to understand current roadmap state and project context',
-      'Mine Ideas.md and Log.md for related thoughts or prior discussion of this idea',
-      'Explore where the idea fits: new milestone? modification to existing milestone?',
-      'Consider impact: does this change priorities? affect other milestones? add dependencies?',
-      'Ask clarifying questions before proposing any changes',
-      'Propose small, incremental diffs after each decision - not one big diff at the end',
-      'If the idea is out of scope for the project, say so and explain why',
-      'Milestones should be vertical (demo-able) not horizontal (layers/components)',
-      'Vertical slices belong in Tasks.md, not Roadmap.md',
-    ],
-    usesAI: true,
-  },
-
-  /**
    * FILL OVERVIEW: AI-guided session to fill in the Overview document.
    * Uses focusedFile mechanism for rich system prompt support.
    */
