@@ -255,9 +255,9 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     description: 'AI-guided session to fill in the Tasks document from scratch',
     intent:
       'Guide the user through filling in Tasks.md for the first time. ' +
-      'Start by understanding project scope from Overview.md and milestones from Roadmap.md, ' +
-      'then work through creating vertical slices aligned with roadmap milestones, ' +
-      'defining concrete tasks within each slice, and setting up Next 1-3 Actions. ' +
+      'Start by defining a list of vertical slices (short descriptions only) based on ' +
+      'Overview.md, Roadmap.md, Log.md, and Ideas.md. Only expand a slice into full detail ' +
+      'and tasks when the user marks it as active. ' +
       'Requires Overview.md to have content; works best when Roadmap.md has milestones defined.',
     readFiles: [PROJECT_FILES.overview, PROJECT_FILES.roadmap, PROJECT_FILES.tasks, PROJECT_FILES.log, PROJECT_FILES.ideas],
     writeFiles: [PROJECT_FILES.tasks],
@@ -269,15 +269,15 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Check if Overview.md has an elevator pitch first - redirect if not',
       'Check if Roadmap.md has milestones - warn if not but proceed if user wants',
       'Read Overview.md and Roadmap.md to understand project scope and milestone targets',
-      'Mine Log.md and Ideas.md for actionable items that should become tasks',
-      'Create vertical slices that align with Roadmap milestones (VS1 links to M1, etc.)',
-      'Each slice needs: name, goal (demo-able outcome), why (value/alignment), and Definition of Done',
-      'Break each slice into concrete tasks (VS1-T1, VS1-T2, etc.)',
+      'Mine Log.md and Ideas.md for actionable items that inform vertical slices',
+      'FIRST: Create a "Vertical Slices" section with a SHORT list of slices (name + 1-2 sentences each)',
+      'Vertical slices should align with Roadmap milestones and be derived from all context files',
+      'Do NOT expand slices into full detail until user marks one as active',
+      'When user marks a slice as active, THEN expand it under "Active Vertical Slices" with: goal, why, milestone link, Definition of Done, and tasks',
       'Tasks should be small (15-60 minutes), concrete, and have clear acceptance criteria',
       'Ask clarifying questions before proposing any changes',
-      'Propose small, incremental diffs after each slice OR task group is discussed',
-      'Set up Next 1-3 Actions at the end - the immediate concrete steps',
-      'Work through ONE slice at a time - do not dump entire task list at once',
+      'Propose small, incremental diffs - first the slice list, then active slice expansion',
+      'Set up Next 1-3 Actions only after at least one slice is active',
       'Never invent tasks - only extract from existing project content',
     ],
     usesAI: true,

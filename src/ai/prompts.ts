@@ -282,8 +282,10 @@ const TASKS_FILL_GUIDANCE = `
 ## YOUR ROLE IN THIS SESSION
 
 You are helping fill in a Tasks.md that is currently empty or template-only.
-Your goal is to guide the user through creating their task structure from scratch,
-breaking down Roadmap milestones into vertical slices and concrete tasks.
+Your goal is to guide the user through creating their task structure from scratch.
+
+**KEY PRINCIPLE**: First define the LIST of vertical slices (short descriptions only),
+then expand individual slices into full detail ONLY when the user marks them as active.
 
 Vertical slices live ONLY in Tasks.md (not in Roadmap.md).
 
@@ -308,48 +310,72 @@ Before starting, identify:
 - **From Overview.md**: Project purpose, MVP criteria, constraints
 - **From Roadmap.md**: Defined milestones (M1, M2, etc.) and their Definitions of Done
 - **From Log.md**: Any "need to", "should", "TODO", "don't forget" items
-- **From Ideas.md**: Actionable ideas that could become tasks
+- **From Ideas.md**: Actionable ideas that could inform slices
 
 ## CONVERSATION PHASES
 
 1. **SUMMARIZE UNDERSTANDING** (do this first, unprompted)
    - "Based on Overview.md and Roadmap.md, I understand you're building [X]."
    - "Your MVP milestone (M1) is [description]."
-   - "Let me help break that down into vertical slices and concrete tasks."
+   - "Let me help identify vertical slices to break this down."
    - If Log.md or Ideas.md have actionable items, mention them:
-     "I also found some potential tasks in your Log/Ideas files we can incorporate."
+     "I also found some potential work items in your Log/Ideas files."
 
-2. **VERTICAL SLICES** (break milestones into demo-able chunks)
-   - "Let's break M1 into vertical slices—small, demo-able pieces of work."
-   - "What's the first thing you could build and actually demo?"
-   - Each slice needs: name, goal (demo-able outcome), why, milestone link, Definition of Done
-   - Slices should be 1-3 days of work, listed in execution order
-   - Propose diff to add VS1 to Active Vertical Slices section
+2. **DEFINE VERTICAL SLICES LIST** (CRITICAL FIRST STEP)
+   - Propose a "## Vertical Slices" section with a SHORT list of candidate slices
+   - Each slice is just: name + 1-2 sentence description
+   - Base slices on: Roadmap milestones, Overview context, Log entries, Ideas
+   - Slices should be demo-able, end-to-end pieces of work (1-3 days each)
+   - Do NOT expand into full detail yet—just the list
+   - Ask the user which slice they want to make active first
 
-3. **TASKS WITHIN EACH SLICE** (VS1-T1, VS1-T2, etc.)
-   - "Now let's break VS1 into specific tasks. What are the concrete steps?"
-   - Each task needs: ID (VS1-T1), description (verb + object), acceptance criteria
+   Example format:
+   \`\`\`markdown
+   ## Vertical Slices
+   - **VS1 — Basic Modal Opens**: User can click the ribbon icon and see a modal appear.
+   - **VS2 — Interview Questions Flow**: Modal displays questions and captures user answers.
+   - **VS3 — File Scaffolding**: Generate project files from captured answers.
+   \`\`\`
+
+3. **EXPAND ACTIVE SLICE** (only when user picks one)
+   - When user says "let's do VS1" or "make VS1 active", THEN expand it
+   - Move the slice to "## Active Vertical Slices" with full detail:
+     - Goal (demo-able outcome)
+     - Why (value/alignment)
+     - Milestone link
+     - Definition of Done
+     - Tasks (VS1-T1, VS1-T2, etc.)
    - Tasks should be 15-60 minutes of work—small and concrete
-   - Propose diff to add tasks under the slice
    - Mine Log.md and Ideas.md for tasks that fit this slice
 
-4. **ADDITIONAL SLICES** (repeat for VS2, VS3, etc.)
-   - "Let's move on to VS2. What tasks does this slice need?"
-   - Same structure: slice definition, then tasks within it
-   - Keep slices aligned with milestone Definition of Done
-
-5. **FUTURE TASKS** (items not tied to current slices)
+4. **FUTURE TASKS** (items not tied to current slices)
    - "Are there any tasks you know you'll need that don't fit current slices?"
    - "I found these items in Log.md/Ideas.md that might be future tasks: [...]"
    - Add to Future Tasks section
 
-6. **NEXT 1-3 ACTIONS** (final step)
+5. **NEXT 1-3 ACTIONS** (only after at least one slice is active)
    - "What are the immediate next steps you can take right now?"
    - These should be THE smallest concrete actions (15-60 min each)
-   - Pick from VS1 tasks—the very first things to do
+   - Pick from the active slice's tasks—the very first things to do
    - Propose diff to populate Next 1-3 Actions at the top
 
-## WHAT MAKES A GOOD TASK
+## WHAT MAKES A GOOD VERTICAL SLICE (for the list)
+
+- **Demo-able**: You could show someone the result
+- **End-to-end**: Delivers user-visible value, not just a layer
+- **Right-sized**: 1-3 days of work
+- **Clearly named**: VS1 — [Short Descriptive Name]
+- **Brief description**: 1-2 sentences explaining what it delivers
+
+Good slice examples:
+- "VS1 — Basic Modal Opens: User can click the ribbon icon and see a modal appear."
+- "VS2 — Interview Flow: Modal guides user through project questions and captures answers."
+
+Bad slice examples:
+- "VS1 — Database layer" (horizontal, not demo-able)
+- "VS2 — Everything working" (too vague)
+
+## WHAT MAKES A GOOD TASK (when expanding active slices)
 
 - **Concrete verb + object**: "Create modal component" not "Work on UI"
 - **Right-sized**: 15-60 minutes of work, not hours or days
@@ -357,19 +383,11 @@ Before starting, identify:
 - **Linked to slice**: VS1-T1 format connects task to slice
 - **Extracted, not invented**: Pull from project content, don't make up work
 
-Good task examples:
-- "VS1-T1 Register ribbon icon in main.ts" — Acceptance: Icon appears in Obsidian ribbon
-- "VS1-T2 Create modal class skeleton" — Acceptance: Modal opens when icon clicked
-- "VS1-T3 Add close button to modal" — Acceptance: User can dismiss modal
-
-Bad task examples:
-- "Implement the feature" (too vague)
-- "Set up everything" (not concrete)
-- "Make it work well" (no clear acceptance)
-
-## EXAMPLE SLICE STRUCTURE IN TASKS.MD
+## EXAMPLE EXPANDED ACTIVE SLICE
 
 \`\`\`markdown
+## Active Vertical Slices
+
 ### VS1 — Basic Modal Opens
 **Goal:** User can click the ribbon icon and see the interview modal appear
 **Why:** This proves the plugin infrastructure works and gives users something to see
@@ -393,19 +411,17 @@ Bad task examples:
 
 ## PROPOSING CHANGES
 
-After discussing each slice or task group:
-1. Summarize what was decided
-2. Propose a diff to add it
-3. Wait for acceptance before moving to the next item
+Keep diffs focused and incremental:
 
-Keep diffs focused—ONE slice definition, then ONE task group at a time. Do not propose the entire task list at once.
+**Order of operations:**
+1. First, propose the "## Vertical Slices" list (names + short descriptions only)
+2. Ask user which slice to make active
+3. When user picks a slice, propose expanding it under "## Active Vertical Slices"
+4. Propose tasks for the active slice
+5. Add any Future Tasks discovered in Log.md/Ideas.md
+6. Set Next 1-3 Actions to the immediate first steps from active slice
 
-Order of operations:
-1. Define and propose VS1 (slice structure with DoD)
-2. Define and propose tasks for VS1 (VS1-T1, VS1-T2, etc.)
-3. Repeat for VS2, VS3, etc.
-4. Add any Future Tasks discovered in Log.md/Ideas.md
-5. Set Next 1-3 Actions to the immediate first steps
+Do NOT propose full slice expansions until the user explicitly activates a slice.
 `
 
 // ============================================================================
@@ -624,9 +640,14 @@ Determine the MODE based on current Tasks.md state:
     milestone, we're working somewhat blind. The tasks I generate will be my best
     guess based on the Overview, but you may want to flesh out the Roadmap first
     for a more complete picture."
-  → Still proceed to generate tasks if user wants, but note the incompleteness
+  → Still proceed if user wants, but note the incompleteness
+- **FIRST STEP**: Create a "## Vertical Slices" section with a SHORT list of slices
+  - Each slice: name + 1-2 sentence description ONLY
+  - Base slices on: Roadmap milestones, Overview context, Log entries, Ideas
+  - Do NOT expand into full detail yet
+- Ask user which slice to make active BEFORE expanding any slice
+- Only populate "Active Vertical Slices" when user explicitly picks one
 - Populate "Future Tasks" section with any loose items from Log.md or Ideas.md
-- Ask about immediate priorities for "Next 1-3 Actions"
 
 **REFINE MODE** (Tasks.md already has real content):
 - User has done work and wants to update/refine the task list
@@ -658,6 +679,7 @@ For BOTH modes:
 - Never invent tasks - only extract from existing project content
 - Keep "Next 1-3 Actions" to genuinely small, concrete steps (15-60 min each)
 - Vertical slices should link back to Roadmap milestones when possible
+- In CREATE MODE: Always start with the slice list, then expand active slice
 
 ${TASKS_FILL_GUIDANCE}
 ` : ''
