@@ -91,12 +91,13 @@ export function validateOverviewHeadings(content: string): OverviewHeadingValida
 /**
  * Expected headings in Roadmap.md, in order.
  * These are the canonical headings from the template.
- * Note: Individual milestone headings (### M1, ### M2) are dynamic and not validated here.
+ * Note: Individual milestone headings (### M1, ### M2) and slice subheadings are dynamic and not validated here.
  */
 export const ROADMAP_EXPECTED_HEADINGS = [
   '## Current Focus',
   '## Milestone Index',
   '## Milestones',
+  '## Vertical Slices',
   '## Cut / Deferred Milestones',
 ] as const
 
@@ -225,9 +226,9 @@ const TEMPLATE_DEFINITIONS: Record<ExpectedCoreFile, TemplateDefinition> = {
       ...COMMON_PLACEHOLDERS,
       '<Milestone title>',
       '<Milestone Title>',
-      '<Slice name>',
       '<Slice Name>',
-      '<Vertical Slice Name>',
+      '<1-2 sentence description of what it delivers>',
+      '<1-2 sentence description>',
       '<One sentence. "We\'re trying to…">',
       '<One sentence value>',
       '<What exists when done?>',
@@ -235,9 +236,6 @@ const TEMPLATE_DEFINITIONS: Record<ExpectedCoreFile, TemplateDefinition> = {
       '<Testable bullet>',
       '<User can… bullet>',
       '<External constraint / other milestone>',
-      '<Small concrete step (~15–60 mins)>',
-      '<Next step>',
-      '<VS?-T?>',
       '<If this grows, move detail to Archive.md with rationale.>',
     ],
     minMeaningful: 150,
@@ -248,15 +246,13 @@ const TEMPLATE_DEFINITIONS: Record<ExpectedCoreFile, TemplateDefinition> = {
       ...COMMON_PLACEHOLDERS,
       '<Smallest concrete step (~15–60 minutes)>',
       '<Next step>',
-      '<VS?-T?>',
-      '<End-to-end capability you can demo>',
-      '<Value / milestone alignment>',
-      '<User can…>',
-      '<System does…>',
-      '<Verb + object>',
+      '<Standalone task with no slice>',
+      '<Standalone task>',
+      '<Task description>',
       '<How you\'ll know it\'s done>',
       '<Thing blocked>',
       '<dependency>',
+      '<unblock plan: <...>>',
     ],
     minMeaningful: 100,
     treatEmptyAsTemplate: true,
@@ -562,6 +558,10 @@ export function fixRoadmapHeadings(content: string, projectName: string): string
       placeholder: '', // Has sub-sections for individual milestones
     },
     {
+      heading: '## Vertical Slices',
+      placeholder: '', // Has sub-sections for milestone slices
+    },
+    {
       heading: '## Cut / Deferred Milestones (kept intentionally small)',
       placeholder: '- <If this grows, move detail to Archive.md with rationale.>',
     },
@@ -595,6 +595,19 @@ export function fixRoadmapHeadings(content: string, projectName: string): string
 **Links**
 - Tasks: [[Tasks]]
 - Key log entries: [[Log]]`)
+      } else if (heading === '## Vertical Slices') {
+        fixedSections.push(`\n${heading}
+
+Vertical slices are the features/capabilities needed to achieve each milestone.
+Each slice is a demo-able, end-to-end deliverable (typically 1-5 days of work).
+Tasks in [[Tasks]] link back to slices here using \`[[Roadmap#VS1 — Slice Name]]\`.
+
+### M1 Slices
+- **VS1 — <Slice Name>**: <1-2 sentence description of what it delivers>
+- **VS2 — <Slice Name>**: <1-2 sentence description>
+
+### M2 Slices
+- **VS3 — <Slice Name>**: <1-2 sentence description>`)
       } else {
         fixedSections.push(`\n${heading}\n${placeholder}`)
       }

@@ -2,16 +2,14 @@
  * Harvest Tasks Modal - Review and place AI-harvested tasks
  */
 
-import { App, Modal, setIcon } from 'obsidian'
+import { App, Modal } from 'obsidian'
 import type {
   HarvestedTask,
   HarvestTaskSelection,
   TaskDestination,
-  ParsedTasksStructure,
-  ActiveSlice,
-  PlannedSlice,
+  RoadmapSlice,
 } from '../utils/harvest-tasks-parser'
-import { getDestinationLabel, destinationRequiresTarget, destinationRequiresSliceName } from '../utils/harvest-tasks-parser'
+import { getDestinationLabel, destinationSupportsSliceLink, formatSliceLink, formatSliceDisplay } from '../utils/harvest-tasks-parser'
 
 // ============================================================================
 // Types
@@ -29,23 +27,22 @@ export type HarvestTasksActionCallback = (
 export class HarvestTasksModal extends Modal {
   private tasks: HarvestedTask[]
   private projectPath: string
-  private tasksStructure: ParsedTasksStructure
+  private roadmapSlices: RoadmapSlice[]
   private onAction: HarvestTasksActionCallback
   private selections: Map<string, HarvestTaskSelection> = new Map()
-  private expandedGroups: Set<string> = new Set()
-  private activeFilter: 'all' | 'log' | 'ideas' | 'other' = 'all' as const
+  private activeFilter: 'all' | 'log' | 'ideas' | 'other' = 'all'
 
   constructor(
     app: App,
     tasks: HarvestedTask[],
     projectPath: string,
-    tasksStructure: ParsedTasksStructure,
+    roadmapSlices: RoadmapSlice[],
     onAction: HarvestTasksActionCallback,
   ) {
     super(app)
     this.tasks = tasks
     this.projectPath = projectPath
-    this.tasksStructure = tasksStructure
+    this.roadmapSlices = roadmapSlices
     this.onAction = onAction
 
     // Initialize selections with AI suggestions
@@ -53,24 +50,16 @@ export class HarvestTasksModal extends Modal {
       this.selections.set(task.id, {
         taskId: task.id,
         destination: task.suggestedDestination,
-        targetVS: this.getDefaultTargetVS(task.suggestedDestination),
-        sliceName: task.suggestedVSName,
+        sliceLink: task.suggestedSliceLink || this.getDefaultSliceLink(task.suggestedDestination),
         customText: null,
       })
     }
   }
 
-  private getDefaultTargetVS(destination: TaskDestination): string | null {
-    if (destination === 'active-vs' || destination === 'next-actions') {
-      // Default to first active slice if available
-      if (this.tasksStructure.activeSlices.length > 0) {
-        return this.tasksStructure.activeSlices[0].id
-      }
-    }
-    if (destination === 'existing-planned-slice') {
-      if (this.tasksStructure.plannedSlices.length > 0) {
-        return this.tasksStructure.plannedSlices[0].id
-      }
+  private getDefaultSliceLink(destination: TaskDestination): string | null {
+    if (destinationSupportsSliceLink(destination) && this.roadmapSlices.length > 0) {
+      // Default to first slice if available
+      return formatSliceLink(this.roadmapSlices[0])
     }
     return null
   }
@@ -117,6 +106,13 @@ export class HarvestTasksModal extends Modal {
     if (stats.duplicatesSkipped > 0) {
       header.createEl('p', {
         text: `(${stats.duplicatesSkipped} similar to existing tasks)`,
+        cls: 'lachesis-harvest-tasks-note',
+      })
+    }
+
+    if (this.roadmapSlices.length > 0) {
+      header.createEl('p', {
+        text: `${this.roadmapSlices.length} slices available from Roadmap.md`,
         cls: 'lachesis-harvest-tasks-note',
       })
     }
@@ -259,14 +255,9 @@ export class HarvestTasksModal extends Modal {
     // Destination dropdown
     this.renderDestinationDropdown(controlsRow, task, selection)
 
-    // Target VS dropdown (conditional)
-    if (destinationRequiresTarget(selection.destination)) {
-      this.renderTargetDropdown(controlsRow, task, selection)
-    }
-
-    // Slice name input (conditional)
-    if (destinationRequiresSliceName(selection.destination)) {
-      this.renderSliceNameInput(controlsRow, task, selection)
+    // Slice link dropdown (conditional)
+    if (destinationSupportsSliceLink(selection.destination) && this.roadmapSlices.length > 0) {
+      this.renderSliceLinkDropdown(controlsRow, task, selection)
     }
   }
 
@@ -283,22 +274,11 @@ export class HarvestTasksModal extends Modal {
     const destinations: TaskDestination[] = [
       'discard',
       'future-tasks',
-      'active-vs',
+      'active-tasks',
       'next-actions',
-      'new-planned-slice',
-      'existing-planned-slice',
     ]
 
     for (const dest of destinations) {
-      // Skip existing-planned-slice if no planned slices exist
-      if (dest === 'existing-planned-slice' && this.tasksStructure.plannedSlices.length === 0) {
-        continue
-      }
-      // Skip active-vs/next-actions if no active slices exist
-      if ((dest === 'active-vs' || dest === 'next-actions') && this.tasksStructure.activeSlices.length === 0) {
-        continue
-      }
-
       const option = select.createEl('option', {
         text: getDestinationLabel(dest),
         value: dest,
@@ -313,43 +293,39 @@ export class HarvestTasksModal extends Modal {
       this.updateSelection(task.id, {
         ...selection,
         destination: newDest,
-        targetVS: this.getDefaultTargetVS(newDest),
-        sliceName: newDest === 'new-planned-slice' ? task.suggestedVSName : null,
+        sliceLink: this.getDefaultSliceLink(newDest),
       })
       this.render()
     })
   }
 
-  private renderTargetDropdown(
+  private renderSliceLinkDropdown(
     container: HTMLElement,
     task: HarvestedTask,
     selection: HarvestTaskSelection,
   ) {
     const wrapper = container.createDiv({ cls: 'lachesis-harvest-dropdown-wrapper' })
-    wrapper.createEl('label', { text: 'Target:', cls: 'lachesis-harvest-label' })
+    wrapper.createEl('label', { text: 'Slice:', cls: 'lachesis-harvest-label' })
 
     const select = wrapper.createEl('select', { cls: 'lachesis-harvest-dropdown' })
 
-    let options: Array<{ id: string; name: string }> = []
-
-    if (selection.destination === 'active-vs' || selection.destination === 'next-actions') {
-      options = this.tasksStructure.activeSlices.map((s) => ({
-        id: s.id,
-        name: `${s.id} — ${s.name}`,
-      }))
-    } else if (selection.destination === 'existing-planned-slice') {
-      options = this.tasksStructure.plannedSlices.map((s) => ({
-        id: s.id,
-        name: `${s.id} — ${s.name}`,
-      }))
+    // Add "No slice (standalone)" option
+    const standaloneOption = select.createEl('option', {
+      text: '(No slice - standalone)',
+      value: '',
+    })
+    if (!selection.sliceLink) {
+      standaloneOption.selected = true
     }
 
-    for (const opt of options) {
+    // Add all roadmap slices as options
+    for (const slice of this.roadmapSlices) {
+      const sliceLink = formatSliceLink(slice)
       const option = select.createEl('option', {
-        text: opt.name,
-        value: opt.id,
+        text: formatSliceDisplay(slice),
+        value: sliceLink,
       })
-      if (opt.id === selection.targetVS) {
+      if (sliceLink === selection.sliceLink) {
         option.selected = true
       }
     }
@@ -357,30 +333,7 @@ export class HarvestTasksModal extends Modal {
     select.addEventListener('change', () => {
       this.updateSelection(task.id, {
         ...selection,
-        targetVS: select.value,
-      })
-    })
-  }
-
-  private renderSliceNameInput(
-    container: HTMLElement,
-    task: HarvestedTask,
-    selection: HarvestTaskSelection,
-  ) {
-    const wrapper = container.createDiv({ cls: 'lachesis-harvest-input-wrapper' })
-    wrapper.createEl('label', { text: 'Slice Name:', cls: 'lachesis-harvest-label' })
-
-    const input = wrapper.createEl('input', {
-      type: 'text',
-      cls: 'lachesis-harvest-text-input',
-      value: selection.sliceName || task.suggestedVSName || '',
-      placeholder: 'Enter slice name...',
-    })
-
-    input.addEventListener('input', () => {
-      this.updateSelection(task.id, {
-        ...selection,
-        sliceName: input.value || null,
+        sliceLink: select.value || null,
       })
     })
   }

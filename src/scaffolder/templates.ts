@@ -107,8 +107,9 @@ project:
   status: active
 
 roadmap:
-  philosophy: "Milestones are vertical, demo-able, end-to-end outcomes. No chore lists here."
+  philosophy: "Milestones are vertical, demo-able, end-to-end outcomes. Vertical slices break milestones into shippable features."
   milestone_granularity: "feature-complete points"
+  slice_granularity: "1-5 days of work, demo-able"
   ordering: "value-first, unblockers early"
   date_policy: "Dates optional; only use if you mean it."
 
@@ -117,17 +118,18 @@ current_focus:
   intent: "What we are trying to accomplish right now in plain English."
 
 ai:
-  primary_job: "Keep a clean milestone sequence and maintain current focus."
+  primary_job: "Keep a clean milestone sequence, define vertical slices, and maintain current focus."
   update_policy:
     allowed_to_change:
       - "reorder milestones based on value/constraints"
       - "clarify definitions of done"
       - "update current_focus"
+      - "add or refine vertical slices for milestones"
     avoid:
-      - "dumping granular chores here (belongs in Tasks.md)"
+      - "dumping granular tasks here (belongs in Tasks.md)"
       - "putting Next 1-3 Actions here (belongs in Tasks.md)"
   extraction_rules: |
-    Milestone work items -> Tasks.md.
+    Individual tasks -> Tasks.md (with [[Roadmap#VS — Slice Name]] link).
     Next actions -> Tasks.md.
     Current focus should always point to the active milestone.
 
@@ -182,6 +184,21 @@ tags: ["project/roadmap"]
 
 ---
 
+## Vertical Slices
+
+Vertical slices are the features/capabilities needed to achieve each milestone.
+Each slice is a demo-able, end-to-end deliverable (typically 1-5 days of work).
+Tasks in [[Tasks]] link back to slices here using \`[[Roadmap#VS1 — Slice Name]]\`.
+
+### M1 Slices
+- **VS1 — <Slice Name>**: <1-2 sentence description of what it delivers>
+- **VS2 — <Slice Name>**: <1-2 sentence description>
+
+### M2 Slices
+- **VS3 — <Slice Name>**: <1-2 sentence description>
+
+---
+
 ## Cut / Deferred Milestones (kept intentionally small)
 - <If this grows, move detail to Archive.md with rationale.>
 `,
@@ -195,10 +212,10 @@ project:
   status: active
 
 tasks:
-  philosophy: "Vertical slices, smallest end-to-end shippable increments."
+  philosophy: "Atomic work items. Tasks can link to vertical slices (from Roadmap) or stand alone."
   rule_of_three: "Always maintain Next 1–3 Actions at the top."
   grooming_policy: "Speculative -> Ideas.md. Done/superseded -> Archive.md."
-  id_format: "VS#-T#"
+  linking: "Use [[Roadmap#VS1 — Slice Name]] to link tasks to slices."
 
 ai:
   primary_job: "Keep actionable work organized and ensure momentum."
@@ -208,12 +225,15 @@ ai:
       - "promote items into Next Actions"
       - "add acceptance checks"
       - "clarify verbs and outcomes"
+      - "add slice links to tasks"
     avoid:
-      - "rewriting milestone outcomes here"
+      - "rewriting milestone outcomes here (those belong in Roadmap)"
+      - "creating vertical slices here (those belong in Roadmap)"
   extraction_rules: |
     If Log.md contains "need to / should / todo / don't forget", create a task here.
     If an item is not actionable, move it to Ideas.md.
     If finished/superseded, move it to Archive.md and leave a pointer.
+    Link tasks to slices in Roadmap.md when applicable.
 
 tags: ["project/tasks"]
 ---
@@ -221,43 +241,30 @@ tags: ["project/tasks"]
 # Tasks — <Project Name>
 
 ## Next 1–3 Actions (always kept fresh)
-- [[#^VS1-T1|VS1-T1]] <Smallest concrete step (~15–60 minutes)>
-- [[#^VS1-T2|VS1-T2]] <Next step>
-- [[#^VS1-T3|VS1-T3]] <Next step>
+- [ ] <Smallest concrete step (~15–60 minutes)> [[Roadmap#VS1 — <Slice Name>]]
+- [ ] <Next step> [[Roadmap#VS1 — <Slice Name>]]
+- [ ] <Standalone task with no slice>
 
-## Active Vertical Slices
+---
 
-### VS1 — <Slice Name>
-**Goal:** <End-to-end capability you can demo>
-**Why:** <Value / milestone alignment>
-**Milestone link:** [[Roadmap#M1 — <Milestone Title>]]
-
-**Definition of Done**
-- <User can…>
-- <System does…>
-
-**Tasks**
-- [ ] VS1-T1 <Verb + object> ^VS1-T1
+## Active Tasks
+- [ ] <Task description> [[Roadmap#VS1 — <Slice Name>]]
   - Acceptance: <How you'll know it's done>
-- [ ] VS1-T2 <...> ^VS1-T2
-- [ ] VS1-T3 <...> ^VS1-T3
+- [ ] <Task description> [[Roadmap#VS2 — <Slice Name>]]
+- [ ] <Standalone task>
 
 ---
 
 ## Blocked / Waiting
 - [ ] <Thing blocked> — blocked by <dependency> — unblock plan: <...>
 
+---
+
 ## Future Tasks (actionable, but not now)
 - [ ] <Task>
 - [ ] <Task>
 
-## Planned Slices (queued for activation)
-<!-- Vertical slices identified but not yet active -->
-<!-- When ready to start, move to Active Vertical Slices and expand tasks -->
-
-### PS1 — <Planned Slice Name>
-**Brief:** <What this slice would deliver>
-**Why queued:** <Dependency or priority reason>
+---
 
 ## Recently Completed (keep short; archive the rest)
 - [x] <Item> (details in [[Archive]])
@@ -354,7 +361,7 @@ project:
 archive:
   purpose:
     - "Keep active docs clean without losing history."
-    - "Store completed slices, superseded plans, rejected ideas, and deep decision rationale."
+    - "Store completed work, superseded plans, rejected ideas, and deep decision rationale."
   rule: "Move, don't duplicate. Leave a short pointer in the original file when needed."
 
 ai:
@@ -375,14 +382,14 @@ tags: ["project/archive"]
 # Archive — <Project Name>
 
 ## Archive Index
-- Completed vertical slices
+- Completed work (milestones, slices, tasks)
 - Superseded plans
 - Rejected ideas
 - Deep decision history
 
-## Completed Vertical Slices
-### <YYYY-MM-DD> — VS1 — <Slice Name>
-**Moved from:** [[Tasks#VS1 — <Slice Name>]]
+## Completed Work
+### <YYYY-MM-DD> — <Milestone or Slice Name>
+**What:** <Description of what was completed>
 **Outcome delivered:** <what shipped>
 **Key links:** <repo/commit/PR/notes>
 **Notes:** <what you learned / what changed>

@@ -158,11 +158,25 @@ function processTemplate(
 - Tasks.md: At least 3 actionable next steps
 
 **Links**
-- Tasks slice: [[Tasks#VS1 — Project Definition]]
+- Tasks: [[Tasks]]
+- Key log entries: [[Log]]
 
 ---
 
 `,
+      )
+
+      // Add initial VS1 slice for minimal projects
+      content = content.replace(
+        /### M1 Slices\n- \*\*VS1 — <Slice Name>\*\*:.*\n- \*\*VS2 — <Slice Name>\*\*:.*/,
+        `### M1 Slices
+- **VS1 — Project Definition**: Complete Overview.md, Roadmap.md, and Tasks.md with enough content for the AI to assist.`,
+      )
+
+      content = content.replace(
+        /### M2 Slices\n- \*\*VS3 — <Slice Name>\*\*:.*/,
+        `### M2 Slices
+- **VS2 — Initial Setup**: Set up the development environment and basic project structure.`,
       )
     } else {
       content = content.replace(/M1 — <Milestone title>/g, 'M1 — Initial Setup')
@@ -170,7 +184,7 @@ function processTemplate(
     }
 
     content = content.replace(/<Milestone Title>/g, 'TBD')
-    content = content.replace(/<Slice name>/g, 'Initial slice')
+    content = content.replace(/<Slice Name>/g, 'Initial slice')
     content = content.replace(/<One sentence. "We're trying to…">/g, '')
     content = content.replace(
       /<What we are trying to accomplish right now in plain English.>/g,
@@ -183,46 +197,34 @@ function processTemplate(
     const isMinimal = hasMinimalExtractedData(data)
 
     if (isMinimal) {
-      content = content.replace(/<Slice Name>/g, 'Project Definition')
+      // Update Next 1-3 Actions with actual task descriptions
       content = content.replace(
-        /<End-to-end capability you can demo>/g,
-        'Project has enough definition for Lachesis to assist',
-      )
-      content = content.replace(
-        /<Value \/ milestone alignment>/g,
-        'Aligns with M1 — Define the Project',
-      )
-
-      // Update Next 1-3 Actions with actual task descriptions (using links, no checkboxes)
-      content = content.replace(
-        /## Next 1–3 Actions \(always kept fresh\)\n- \[\[#\^VS1-T1\|VS1-T1\]\].*\n- \[\[#\^VS1-T2\|VS1-T2\]\].*\n- \[\[#\^VS1-T3\|VS1-T3\]\].*/,
+        /## Next 1–3 Actions \(always kept fresh\)\n- \[ \] <Smallest concrete step.*\n- \[ \] <Next step>.*\n- \[ \] <Standalone task.*\n\n---/,
         `## Next 1–3 Actions (always kept fresh)
-- [[#^VS1-T1|VS1-T1]] Write elevator pitch in Overview.md
-- [[#^VS1-T2|VS1-T2]] Define the problem being solved
-- [[#^VS1-T3|VS1-T3]] Identify target users`,
+- [ ] Write elevator pitch in Overview.md [[Roadmap#VS1 — Project Definition]]
+- [ ] Define the problem being solved [[Roadmap#VS1 — Project Definition]]
+- [ ] Identify target users [[Roadmap#VS1 — Project Definition]]
+
+---`,
       )
 
+      // Update Active Tasks section
       content = content.replace(
-        /\*\*Tasks\*\*\n- \[ \] VS1-T1 <Verb \+ object>.*?(?=---|\n## |$)/s,
-        `**Tasks**
-- [ ] VS1-T1 Write elevator pitch in Overview.md ^VS1-T1
-  - Acceptance: One clear sentence describing what this is and who it's for
-- [ ] VS1-T2 Define the problem being solved ^VS1-T2
-  - Acceptance: Problem statement in Overview.md explains what hurts today
-- [ ] VS1-T3 Identify target users ^VS1-T3
-  - Acceptance: Primary users section in Overview.md has real people/roles
-- [ ] VS1-T4 Add first concrete milestone to Roadmap.md ^VS1-T4
+        /## Active Tasks\n- \[ \] <Task description>.*\n.*Acceptance:.*\n- \[ \] <Task description>.*\n- \[ \] <Standalone task>\n\n---/,
+        `## Active Tasks
+- [ ] Complete Overview.md sections [[Roadmap#VS1 — Project Definition]]
+  - Acceptance: Elevator pitch, problem statement, and target users filled in
+- [ ] Add first concrete milestone to Roadmap.md [[Roadmap#VS1 — Project Definition]]
   - Acceptance: M2 has a clear outcome and definition of done
-- [ ] VS1-T5 Update Next 1-3 Actions with real tasks ^VS1-T5
-  - Acceptance: Actions section has specific, timeboxed work items
+- [ ] Update vertical slices in Roadmap.md [[Roadmap#VS1 — Project Definition]]
+  - Acceptance: At least 2 slices defined for M1
 
-`,
+---`,
       )
-    } else {
-      content = content.replace(/<Slice Name>/g, 'Initial Tasks')
-      content = content.replace(/<End-to-end capability you can demo>/g, '')
-      content = content.replace(/<Value \/ milestone alignment>/g, '')
     }
+
+    // Clean up any remaining slice placeholders
+    content = content.replace(/<Slice Name>/g, '')
   }
 
   // === LOG SPECIFIC ===

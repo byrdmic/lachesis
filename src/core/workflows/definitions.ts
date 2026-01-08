@@ -188,7 +188,8 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     intent:
       'Guide the user through filling in Roadmap.md for the first time. ' +
       'Start by understanding project scope from Overview.md, then work through ' +
-      'defining MVP milestone, subsequent milestones, and current focus. ' +
+      'defining milestones and their vertical slices. Vertical slices are demo-able, ' +
+      'end-to-end capabilities (typically 1-5 days of work) that break down milestones. ' +
       'Requires Overview.md to have at least an elevator pitch first.',
     readFiles: [PROJECT_FILES.overview, PROJECT_FILES.roadmap],
     writeFiles: [PROJECT_FILES.roadmap],
@@ -203,10 +204,12 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Ask clarifying questions before proposing any changes',
       'Milestones must be vertical (demo-able) not horizontal (layers/components)',
       'Each milestone needs: why it matters, outcome, and observable Definition of Done',
+      'After defining each milestone, define 2-5 vertical slices for it',
+      'Vertical slices are demo-able, end-to-end capabilities (typically 1-5 days of work)',
+      'Format slices as: **VS1 — Slice Name**: 1-2 sentence description',
       'Propose small, incremental diffs after each milestone is discussed',
       'Set Current Focus to the active milestone at the end',
       'Work through ONE milestone at a time - do not dump entire roadmap at once',
-      'Vertical slices belong in Tasks.md, not Roadmap.md',
     ],
     usesAI: true,
   },
@@ -221,10 +224,10 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     description: 'AI-guided session to fill in the Tasks document from scratch',
     intent:
       'Guide the user through filling in Tasks.md for the first time. ' +
-      'Start by defining a list of vertical slices (short descriptions only) based on ' +
-      'Overview.md, Roadmap.md, Log.md, and Ideas.md. Only expand a slice into full detail ' +
-      'and tasks when the user marks it as active. ' +
-      'Requires Overview.md to have content; works best when Roadmap.md has milestones defined.',
+      'Read Roadmap.md to understand available vertical slices, then extract tasks from ' +
+      'those slices. Tasks link to Roadmap slices using wiki links [[Roadmap#VS1 — Slice Name]]. ' +
+      'Also supports standalone tasks not linked to any slice. ' +
+      'Requires Overview.md to have content; works best when Roadmap.md has milestones and slices defined.',
     readFiles: [PROJECT_FILES.overview, PROJECT_FILES.roadmap, PROJECT_FILES.tasks, PROJECT_FILES.log, PROJECT_FILES.ideas],
     writeFiles: [PROJECT_FILES.tasks],
     risk: 'low',
@@ -233,17 +236,16 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     allowsCrossFileMove: false,
     rules: [
       'Check if Overview.md has an elevator pitch first - redirect if not',
-      'Check if Roadmap.md has milestones - warn if not but proceed if user wants',
-      'Read Overview.md and Roadmap.md to understand project scope and milestone targets',
-      'Mine Log.md and Ideas.md for actionable items that inform vertical slices',
-      'FIRST: Create a "Vertical Slices" section with a SHORT list of slices (name + 1-2 sentences each)',
-      'Vertical slices should align with Roadmap milestones and be derived from all context files',
-      'Do NOT expand slices into full detail until user marks one as active',
-      'When user marks a slice as active, THEN expand it under "Active Vertical Slices" with: goal, why, milestone link, Definition of Done, and tasks',
+      'Check if Roadmap.md has milestones and slices - redirect to Roadmap: Fill if not',
+      'Read Roadmap.md to understand available vertical slices and current focus',
+      'Mine Log.md and Ideas.md for actionable items that could become tasks',
+      'Create tasks in the Active Tasks section, linking to Roadmap slices where applicable',
+      'Link tasks to slices using wiki links: [[Roadmap#VS1 — Slice Name]]',
+      'Standalone tasks (not linked to any slice) are valid for random ideas/one-offs',
       'Tasks should be small (15-60 minutes), concrete, and have clear acceptance criteria',
       'Ask clarifying questions before proposing any changes',
-      'Propose small, incremental diffs - first the slice list, then active slice expansion',
-      'Set up Next 1-3 Actions only after at least one slice is active',
+      'Propose small, incremental diffs - a few tasks at a time',
+      'Set up Next 1-3 Actions for the most important immediate tasks',
       'Never invent tasks - only extract from existing project content',
     ],
     usesAI: true,
@@ -261,7 +263,8 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Analyze ALL project files (Overview, Roadmap, Tasks, Ideas, Log) for full context. ' +
       'Identify gaps, missing work, implicit TODOs, and ideas that could become tasks. ' +
       'De-duplicate against existing tasks in Tasks.md. Output structured JSON with suggestions ' +
-      'for user to review and place in appropriate locations (Active VS, Next Actions, Future Tasks, or Planned Slices).',
+      'for user to review and place in Tasks.md (Next Actions, Active Tasks, or Future Tasks) ' +
+      'with optional links to Roadmap slices.',
     readFiles: [
       PROJECT_FILES.overview,
       PROJECT_FILES.roadmap,
@@ -277,9 +280,10 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     rules: [
       // Analysis rules
       'Read ALL project files for full context before suggesting tasks',
+      'Read Roadmap.md to understand available vertical slices for task linking',
       'Extract implicit TODOs from Log.md (keywords: "need to", "should", "TODO", "don\'t forget", "fix", "add", "refactor")',
       'Extract actionable ideas from Ideas.md (not vague musings)',
-      'Identify gaps between Roadmap milestones and current Tasks.md',
+      'Identify gaps between Roadmap milestones/slices and current Tasks.md',
       'Check Overview.md constraints/scope to ensure suggestions align with project goals',
 
       // De-duplication rules
@@ -290,8 +294,8 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       // Output format rules
       'Output structured JSON, not diff format',
       'Each task must have sourceFile, text, and reasoning fields',
-      'Suggest appropriate destination based on urgency and alignment',
-      'For new planned slices, suggest a meaningful VS name',
+      'Suggest appropriate destination: next-actions, active-tasks, or future-tasks',
+      'Suggest slice link if task relates to a Roadmap slice (format: [[Roadmap#VS1 — Slice Name]])',
 
       // Content rules
       'Tasks should be concrete and actionable (not vague)',

@@ -28,11 +28,11 @@ import { HarvestTasksModal } from './harvest-tasks-modal'
 import { GitLogModal } from './git-log-modal'
 import {
   parseHarvestResponse,
-  parseTasksStructure,
+  parseRoadmapSlices,
   applyHarvestSelections,
   type HarvestedTask,
   type HarvestTaskSelection,
-  type ParsedTasksStructure,
+  type RoadmapSlice,
 } from '../utils/harvest-tasks-parser'
 import { fetchCommits, formatCommitLog } from '../github'
 import { listChatLogs, loadChatLog, saveChatLog, type ChatLogMetadata } from '../core/chat'
@@ -82,7 +82,7 @@ export class ExistingProjectModal extends Modal {
   private parsedPotentialTasks: ParsedPotentialTasks | null = null
   private lastUsedWorkflowName: WorkflowName | null = null // Track workflow for post-diff processing
   private pendingHarvestedTasks: HarvestedTask[] = []
-  private harvestTasksStructure: ParsedTasksStructure | null = null
+  private roadmapSlices: RoadmapSlice[] = []
 
   // DOM Elements
   private messagesContainer: HTMLElement | null = null
@@ -1150,17 +1150,18 @@ export class ExistingProjectModal extends Modal {
         return
       }
 
-      // Read Tasks.md to get structure for destination options
-      const tasksPath = `${this.projectPath}/Tasks.md`
-      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+      // Read Roadmap.md to get available slices for linking
+      const roadmapPath = `${this.projectPath}/Roadmap.md`
+      const roadmapFile = this.app.vault.getAbstractFileByPath(roadmapPath)
 
-      if (!tasksFile || !(tasksFile instanceof TFile)) {
-        new Notice('Tasks.md not found in project')
-        return
+      if (roadmapFile && roadmapFile instanceof TFile) {
+        const roadmapContent = await this.app.vault.read(roadmapFile)
+        this.roadmapSlices = parseRoadmapSlices(roadmapContent)
+      } else {
+        // No roadmap file - slices will be empty but we can still place tasks
+        this.roadmapSlices = []
       }
 
-      const tasksContent = await this.app.vault.read(tasksFile)
-      this.harvestTasksStructure = parseTasksStructure(tasksContent)
       this.pendingHarvestedTasks = harvestedTasks
 
       // Open the harvest tasks modal
@@ -1175,13 +1176,11 @@ export class ExistingProjectModal extends Modal {
    * Open the harvest tasks review modal.
    */
   private openHarvestTasksModal(): void {
-    if (!this.harvestTasksStructure) return
-
     const modal = new HarvestTasksModal(
       this.app,
       this.pendingHarvestedTasks,
       this.projectPath,
-      this.harvestTasksStructure,
+      this.roadmapSlices,
       (selections, confirmed) => this.handleHarvestTasksAction(selections, confirmed),
     )
     modal.open()
@@ -1229,7 +1228,7 @@ export class ExistingProjectModal extends Modal {
 
       // Clear pending state and refresh snapshot
       this.pendingHarvestedTasks = []
-      this.harvestTasksStructure = null
+      this.roadmapSlices = []
       this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
     } catch (err) {
       console.error('Failed to apply harvest task selections:', err)
