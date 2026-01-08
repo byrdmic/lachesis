@@ -632,6 +632,37 @@ FILE CONTENTS (for filling):
 ${focusedFileContents}
 ================================================================================
 `
+  } else if (focusedFileContents) {
+    // No focused file but we have file contents - include them for general context
+    focusedFileSection = `
+================================================================================
+PROJECT FILES (FULL CONTENT)
+================================================================================
+You have access to all project files below. Use this context to answer questions
+and propose changes. When making changes, use unified diff format.
+
+DIFF FORMAT FOR CHANGES:
+When proposing file changes, output them in unified diff format inside a diff code block:
+\`\`\`diff
+--- Filename.md
++++ Filename.md
+@@ -line,count +line,count @@
+ context line
+-old content
++new content
+ context line
+\`\`\`
+
+RULES:
+• The "-" lines must show the ACTUAL current content of the file
+• The "+" lines show what the content should become AFTER your changes
+• Include 1-2 lines of context around changes
+• Each file gets its own diff block
+• The user will see Accept/Reject buttons for each diff
+
+${focusedFileContents}
+================================================================================
+`
   }
 
   return `You are Lachesis, a project coach helping someone continue work on an existing project.

@@ -795,28 +795,29 @@ export class ExistingProjectModal extends Modal {
       }
     }
 
-    // Fetch file contents if filling a focused file (via "Fill with AI" button)
+    // Fetch file contents - always include all core files for full project context
     let focusedFileContents: string | undefined
     const currentFocusedFile = this.focusedFile // Capture before clearing
-    if (currentFocusedFile) {
-      this.updateStatus(`Fetching ${currentFocusedFile} and context files...`)
-      try {
-        // Always include all core files for full project context
-        const allCoreFiles = Object.values(PROJECT_FILES)
-        const filesToFetch: string[] = [
-          currentFocusedFile,
-          ...allCoreFiles.filter(f => f !== currentFocusedFile)
-        ]
 
-        const fileContents = await fetchProjectFileContents(
-          this.app.vault,
-          this.projectPath,
-          filesToFetch,
-        )
-        focusedFileContents = formatFileContentsForModel(fileContents)
-      } catch (err) {
-        console.error('Failed to fetch focused file contents:', err)
-      }
+    // Always fetch all core files so AI has full context for any request
+    const allCoreFiles = Object.values(PROJECT_FILES)
+    const filesToFetch: string[] = currentFocusedFile
+      ? [currentFocusedFile, ...allCoreFiles.filter(f => f !== currentFocusedFile)]
+      : allCoreFiles
+
+    this.updateStatus(currentFocusedFile
+      ? `Fetching ${currentFocusedFile} and context files...`
+      : 'Fetching project files...')
+
+    try {
+      const fileContents = await fetchProjectFileContents(
+        this.app.vault,
+        this.projectPath,
+        filesToFetch,
+      )
+      focusedFileContents = formatFileContentsForModel(fileContents)
+    } catch (err) {
+      console.error('Failed to fetch file contents:', err)
     }
 
     this.updateStatus('Lachesis is thinking...')
