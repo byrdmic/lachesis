@@ -958,6 +958,15 @@ export class ExistingProjectModal extends Modal {
       return
     }
 
+    // Special handling for fill-overview: use focusedFile mechanism
+    // This reuses the existing system prompt instructions for filling files
+    if (workflow.name === 'fill-overview') {
+      this.focusedFile = 'Overview.md'
+      this.inputEl.value = `Help me fill in Overview.md. It currently only has template placeholders. Let's work through it section by section.`
+      this.handleUserInput()
+      return
+    }
+
     // Standard AI workflow handling
     this.activeWorkflow = workflow
     this.focusedFile = null  // Clear any active "fill file" mode - workflow takes precedence

@@ -16,6 +16,8 @@ export const WORKFLOW_NAMES = [
   'generate-tasks',
   'groom-tasks',
   'roadmap-design',
+  'fill-overview',
+  'roadmap-fill',
   // TODO: Re-enable as they're refined
   // 'synthesize',
   // 'harvest-tasks',

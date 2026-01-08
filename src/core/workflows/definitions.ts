@@ -177,6 +177,70 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     ],
     usesAI: true,
   },
+
+  /**
+   * FILL OVERVIEW: AI-guided session to fill in the Overview document.
+   * Uses focusedFile mechanism for rich system prompt support.
+   */
+  'fill-overview': {
+    name: 'fill-overview',
+    displayName: 'Overview: Fill',
+    description: 'AI-guided session to fill in the Overview document',
+    intent:
+      'Guide the user through filling in the Overview.md document section by section. ' +
+      'Start with the elevator pitch, then work through problem statement, target users, ' +
+      'value proposition, scope, and other sections. Ask clarifying questions and propose ' +
+      'incremental changes as decisions are made.',
+    readFiles: [PROJECT_FILES.overview],
+    writeFiles: [PROJECT_FILES.overview],
+    risk: 'low',
+    confirmation: 'preview',
+    allowsDelete: false,
+    allowsCrossFileMove: false,
+    rules: [
+      'Start by reading the current Overview.md state',
+      'Identify which sections are empty or have only placeholder text',
+      'Guide user through sections in order: Elevator Pitch first, then others',
+      'Ask clarifying questions before proposing changes',
+      'Propose small, incremental diffs after each section is discussed',
+      'Elevator pitch should be 1-2 sentences capturing the project essence',
+      'Keep content concise and focused on user-provided information',
+    ],
+    usesAI: true,
+  },
+
+  /**
+   * ROADMAP FILL: AI-guided session to fill in the Roadmap document from scratch.
+   * Uses focusedFile mechanism. Requires Overview.md to be filled first.
+   */
+  'roadmap-fill': {
+    name: 'roadmap-fill',
+    displayName: 'Roadmap: Fill',
+    description: 'AI-guided session to fill in the Roadmap document from scratch',
+    intent:
+      'Guide the user through filling in Roadmap.md for the first time. ' +
+      'Start by understanding project scope from Overview.md, then work through ' +
+      'defining MVP milestone, subsequent milestones, definitions of done, and current focus. ' +
+      'Requires Overview.md to have at least an elevator pitch first.',
+    readFiles: [PROJECT_FILES.overview, PROJECT_FILES.roadmap],
+    writeFiles: [PROJECT_FILES.roadmap],
+    risk: 'low',
+    confirmation: 'preview',
+    allowsDelete: false,
+    allowsCrossFileMove: false,
+    rules: [
+      'Check if Overview.md has an elevator pitch first - redirect if not',
+      'Read Overview.md to understand project scope, MVP criteria, and constraints',
+      'Start with MVP milestone (M1) - the smallest version that proves this works',
+      'Ask clarifying questions before proposing any milestone changes',
+      'Milestones must be vertical (demo-able) not horizontal (layers/components)',
+      'Each milestone needs: why it matters, outcome, and observable Definition of Done',
+      'Propose small, incremental diffs after each milestone is discussed',
+      'Set Current Focus (active milestone + vertical slice) at the end',
+      'Work through ONE milestone at a time - do not dump entire roadmap at once',
+    ],
+    usesAI: true,
+  },
 }
 
 // ============================================================================
