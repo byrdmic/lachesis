@@ -169,12 +169,13 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Start by asking what idea or change the user wants to explore',
       'Analyze all files to understand current roadmap state and project context',
       'Mine Ideas.md and Log.md for related thoughts or prior discussion of this idea',
-      'Explore where the idea fits: new milestone? new slice? modification to existing?',
+      'Explore where the idea fits: new milestone? modification to existing milestone?',
       'Consider impact: does this change priorities? affect other milestones? add dependencies?',
       'Ask clarifying questions before proposing any changes',
       'Propose small, incremental diffs after each decision - not one big diff at the end',
       'If the idea is out of scope for the project, say so and explain why',
-      'Milestones and slices should be vertical (demo-able) not horizontal (layers/components)',
+      'Milestones should be vertical (demo-able) not horizontal (layers/components)',
+      'Vertical slices belong in Tasks.md, not Roadmap.md',
     ],
     usesAI: true,
   },
@@ -221,8 +222,8 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     intent:
       'Guide the user through filling in Roadmap.md for the first time. ' +
       'Start by understanding project scope from Overview.md, then work through ' +
-      'defining MVP milestone, vertical slices in execution order, subsequent milestones, ' +
-      'and current focus. Requires Overview.md to have at least an elevator pitch first.',
+      'defining MVP milestone, subsequent milestones, and current focus. ' +
+      'Requires Overview.md to have at least an elevator pitch first.',
     readFiles: [PROJECT_FILES.overview, PROJECT_FILES.roadmap],
     writeFiles: [PROJECT_FILES.roadmap],
     risk: 'low',
@@ -233,15 +234,51 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Check if Overview.md has an elevator pitch first - redirect if not',
       'Read Overview.md to understand project scope, MVP criteria, and constraints',
       'Start with MVP milestone (M1) - the smallest version that proves this works',
-      'After defining a milestone, break it into vertical slices (ordered work chunks)',
-      'Vertical slices should be 1-3 days of work, listed in execution order',
-      'Each slice needs: name, goal (what can you demo), and scope (specific deliverables)',
       'Ask clarifying questions before proposing any changes',
       'Milestones must be vertical (demo-able) not horizontal (layers/components)',
       'Each milestone needs: why it matters, outcome, and observable Definition of Done',
-      'Propose small, incremental diffs after each milestone OR slice is discussed',
-      'Set Current Focus (active milestone + vertical slice) at the end',
-      'Work through ONE item at a time - do not dump entire roadmap at once',
+      'Propose small, incremental diffs after each milestone is discussed',
+      'Set Current Focus to the active milestone at the end',
+      'Work through ONE milestone at a time - do not dump entire roadmap at once',
+      'Vertical slices belong in Tasks.md, not Roadmap.md',
+    ],
+    usesAI: true,
+  },
+
+  /**
+   * TASKS FILL: AI-guided session to fill in the Tasks document from scratch.
+   * Uses focusedFile mechanism. Requires Overview.md and ideally Roadmap.md first.
+   */
+  'tasks-fill': {
+    name: 'tasks-fill',
+    displayName: 'Tasks: Fill',
+    description: 'AI-guided session to fill in the Tasks document from scratch',
+    intent:
+      'Guide the user through filling in Tasks.md for the first time. ' +
+      'Start by understanding project scope from Overview.md and milestones from Roadmap.md, ' +
+      'then work through creating vertical slices aligned with roadmap milestones, ' +
+      'defining concrete tasks within each slice, and setting up Next 1-3 Actions. ' +
+      'Requires Overview.md to have content; works best when Roadmap.md has milestones defined.',
+    readFiles: [PROJECT_FILES.overview, PROJECT_FILES.roadmap, PROJECT_FILES.tasks, PROJECT_FILES.log, PROJECT_FILES.ideas],
+    writeFiles: [PROJECT_FILES.tasks],
+    risk: 'low',
+    confirmation: 'preview',
+    allowsDelete: false,
+    allowsCrossFileMove: false,
+    rules: [
+      'Check if Overview.md has an elevator pitch first - redirect if not',
+      'Check if Roadmap.md has milestones - warn if not but proceed if user wants',
+      'Read Overview.md and Roadmap.md to understand project scope and milestone targets',
+      'Mine Log.md and Ideas.md for actionable items that should become tasks',
+      'Create vertical slices that align with Roadmap milestones (VS1 links to M1, etc.)',
+      'Each slice needs: name, goal (demo-able outcome), why (value/alignment), and Definition of Done',
+      'Break each slice into concrete tasks (VS1-T1, VS1-T2, etc.)',
+      'Tasks should be small (15-60 minutes), concrete, and have clear acceptance criteria',
+      'Ask clarifying questions before proposing any changes',
+      'Propose small, incremental diffs after each slice OR task group is discussed',
+      'Set up Next 1-3 Actions at the end - the immediate concrete steps',
+      'Work through ONE slice at a time - do not dump entire task list at once',
+      'Never invent tasks - only extract from existing project content',
     ],
     usesAI: true,
   },

@@ -18,6 +18,7 @@ export const WORKFLOW_NAMES = [
   'roadmap-design',
   'fill-overview',
   'roadmap-fill',
+  'tasks-fill',
   // TODO: Re-enable as they're refined
   // 'synthesize',
   // 'harvest-tasks',

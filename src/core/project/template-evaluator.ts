@@ -97,7 +97,6 @@ export const ROADMAP_EXPECTED_HEADINGS = [
   '## Current Focus',
   '## Milestone Index',
   '## Milestones',
-  '## Vertical Slices',
   '## Cut / Deferred Milestones',
 ] as const
 
@@ -551,7 +550,6 @@ export function fixRoadmapHeadings(content: string, projectName: string): string
     {
       heading: '## Current Focus',
       placeholder: `- **Milestone:** M1 — <Milestone title>
-- **Vertical Slice:** VS1 — <Slice name>
 - **Intent:** <One sentence. "We're trying to…">`,
     },
     {
@@ -562,10 +560,6 @@ export function fixRoadmapHeadings(content: string, projectName: string): string
     {
       heading: '## Milestones',
       placeholder: '', // Has sub-sections for individual milestones
-    },
-    {
-      heading: '## Vertical Slices (execution order)',
-      placeholder: '', // Has sub-sections for individual slices
     },
     {
       heading: '## Cut / Deferred Milestones (kept intentionally small)',
@@ -599,22 +593,8 @@ export function fixRoadmapHeadings(content: string, projectName: string): string
 - <External constraint / other milestone>
 
 **Links**
-- Tasks slice: [[Tasks#VS1 — <Vertical Slice Name>]]
+- Tasks: [[Tasks]]
 - Key log entries: [[Log]]`)
-      } else if (heading === '## Vertical Slices (execution order)') {
-        // For ## Vertical Slices, add template slices
-        fixedSections.push(`\n${heading}
-
-> Vertical slices are small, demo-able chunks that deliver end-to-end value.
-> List them in the order you plan to execute them. Each slice should be completable in 1-3 days.
-
-### VS1 — <Slice Name>
-**Milestone:** M1
-**Status:** planned  <!-- planned | active | done | blocked -->
-**Goal:** <What can you demo when this is done?>
-**Scope:**
-- <Specific deliverable>
-- <Specific deliverable>`)
       } else {
         fixedSections.push(`\n${heading}\n${placeholder}`)
       }

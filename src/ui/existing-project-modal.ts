@@ -976,6 +976,15 @@ export class ExistingProjectModal extends Modal {
       return
     }
 
+    // Special handling for tasks-fill: use focusedFile mechanism
+    // Similar to fill-overview but for Tasks.md
+    if (workflow.name === 'tasks-fill') {
+      this.focusedFile = 'Tasks.md'
+      this.inputEl.value = `Help me fill in Tasks.md. I need to create vertical slices and tasks aligned with my roadmap. Let's work through it step by step.`
+      this.handleUserInput()
+      return
+    }
+
     // Standard AI workflow handling
     this.activeWorkflow = workflow
     this.focusedFile = null  // Clear any active "fill file" mode - workflow takes precedence

@@ -114,7 +114,6 @@ roadmap:
 
 current_focus:
   milestone_id: "M1"
-  slice_id: "VS1"
   intent: "What we are trying to accomplish right now in plain English."
 
 ai:
@@ -128,9 +127,9 @@ ai:
       - "dumping granular chores here (belongs in Tasks.md)"
       - "putting Next 1-3 Actions here (belongs in Tasks.md)"
   extraction_rules: |
-    Milestone work items -> Tasks.md vertical slice.
+    Milestone work items -> Tasks.md.
     Next actions -> Tasks.md.
-    Current focus should always point to a milestone + slice when possible.
+    Current focus should always point to the active milestone.
 
 tags: ["project/roadmap"]
 ---
@@ -139,7 +138,6 @@ tags: ["project/roadmap"]
 
 ## Current Focus
 - **Milestone:** M1 — <Milestone title>
-- **Vertical Slice:** VS1 — <Slice name>
 - **Intent:** <One sentence. "We're trying to…">
 
 ---
@@ -166,7 +164,7 @@ tags: ["project/roadmap"]
 - <External constraint / other milestone>
 
 **Links**
-- Tasks slice: [[Tasks#VS1 — <Vertical Slice Name>]]
+- Tasks: [[Tasks]]
 - Key log entries: [[Log]]
 
 ---
@@ -180,31 +178,7 @@ tags: ["project/roadmap"]
 - <...>
 
 **Links**
-- Tasks slice: [[Tasks#VS2 — <Vertical Slice Name>]]
-
----
-
-## Vertical Slices (execution order)
-
-> Vertical slices are small, demo-able chunks that deliver end-to-end value.
-> List them in the order you plan to execute them. Each slice should be completable in 1-3 days.
-
-### VS1 — <Slice Name>
-**Milestone:** M1
-**Status:** planned  <!-- planned | active | done | blocked -->
-**Goal:** <What can you demo when this is done?>
-**Scope:**
-- <Specific deliverable>
-- <Specific deliverable>
-
----
-
-### VS2 — <Slice Name>
-**Milestone:** M1
-**Status:** planned
-**Goal:** <What can you demo when this is done?>
-**Scope:**
-- <Specific deliverable>
+- Tasks: [[Tasks]]
 
 ---
 
