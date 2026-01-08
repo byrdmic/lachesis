@@ -26,6 +26,9 @@ export interface LachesisSettings {
   openaiApiKey: string
   openaiModel: string
 
+  // GitHub settings
+  githubToken: string
+
   // Project settings
   projectsFolder: string
 }
@@ -36,6 +39,7 @@ export const DEFAULT_SETTINGS: LachesisSettings = {
   anthropicModel: 'claude-sonnet-4-20250514',
   openaiApiKey: '',
   openaiModel: 'gpt-5.2',
+  githubToken: '',
   projectsFolder: 'Projects',
 }
 
@@ -135,6 +139,9 @@ export class LachesisSettingTab extends PluginSettingTab {
 
     // Test connection button
     this.displayConnectionTest(containerEl)
+
+    // GitHub section
+    this.displayGitHubSettings(containerEl)
 
     // Projects section
     containerEl.createEl('h3', { text: 'Project Settings' })
@@ -312,6 +319,54 @@ export class LachesisSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings()
           })
       })
+  }
+
+  private displayGitHubSettings(containerEl: HTMLElement): void {
+    containerEl.createEl('h3', { text: 'GitHub Integration' })
+
+    const descEl = containerEl.createDiv()
+    descEl.style.color = 'var(--text-muted)'
+    descEl.style.fontSize = '0.9em'
+    descEl.style.marginBottom = '1em'
+    descEl.setText(
+      'A personal access token is required to fetch commit history from private repositories.'
+    )
+
+    // Token with password masking
+    const tokenSetting = new Setting(containerEl)
+      .setName('Personal Access Token')
+      .setDesc('Generate at github.com/settings/tokens with "repo" scope')
+
+    let tokenInput: HTMLInputElement
+
+    tokenSetting.addText((text) => {
+      tokenInput = text.inputEl
+      text.inputEl.type = 'password'
+      text.inputEl.style.width = '300px'
+      text
+        .setPlaceholder('ghp_...')
+        .setValue(this.plugin.settings.githubToken)
+        .onChange(async (value) => {
+          this.plugin.settings.githubToken = value
+          await this.plugin.saveSettings()
+        })
+    })
+
+    // Toggle visibility button
+    tokenSetting.addButton((button) =>
+      button
+        .setIcon('eye')
+        .setTooltip('Toggle visibility')
+        .onClick(() => {
+          if (tokenInput.type === 'password') {
+            tokenInput.type = 'text'
+            button.setIcon('eye-off')
+          } else {
+            tokenInput.type = 'password'
+            button.setIcon('eye')
+          }
+        })
+    )
   }
 
   private displayConnectionTest(containerEl: HTMLElement): void {

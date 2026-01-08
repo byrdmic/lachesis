@@ -1274,3 +1274,92 @@
   filter: brightness(1.1);
   transform: translateY(-1px);
 }
+
+/* ============================================================================
+   Git Log Modal
+   ============================================================================ */
+
+.lachesis-git-log-modal {
+  padding: 20px;
+  max-height: 70vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lachesis-git-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-git-log-header h2 {
+  margin: 0;
+  font-size: 1.2em;
+  color: var(--text-normal);
+}
+
+.lachesis-git-log-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.lachesis-git-log-loading {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.lachesis-git-log-error {
+  color: var(--text-error);
+}
+
+.lachesis-git-log-error .lachesis-git-log-hint {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  margin-top: 8px;
+}
+
+.lachesis-git-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lachesis-git-log-entry {
+  padding: 10px 12px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-git-log-main {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.lachesis-git-log-sha {
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+  color: var(--interactive-accent);
+  background: var(--background-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.lachesis-git-log-message {
+  color: var(--text-normal);
+  word-break: break-word;
+}
+
+.lachesis-git-log-meta {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin-top: 6px;
+  padding-left: 60px;
+}

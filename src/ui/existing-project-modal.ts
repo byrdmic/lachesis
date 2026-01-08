@@ -24,6 +24,8 @@ import {
 } from '../utils/potential-tasks-parser'
 import { DiffViewerModal, type DiffAction, type DiffViewerOptions } from './diff-viewer-modal'
 import { PotentialTasksModal, type TaskSelection } from './potential-tasks-modal'
+import { GitLogModal } from './git-log-modal'
+import { fetchCommits, formatCommitLog } from '../github'
 import { listChatLogs, loadChatLog, saveChatLog, type ChatLogMetadata } from '../core/chat'
 import { TEMPLATES, type TemplateName } from '../scaffolder/templates'
 import { processTemplateForFile } from '../scaffolder/scaffolder'
@@ -221,6 +223,22 @@ export class ExistingProjectModal extends Modal {
         this.generateOpeningMessage()
       }
     })
+
+    // Git Log button - show recent commits if GitHub repo is configured
+    if (this.snapshot.aiConfig?.github_repo) {
+      const gitLogBtn = workflowBar.createEl('button', {
+        text: 'Git Log',
+        cls: 'lachesis-workflow-button lachesis-git-log-button',
+      })
+      gitLogBtn.addEventListener('click', () => {
+        const modal = new GitLogModal(
+          this.app,
+          this.snapshot.aiConfig!.github_repo!,
+          this.plugin.settings.githubToken
+        )
+        modal.open()
+      })
+    }
 
     for (const workflow of getAllWorkflows()) {
       const btn = workflowBar.createEl('button', {
@@ -663,6 +681,29 @@ export class ExistingProjectModal extends Modal {
     this.isProcessing = !enabled
   }
 
+  /**
+   * Fetch recent commits from GitHub if a repo is configured.
+   * Returns formatted commit log or undefined if not available.
+   */
+  private async fetchRecentCommits(commitCount = 20): Promise<string | undefined> {
+    const githubRepo = this.snapshot.aiConfig?.github_repo
+    if (!githubRepo) return undefined
+
+    const result = await fetchCommits(githubRepo, {
+      token: this.plugin.settings.githubToken || undefined,
+      perPage: commitCount,
+    })
+
+    if (!result.success) {
+      console.warn('Failed to fetch commits:', result.error)
+      return undefined
+    }
+
+    if (result.data.length === 0) return undefined
+
+    return formatCommitLog(result.data, { includeDate: true })
+  }
+
   private async generateOpeningMessage() {
     if (!this.provider) return
 
@@ -672,13 +713,18 @@ export class ExistingProjectModal extends Modal {
     // Add placeholder for streaming message
     this.addMessageToUI('assistant', '', true)
 
-    const snapshotSummary = formatProjectSnapshotForModel(this.snapshot)
+    // Fetch recent commits in parallel with building the snapshot
+    const [snapshotSummary, recentCommits] = await Promise.all([
+      Promise.resolve(formatProjectSnapshotForModel(this.snapshot)),
+      this.fetchRecentCommits(),
+    ])
 
     const systemPrompt = buildSystemPrompt({
       sessionType: 'existing',
       projectName: this.snapshot.projectName,
       isFirstMessage: true,
       snapshotSummary,
+      recentCommits,
     })
 
     try {
@@ -823,6 +869,9 @@ export class ExistingProjectModal extends Modal {
     this.updateStatus('Lachesis is thinking...')
     this.addMessageToUI('assistant', '', true)
 
+    // Fetch recent commits for context
+    const recentCommits = await this.fetchRecentCommits()
+
     const snapshotSummary = formatProjectSnapshotForModel(this.snapshot)
 
     const systemPrompt = buildSystemPrompt({
@@ -834,6 +883,7 @@ export class ExistingProjectModal extends Modal {
       workflowFileContents,
       focusedFile: currentFocusedFile ?? undefined,
       focusedFileContents,
+      recentCommits,
     })
 
     // Store workflow name for post-diff processing, then clear active workflow

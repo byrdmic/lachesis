@@ -59,6 +59,11 @@ export type SystemPromptOptions = {
    * File contents for the focused file and related context files.
    */
   focusedFileContents?: string
+  /**
+   * Recent commits from GitHub (formatted git log).
+   * Provides context about what work has been done recently.
+   */
+  recentCommits?: string
 }
 
 // ============================================================================
@@ -437,10 +442,11 @@ type ExistingProjectPromptOptions = {
   workflowFileContents?: string
   focusedFile?: string
   focusedFileContents?: string
+  recentCommits?: string
 }
 
 function buildExistingProjectPrompt(options: ExistingProjectPromptOptions): string {
-  const { projectName, timeGreeting, isFirstMessage, snapshotSummary, activeWorkflow, workflowFileContents, focusedFile, focusedFileContents } = options
+  const { projectName, timeGreeting, isFirstMessage, snapshotSummary, activeWorkflow, workflowFileContents, focusedFile, focusedFileContents, recentCommits } = options
 
   const openingInstructions = isFirstMessage
     ? `OPENING MESSAGE (CRITICAL - FOLLOW EXACTLY):
@@ -787,6 +793,20 @@ ${focusedFileContents}
 `
   }
 
+  // Build recent commits section if available
+  const recentCommitsSection = recentCommits
+    ? `
+================================================================================
+RECENT GIT COMMITS (from GitHub)
+================================================================================
+This shows recent work done on the project. Use this context to understand what
+has been implemented, what's in progress, and what the developer has been working on.
+
+${recentCommits}
+================================================================================
+`
+    : ''
+
   return `You are Lachesis, a project coach helping someone continue work on an existing project.
 
 ================================================================================
@@ -794,7 +814,7 @@ PROJECT SNAPSHOT (CURRENT STATE)
 ================================================================================
 ${snapshotSummary || 'No snapshot available.'}
 ================================================================================
-${workflowSection}${focusedFileSection}
+${recentCommitsSection}${workflowSection}${focusedFileSection}
 ${voiceSection}
 
 ${openingInstructions}
@@ -878,6 +898,7 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
       workflowFileContents: options.workflowFileContents,
       focusedFile: options.focusedFile,
       focusedFileContents: options.focusedFileContents,
+      recentCommits: options.recentCommits,
     })
   }
 
