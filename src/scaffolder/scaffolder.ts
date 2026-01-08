@@ -193,18 +193,27 @@ function processTemplate(
         'Aligns with M1 — Define the Project',
       )
 
+      // Update Next 1-3 Actions with actual task descriptions (using links, no checkboxes)
+      content = content.replace(
+        /## Next 1–3 Actions \(always kept fresh\)\n- \[\[#\^VS1-T1\|VS1-T1\]\].*\n- \[\[#\^VS1-T2\|VS1-T2\]\].*\n- \[\[#\^VS1-T3\|VS1-T3\]\].*/,
+        `## Next 1–3 Actions (always kept fresh)
+- [[#^VS1-T1|VS1-T1]] Write elevator pitch in Overview.md
+- [[#^VS1-T2|VS1-T2]] Define the problem being solved
+- [[#^VS1-T3|VS1-T3]] Identify target users`,
+      )
+
       content = content.replace(
         /\*\*Tasks\*\*\n- \[ \] VS1-T1 <Verb \+ object>.*?(?=---|\n## |$)/s,
         `**Tasks**
-- [ ] VS1-T1 Write elevator pitch in Overview.md
+- [ ] VS1-T1 Write elevator pitch in Overview.md ^VS1-T1
   - Acceptance: One clear sentence describing what this is and who it's for
-- [ ] VS1-T2 Define the problem being solved
+- [ ] VS1-T2 Define the problem being solved ^VS1-T2
   - Acceptance: Problem statement in Overview.md explains what hurts today
-- [ ] VS1-T3 Identify target users
+- [ ] VS1-T3 Identify target users ^VS1-T3
   - Acceptance: Primary users section in Overview.md has real people/roles
-- [ ] VS1-T4 Add first concrete milestone to Roadmap.md
+- [ ] VS1-T4 Add first concrete milestone to Roadmap.md ^VS1-T4
   - Acceptance: M2 has a clear outcome and definition of done
-- [ ] VS1-T5 Update Next 1-3 Actions with real tasks
+- [ ] VS1-T5 Update Next 1-3 Actions with real tasks ^VS1-T5
   - Acceptance: Actions section has specific, timeboxed work items
 
 `,

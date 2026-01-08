@@ -221,9 +221,9 @@ tags: ["project/tasks"]
 # Tasks — <Project Name>
 
 ## Next 1–3 Actions (always kept fresh)
-- [ ] <VS?-T?> <Smallest concrete step (~15–60 minutes)>
-- [ ] <VS?-T?> <Next step>
-- [ ] <VS?-T?> <Next step>
+- [[#^VS1-T1|VS1-T1]] <Smallest concrete step (~15–60 minutes)>
+- [[#^VS1-T2|VS1-T2]] <Next step>
+- [[#^VS1-T3|VS1-T3]] <Next step>
 
 ## Active Vertical Slices
 
@@ -237,10 +237,10 @@ tags: ["project/tasks"]
 - <System does…>
 
 **Tasks**
-- [ ] VS1-T1 <Verb + object>
+- [ ] VS1-T1 <Verb + object> ^VS1-T1
   - Acceptance: <How you'll know it's done>
-- [ ] VS1-T2 <...>
-- [ ] VS1-T3 <...>
+- [ ] VS1-T2 <...> ^VS1-T2
+- [ ] VS1-T3 <...> ^VS1-T3
 
 ---
 

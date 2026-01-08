@@ -289,6 +289,15 @@ Before starting, identify:
    - "What are the immediate next steps you can take right now?"
    - These should be THE smallest concrete actions (15-60 min each)
    - Pick from the active slice's tasks—the very first things to do
+   - **CRITICAL FORMAT**: Next Actions use links, NOT checkboxes:
+     - Format: \`- [[#^VS1-T1|VS1-T1]] Task description\`
+     - The link jumps to the task in the Tasks section (which has the checkbox)
+     - Example:
+       \`\`\`markdown
+       ## Next 1–3 Actions (always kept fresh)
+       - [[#^VS1-T1|VS1-T1]] Register ribbon icon in main.ts
+       - [[#^VS1-T2|VS1-T2]] Create InterviewModal class
+       \`\`\`
    - Propose diff to populate Next 1-3 Actions at the top
 
 ## WHAT MAKES A GOOD VERTICAL SLICE (for the list)
@@ -314,6 +323,7 @@ Bad slice examples:
 - **Clear acceptance**: How do you know it's done?
 - **Linked to slice**: VS1-T1 format connects task to slice
 - **Extracted, not invented**: Pull from project content, don't make up work
+- **Block ID at end**: Every task line ends with ^VS#-T# for internal linking (e.g., \`- [ ] VS1-T1 Create modal component ^VS1-T1\`)
 
 ## EXAMPLE EXPANDED ACTIVE SLICE
 
@@ -331,13 +341,13 @@ Bad slice examples:
 - Modal can be closed
 
 **Tasks**
-- [ ] VS1-T1 Register ribbon icon in main.ts
+- [ ] VS1-T1 Register ribbon icon in main.ts ^VS1-T1
   - Acceptance: Icon appears in Obsidian ribbon when plugin loads
-- [ ] VS1-T2 Create InterviewModal class extending Modal
+- [ ] VS1-T2 Create InterviewModal class extending Modal ^VS1-T2
   - Acceptance: Class compiles, can be instantiated
-- [ ] VS1-T3 Wire ribbon click to open modal
+- [ ] VS1-T3 Wire ribbon click to open modal ^VS1-T3
   - Acceptance: Clicking ribbon icon opens the modal
-- [ ] VS1-T4 Add close button to modal
+- [ ] VS1-T4 Add close button to modal ^VS1-T4
   - Acceptance: User can click X to dismiss modal
 \`\`\`
 
@@ -751,6 +761,33 @@ YOUR ROLE FOR EXISTING PROJECTS:
 - Answer questions about the project state
 - Help fill in gaps in thin or template-only files
 - Keep the project documentation healthy and actionable
+
+DOCUMENT FORMAT STANDARDS (ALWAYS APPLY):
+
+**Tasks.md Structure:**
+- "Next 1-3 Actions" section uses LINKS, not checkboxes
+- Format: \`- [[#^VS1-T1|VS1-T1]] Task description\`
+- Every task line under "Active Vertical Slices" MUST end with a block ID: \`^VS#-T#\`
+- Task format: \`- [ ] VS1-T1 Task description ^VS1-T1\`
+- The link in "Next 1-3 Actions" jumps to the task with the checkbox below
+- When marking a task complete, mark the checkbox at the task definition, not in Next Actions
+
+Example Tasks.md structure:
+\`\`\`markdown
+## Next 1–3 Actions (always kept fresh)
+- [[#^VS1-T1|VS1-T1]] Write elevator pitch
+- [[#^VS1-T2|VS1-T2]] Define the problem
+
+## Active Vertical Slices
+### VS1 — Project Definition
+**Tasks**
+- [ ] VS1-T1 Write elevator pitch ^VS1-T1
+- [ ] VS1-T2 Define the problem ^VS1-T2
+\`\`\`
+
+**Roadmap.md:** High-level milestones only. Vertical slices belong in Tasks.md.
+
+**Log.md:** Freeform notes. Items with "need to", "should", "TODO" get extracted to Tasks.md.
 
 OVERVIEW.MD IS THE 40,000-FOOT VIEW (CRITICAL):
 - Overview.md is the project's north star - it must be clear before other work makes sense
