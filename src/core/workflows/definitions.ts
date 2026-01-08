@@ -147,17 +147,17 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
   },
 
   /**
-   * ROADMAP DESIGN: Interactive session to flesh out project milestones.
+   * ROADMAP REFINE: Explore integrating new ideas into the existing roadmap.
    * AI-guided conversation with incremental diffs.
    */
   'roadmap-design': {
     name: 'roadmap-design',
-    displayName: 'Roadmap: Design Session',
-    description: 'Interactive session to flesh out project milestones',
+    displayName: 'Roadmap: Refine',
+    description: 'Explore integrating a new idea into your existing roadmap',
     intent:
-      'Guide the user through designing or refining their project roadmap. ' +
-      'Analyze all project files to understand current state, then lead a structured ' +
-      'conversation to clarify milestones, definitions of done, and priorities. ' +
+      'Help the user explore how a new idea or change could fit into their existing roadmap. ' +
+      'Analyze all project files (Overview, Roadmap, Ideas, Log) to understand current state, ' +
+      'then guide a conversation about where the idea fits, what it affects, and how to integrate it. ' +
       'Propose incremental changes as decisions are made.',
     readFiles: ALL_CORE_FILES,
     writeFiles: [PROJECT_FILES.roadmap],
@@ -166,14 +166,15 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     allowsDelete: false,
     allowsCrossFileMove: false,
     rules: [
-      'Start by analyzing all files and summarizing current roadmap state',
-      'Identify gaps: unclear milestones, missing definitions of done, unordered priorities',
-      'Mine Log.md and Ideas.md for signals about what matters to the user',
+      'Start by asking what idea or change the user wants to explore',
+      'Analyze all files to understand current roadmap state and project context',
+      'Mine Ideas.md and Log.md for related thoughts or prior discussion of this idea',
+      'Explore where the idea fits: new milestone? new slice? modification to existing?',
+      'Consider impact: does this change priorities? affect other milestones? add dependencies?',
       'Ask clarifying questions before proposing any changes',
-      'Guide user through phases: Analysis → Milestones → DoD → Prioritization → Focus',
       'Propose small, incremental diffs after each decision - not one big diff at the end',
-      'Keep conversation focused on strategic outcomes, not tactical tasks',
-      'Milestones should be vertical (demo-able) not horizontal (layers/components)',
+      'If the idea is out of scope for the project, say so and explain why',
+      'Milestones and slices should be vertical (demo-able) not horizontal (layers/components)',
     ],
     usesAI: true,
   },
@@ -220,8 +221,8 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     intent:
       'Guide the user through filling in Roadmap.md for the first time. ' +
       'Start by understanding project scope from Overview.md, then work through ' +
-      'defining MVP milestone, subsequent milestones, definitions of done, and current focus. ' +
-      'Requires Overview.md to have at least an elevator pitch first.',
+      'defining MVP milestone, vertical slices in execution order, subsequent milestones, ' +
+      'and current focus. Requires Overview.md to have at least an elevator pitch first.',
     readFiles: [PROJECT_FILES.overview, PROJECT_FILES.roadmap],
     writeFiles: [PROJECT_FILES.roadmap],
     risk: 'low',
@@ -232,12 +233,15 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Check if Overview.md has an elevator pitch first - redirect if not',
       'Read Overview.md to understand project scope, MVP criteria, and constraints',
       'Start with MVP milestone (M1) - the smallest version that proves this works',
-      'Ask clarifying questions before proposing any milestone changes',
+      'After defining a milestone, break it into vertical slices (ordered work chunks)',
+      'Vertical slices should be 1-3 days of work, listed in execution order',
+      'Each slice needs: name, goal (what can you demo), and scope (specific deliverables)',
+      'Ask clarifying questions before proposing any changes',
       'Milestones must be vertical (demo-able) not horizontal (layers/components)',
       'Each milestone needs: why it matters, outcome, and observable Definition of Done',
-      'Propose small, incremental diffs after each milestone is discussed',
+      'Propose small, incremental diffs after each milestone OR slice is discussed',
       'Set Current Focus (active milestone + vertical slice) at the end',
-      'Work through ONE milestone at a time - do not dump entire roadmap at once',
+      'Work through ONE item at a time - do not dump entire roadmap at once',
     ],
     usesAI: true,
   },

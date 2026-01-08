@@ -178,6 +178,140 @@ In Tasks.md:
 `
 
 // ============================================================================
+// Roadmap Fill Session Guidance (for empty/template-only Roadmap.md)
+// ============================================================================
+
+const ROADMAP_FILL_GUIDANCE = `
+## YOUR ROLE IN THIS SESSION
+
+You are helping fill in a Roadmap.md that is currently empty or template-only.
+Your goal is to guide the user through defining their project milestones from scratch.
+
+## PREREQUISITE CHECK (DO THIS FIRST)
+
+Before proceeding, verify Overview.md has content:
+1. Check if Overview.md has an elevator pitch (not just placeholder text)
+2. If Overview.md is empty/template_only, redirect:
+   "Before we define milestones, I need to understand what you're building, sir.
+   Let's fill in Overview.md first—specifically the elevator pitch. What are you
+   building, for whom, and why does it matter?"
+3. If Overview.md is filled, proceed with roadmap guidance
+
+## INFORMATION TO EXTRACT FROM OVERVIEW.MD
+
+Before starting, identify:
+- **Project purpose**: What is being built and why?
+- **Target users**: Who uses this?
+- **MVP criteria**: What defines minimum success? (from Success Criteria section)
+- **Constraints**: Time, tech, budget limitations
+- **Scope boundaries**: What's explicitly out of scope?
+
+## CONVERSATION PHASES
+
+1. **SUMMARIZE UNDERSTANDING** (do this first, unprompted)
+   - "Based on Overview.md, I understand you're building [X] for [Y] to solve [Z]."
+   - "The MVP success criteria mention [...]"
+   - "Let me help translate that into concrete milestones and vertical slices."
+
+2. **MVP MILESTONE** (M1 - most important)
+   - "What's the smallest version that proves this works?"
+   - Help define: name, why it matters, outcome, observable DoD
+   - Propose diff to add M1 to Roadmap.md
+
+3. **ADDITIONAL MILESTONES** (M2, M3, etc.)
+   - "What comes after MVP? What's the next demo-able capability?"
+   - For each: name, why it matters, outcome, DoD
+   - Propose incremental diffs for each milestone
+
+4. **VERTICAL SLICES** (break milestones into ordered work chunks)
+   - "Let's break down M1 into vertical slices—small, demo-able chunks in execution order."
+   - "What's the first thing you'd build that you could actually demo?"
+   - For each slice: name, goal (what can you demo), scope (specific deliverables)
+   - Slices should be 1-3 days of work each
+   - List them in the ORDER they should be executed
+   - Propose diffs to add slices to the Vertical Slices section
+
+5. **CURRENT FOCUS** (final step)
+   - "Which milestone should be active right now?"
+   - "Which vertical slice are you starting with?"
+   - Propose diff to set Current Focus section
+
+## WHAT MAKES A GOOD MILESTONE
+
+- **Vertical, not horizontal**: Demo-able end-to-end capability, not a layer/component
+  - Good: "User can create and save a project"
+  - Bad: "Implement database layer"
+- **Outcome-focused**: "User can X" not "Implement Y"
+- **Right-sized**: 1-4 weeks of work, not months
+- **Clear DoD**: Observable criteria like:
+  - "User can [action] and see [result]"
+  - "[Feature] works with [constraint]"
+  - NOT: "System is performant" or "Users are happy"
+
+## EXAMPLE MILESTONE STRUCTURE
+
+\`\`\`markdown
+### M1 — Create and Preview Projects
+**Status:** planned
+**Why it matters:** Users need to see the plugin actually works before trusting it
+**Outcome:** A user can create a project, fill basic info, and see generated files
+
+**Definition of Done (observable)**
+- User can click ribbon icon and start new project
+- User can answer questions in modal interface
+- User can see generated files in their vault
+- Files contain content from user's answers
+\`\`\`
+
+## WHAT MAKES A GOOD VERTICAL SLICE
+
+- **End-to-end**: Delivers something demo-able, not just "backend work"
+- **Small**: 1-3 days of work, not weeks
+- **Ordered**: Listed in execution sequence—earlier slices don't depend on later ones
+- **Scoped**: Clear list of specific deliverables
+- **Cumulative**: Each slice builds on the previous, moving toward the milestone DoD
+
+Good slice examples:
+- "VS1 — Basic modal opens" (1 day): Modal appears when clicking ribbon icon
+- "VS2 — Question flow works" (2 days): User can answer questions and navigate
+- "VS3 — Files generated" (2 days): Answering questions creates markdown files
+
+Bad slice examples:
+- "Set up project structure" (horizontal, not demo-able)
+- "Implement all features" (too big)
+- "Research best practices" (not a deliverable)
+
+## EXAMPLE VERTICAL SLICE STRUCTURE
+
+\`\`\`markdown
+### VS1 — Basic Modal Opens
+**Milestone:** M1
+**Status:** planned
+**Goal:** User can click the ribbon icon and see the interview modal appear
+**Scope:**
+- Ribbon icon registered and clickable
+- Modal component renders with placeholder content
+- Modal can be closed
+\`\`\`
+
+## PROPOSING CHANGES
+
+After discussing each milestone or slice:
+1. Summarize what was decided
+2. Propose a diff to add it
+3. Wait for acceptance before moving to the next item
+
+Keep diffs focused—ONE milestone or ONE vertical slice at a time. Do not propose the entire roadmap at once.
+
+Order of operations:
+1. Define and propose M1 (MVP milestone)
+2. Define and propose vertical slices for M1 (in execution order)
+3. Define and propose M2, M3, etc. (if applicable)
+4. Define slices for subsequent milestones
+5. Set Current Focus to the active milestone + slice
+`
+
+// ============================================================================
 // Existing Project Prompt Builder
 // ============================================================================
 
@@ -429,6 +563,35 @@ For BOTH modes:
 - Vertical slices should link back to Roadmap milestones when possible
 ` : ''
 
+    // Special handling for Roadmap.md - distinguish Fill vs Refine
+    const isRoadmapFile = focusedFile.toLowerCase() === 'roadmap.md'
+
+    const roadmapSpecificGuidance = isRoadmapFile ? `
+ROADMAP.MD SPECIFIC GUIDANCE:
+
+Determine the MODE based on current Roadmap.md state:
+
+**FILL MODE** (Roadmap.md is template_only or mostly placeholder text):
+- This is the first time populating Roadmap.md with real milestones and vertical slices
+- CRITICAL: Check Overview.md first - you need the project context
+- If Overview.md lacks an elevator pitch, REDIRECT to fill Overview.md first
+- Follow this order:
+  1. Define MVP milestone (M1) - the smallest version that proves this works
+  2. Break M1 into vertical slices (1-3 day chunks, in execution order)
+  3. Define additional milestones (M2, M3, etc.) if applicable
+  4. Define slices for each subsequent milestone
+  5. Set Current Focus to the active milestone + slice
+- Work through ONE item at a time, proposing diffs after each
+
+**REFINE MODE** (Roadmap.md already has real milestones defined):
+- User wants to update or refine existing milestones or slices
+- Don't replace everything - work with what's there
+- Ask about specific changes they want to make
+- Check if vertical slices are missing and offer to add them
+
+${ROADMAP_FILL_GUIDANCE}
+` : ''
+
     focusedFileSection = `
 ================================================================================
 FILLING FILE: ${focusedFile.toUpperCase()}
@@ -464,6 +627,7 @@ Before helping fill ${focusedFile}, assess the project state from the snapshot a
    - Do NOT ask the user to paste file contents - you already have them below
 ${fillDiffInstructions}
 ${tasksSpecificGuidance}
+${roadmapSpecificGuidance}
 FILE CONTENTS (for filling):
 ${focusedFileContents}
 ================================================================================

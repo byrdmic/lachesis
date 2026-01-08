@@ -209,6 +209,7 @@
   color: var(--text-normal);
   margin-bottom: 16px;
   background: linear-gradient(135deg, var(--text-normal) 0%, var(--text-muted) 100%);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -275,13 +276,24 @@
   border-bottom-right-radius: 2px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(255,255,255,0.1);
-  user-select: text;
+  -webkit-user-select: text !important;
+  user-select: text !important;
   cursor: text;
+  pointer-events: auto;
 }
 
 .lachesis-message.user * {
-  user-select: text;
+  -webkit-user-select: text !important;
+  user-select: text !important;
   cursor: text;
+  pointer-events: auto;
+}
+
+/* Selection highlight for user messages - contrasts with purple background */
+.lachesis-message.user::selection,
+.lachesis-message.user *::selection {
+  background: rgba(255, 255, 255, 0.4);
+  color: var(--text-on-accent);
 }
 
 /* Markdown content inside messages */
@@ -879,6 +891,30 @@
 .lachesis-issue-fix-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.lachesis-issue-details {
+  font-size: 0.75em;
+  color: var(--text-faint);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.lachesis-issue-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.lachesis-issue-fix-btn-secondary {
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.lachesis-issue-fix-btn-secondary:hover {
+  background: var(--background-modifier-border-hover);
+  color: var(--text-normal);
 }
 
 /* Make the badge clickable when there are issues */

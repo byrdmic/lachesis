@@ -10,7 +10,7 @@ import { getProvider } from '../ai/providers/factory'
 import { isProviderAvailable } from '../ai/providers/factory'
 import type { AIProvider, ConversationMessage } from '../ai/providers/types'
 import { buildSystemPrompt } from '../ai/prompts'
-import { getAllWorkflows, getWorkflowDefinition, WORKFLOW_DEFINITIONS } from '../core/workflows/definitions'
+import { getAllWorkflows, getWorkflowDefinition, WORKFLOW_DEFINITIONS, PROJECT_FILES } from '../core/workflows/definitions'
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 import { extractDiffBlocks, applyDiff, containsDiffBlocks, type DiffBlock } from '../utils/diff'
 import { getTrimmedLogContent, getFilteredLogForTitleEntries, type TrimmedLogResult, type FilteredLogResult } from '../utils/log-parser'
@@ -27,7 +27,7 @@ import { PotentialTasksModal, type TaskSelection } from './potential-tasks-modal
 import { listChatLogs, loadChatLog, saveChatLog, type ChatLogMetadata } from '../core/chat'
 import { TEMPLATES, type TemplateName } from '../scaffolder/templates'
 import { processTemplateForFile } from '../scaffolder/scaffolder'
-import { validateOverviewHeadings, fixOverviewHeadings } from '../core/project/template-evaluator'
+import { validateOverviewHeadings, fixOverviewHeadings, validateRoadmapHeadings, fixRoadmapHeadings } from '../core/project/template-evaluator'
 
 // ============================================================================
 // Types
@@ -39,8 +39,13 @@ type ProjectIssue = {
   file: ExpectedCoreFile | '.ai/config.json'
   type: 'missing' | 'template_only' | 'thin' | 'config' | 'headings_invalid'
   message: string
+  /** Additional details shown below the message (e.g., list of missing headings) */
+  details?: string
   fixLabel: string
   fixAction: () => Promise<void>
+  /** Optional secondary fix action */
+  secondaryFixLabel?: string
+  secondaryFixAction?: () => Promise<void>
 }
 
 // ============================================================================
@@ -796,18 +801,12 @@ export class ExistingProjectModal extends Modal {
     if (currentFocusedFile) {
       this.updateStatus(`Fetching ${currentFocusedFile} and context files...`)
       try {
-        // Determine which context files to include
-        const filesToFetch: string[] = [currentFocusedFile]
-
-        // Always include Overview.md for project context (unless that's the focused file)
-        if (currentFocusedFile !== 'Overview.md') {
-          filesToFetch.push('Overview.md')
-        }
-
-        // For Tasks.md, also include Roadmap.md for milestone context
-        if (currentFocusedFile === 'Tasks.md') {
-          filesToFetch.push('Roadmap.md')
-        }
+        // Always include all core files for full project context
+        const allCoreFiles = Object.values(PROJECT_FILES)
+        const filesToFetch: string[] = [
+          currentFocusedFile,
+          ...allCoreFiles.filter(f => f !== currentFocusedFile)
+        ]
 
         const fileContents = await fetchProjectFileContents(
           this.app.vault,
@@ -963,6 +962,15 @@ export class ExistingProjectModal extends Modal {
     if (workflow.name === 'fill-overview') {
       this.focusedFile = 'Overview.md'
       this.inputEl.value = `Help me fill in Overview.md. It currently only has template placeholders. Let's work through it section by section.`
+      this.handleUserInput()
+      return
+    }
+
+    // Special handling for roadmap-fill: use focusedFile mechanism
+    // Similar to fill-overview but for Roadmap.md
+    if (workflow.name === 'roadmap-fill') {
+      this.focusedFile = 'Roadmap.md'
+      this.inputEl.value = `Help me fill in Roadmap.md. I need to define milestones for my project from scratch. Let's work through it step by step.`
       this.handleUserInput()
       return
     }
@@ -1323,6 +1331,22 @@ export class ExistingProjectModal extends Modal {
       }
     }
 
+    // Check Roadmap.md headings validation (only if file exists and isn't already flagged as missing/template_only)
+    const roadmapEntry = this.snapshot.files['Roadmap.md']
+    if (roadmapEntry?.exists && roadmapEntry.templateStatus !== 'missing') {
+      // Don't duplicate if Roadmap.md is already in issues as template_only
+      const alreadyHasRoadmapIssue = issues.some(
+        (i) => i.file === 'Roadmap.md' && (i.type === 'missing' || i.type === 'template_only')
+      )
+      if (!alreadyHasRoadmapIssue) {
+        // Read file synchronously using fs to check headings
+        const headingIssue = this.checkRoadmapHeadingsSync()
+        if (headingIssue) {
+          issues.push(headingIssue)
+        }
+      }
+    }
+
     return issues
   }
 
@@ -1341,18 +1365,65 @@ export class ExistingProjectModal extends Modal {
       const validation = validateOverviewHeadings(content)
 
       if (!validation.isValid) {
+        // Format the missing headings as a readable list
+        const missingList = validation.missingHeadings
+          .map(h => h.replace(/^##+ /, ''))  // Remove markdown heading markers for display
+          .join(', ')
+
         return {
           file: 'Overview.md',
           type: 'headings_invalid',
           message: `Missing ${validation.missingHeadings.length} heading(s)`,
-          fixLabel: 'Fix Headings',
-          fixAction: () => this.fixInvalidHeadings(),
+          details: `Missing: ${missingList}`,
+          fixLabel: 'Add Missing (AI)',
+          fixAction: () => this.addMissingHeadingsWithAI('Overview.md', validation.missingHeadings),
+          secondaryFixLabel: 'Reformat File',
+          secondaryFixAction: () => this.fixInvalidHeadings(),
         }
       }
 
       return null
     } catch (err) {
       console.warn('Failed to validate Overview.md headings:', err)
+      return null
+    }
+  }
+
+  /**
+   * Synchronously check Roadmap.md heading validation using filesystem.
+   * Returns an issue if headings are invalid, null otherwise.
+   */
+  private checkRoadmapHeadingsSync(): ProjectIssue | null {
+    try {
+      const basePath = (this.app.vault.adapter as any).getBasePath() as string
+      const roadmapPath = path.join(basePath, this.projectPath, 'Roadmap.md')
+
+      if (!fs.existsSync(roadmapPath)) return null
+
+      const content = fs.readFileSync(roadmapPath, 'utf-8')
+      const validation = validateRoadmapHeadings(content)
+
+      if (!validation.isValid) {
+        // Format the missing headings as a readable list
+        const missingList = validation.missingHeadings
+          .map(h => h.replace(/^##+ /, ''))  // Remove markdown heading markers for display
+          .join(', ')
+
+        return {
+          file: 'Roadmap.md',
+          type: 'headings_invalid',
+          message: `Missing ${validation.missingHeadings.length} heading(s)`,
+          details: `Missing: ${missingList}`,
+          fixLabel: 'Add Missing (AI)',
+          fixAction: () => this.addMissingHeadingsWithAI('Roadmap.md', validation.missingHeadings),
+          secondaryFixLabel: 'Reformat File',
+          secondaryFixAction: () => this.fixRoadmapInvalidHeadings(),
+        }
+      }
+
+      return null
+    } catch (err) {
+      console.warn('Failed to validate Roadmap.md headings:', err)
       return null
     }
   }
@@ -1452,8 +1523,16 @@ export class ExistingProjectModal extends Modal {
     contentEl.createDiv({ cls: 'lachesis-issue-file', text: issue.file })
     contentEl.createDiv({ cls: 'lachesis-issue-message', text: issue.message })
 
-    // Fix button
-    const fixBtn = itemEl.createEl('button', {
+    // Details (e.g., list of missing headings)
+    if (issue.details) {
+      contentEl.createDiv({ cls: 'lachesis-issue-details', text: issue.details })
+    }
+
+    // Button container for multiple actions
+    const buttonContainer = itemEl.createDiv({ cls: 'lachesis-issue-buttons' })
+
+    // Primary fix button
+    const fixBtn = buttonContainer.createEl('button', {
       text: issue.fixLabel,
       cls: 'lachesis-issue-fix-btn',
     })
@@ -1463,6 +1542,20 @@ export class ExistingProjectModal extends Modal {
       fixBtn.setText('Working...')
       await issue.fixAction()
     })
+
+    // Secondary fix button (if available)
+    if (issue.secondaryFixLabel && issue.secondaryFixAction) {
+      const secondaryBtn = buttonContainer.createEl('button', {
+        text: issue.secondaryFixLabel,
+        cls: 'lachesis-issue-fix-btn lachesis-issue-fix-btn-secondary',
+      })
+      secondaryBtn.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        secondaryBtn.disabled = true
+        secondaryBtn.setText('Working...')
+        await issue.secondaryFixAction!()
+      })
+    }
   }
 
   // ============================================================================
@@ -1542,10 +1635,44 @@ export class ExistingProjectModal extends Modal {
   }
 
   /**
+   * Add missing headings to a file using AI to propose targeted diffs.
+   * This allows the user to review and accept/reject each proposed change.
+   */
+  private async addMissingHeadingsWithAI(
+    fileName: ExpectedCoreFile,
+    missingHeadings: string[]
+  ): Promise<void> {
+    this.closeIssuesDropdown()
+
+    // Set the focused file so handleUserInput will fetch its contents
+    this.focusedFile = fileName
+
+    // Format the missing headings list for the AI
+    const headingsList = missingHeadings
+      .map(h => `- ${h}`)
+      .join('\n')
+
+    // Set up the input to trigger a focused conversation asking for targeted diffs
+    if (this.inputEl) {
+      this.inputEl.value = `${fileName} is missing the following headings:\n\n${headingsList}\n\nPlease propose a diff to add ONLY these missing headings with appropriate placeholder content. Do not modify existing content—just add the missing sections in the correct locations.`
+      this.handleUserInput()
+    }
+  }
+
+  /**
    * Fix Overview.md headings by adding missing sections with placeholders.
    * This is a structural fix that doesn't require AI.
+   * WARNING: This reformats the entire file structure.
    */
   private async fixInvalidHeadings(): Promise<void> {
+    // Confirm with user since this reformats the file
+    const confirmed = window.confirm(
+      'This will reformat Overview.md to match the expected template structure.\n\n' +
+      'Your existing content will be preserved where possible, but the file structure will change.\n\n' +
+      'Continue?'
+    )
+    if (!confirmed) return
+
     try {
       const overviewPath = `${this.projectPath}/Overview.md`
       const overviewFile = this.app.vault.getAbstractFileByPath(overviewPath)
@@ -1559,11 +1686,46 @@ export class ExistingProjectModal extends Modal {
       const fixedContent = fixOverviewHeadings(content, this.snapshot.projectName)
 
       await this.app.vault.modify(overviewFile, fixedContent)
-      new Notice('Fixed Overview.md headings')
+      new Notice('Reformatted Overview.md')
 
       await this.refreshAfterFix()
     } catch (err) {
-      new Notice(`Failed to fix headings: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      new Notice(`Failed to reformat: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Fix Roadmap.md headings by adding missing sections with placeholders.
+   * This is a structural fix that doesn't require AI.
+   * WARNING: This reformats the entire file structure.
+   */
+  private async fixRoadmapInvalidHeadings(): Promise<void> {
+    // Confirm with user since this reformats the file
+    const confirmed = window.confirm(
+      'This will reformat Roadmap.md to match the expected template structure.\n\n' +
+      'Your existing content will be preserved where possible, but the file structure will change.\n\n' +
+      'Continue?'
+    )
+    if (!confirmed) return
+
+    try {
+      const roadmapPath = `${this.projectPath}/Roadmap.md`
+      const roadmapFile = this.app.vault.getAbstractFileByPath(roadmapPath)
+
+      if (!roadmapFile || !(roadmapFile instanceof TFile)) {
+        new Notice('Roadmap.md not found')
+        return
+      }
+
+      const content = await this.app.vault.read(roadmapFile)
+      const fixedContent = fixRoadmapHeadings(content, this.snapshot.projectName)
+
+      await this.app.vault.modify(roadmapFile, fixedContent)
+      new Notice('Reformatted Roadmap.md')
+
+      await this.refreshAfterFix()
+    } catch (err) {
+      new Notice(`Failed to reformat Roadmap: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 

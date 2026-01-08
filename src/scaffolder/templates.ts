@@ -184,6 +184,30 @@ tags: ["project/roadmap"]
 
 ---
 
+## Vertical Slices (execution order)
+
+> Vertical slices are small, demo-able chunks that deliver end-to-end value.
+> List them in the order you plan to execute them. Each slice should be completable in 1-3 days.
+
+### VS1 — <Slice Name>
+**Milestone:** M1
+**Status:** planned  <!-- planned | active | done | blocked -->
+**Goal:** <What can you demo when this is done?>
+**Scope:**
+- <Specific deliverable>
+- <Specific deliverable>
+
+---
+
+### VS2 — <Slice Name>
+**Milestone:** M1
+**Status:** planned
+**Goal:** <What can you demo when this is done?>
+**Scope:**
+- <Specific deliverable>
+
+---
+
 ## Cut / Deferred Milestones (kept intentionally small)
 - <If this grows, move detail to Archive.md with rationale.>
 `,
