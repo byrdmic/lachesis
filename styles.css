@@ -1740,3 +1740,16 @@
   filter: brightness(1.1);
   transform: translateY(-1px);
 }
+
+/* ============================================================
+   Ideas Groom Modal
+   (Reuses harvest-tasks-modal CSS classes with additional specificity)
+   ============================================================ */
+
+.modal.lachesis-ideas-groom-modal-root {
+  /* Inherits all harvest-tasks-modal-root styles */
+}
+
+.lachesis-ideas-groom-modal {
+  /* Inherits all harvest-tasks-modal styles */
+}

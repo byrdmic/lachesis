@@ -25,6 +25,7 @@ import {
 import { DiffViewerModal, type DiffAction, type DiffViewerOptions } from './diff-viewer-modal'
 import { PotentialTasksModal, type TaskSelection } from './potential-tasks-modal'
 import { HarvestTasksModal } from './harvest-tasks-modal'
+import { IdeasGroomModal } from './ideas-groom-modal'
 import { GitLogModal } from './git-log-modal'
 import {
   parseHarvestResponse,
@@ -34,6 +35,12 @@ import {
   type HarvestTaskSelection,
   type RoadmapSlice,
 } from '../utils/harvest-tasks-parser'
+import {
+  parseIdeasGroomResponse,
+  applyIdeasGroomSelections,
+  type GroomedIdeaTask,
+  type GroomedIdeaSelection,
+} from '../utils/ideas-groom-parser'
 import { fetchCommits, formatCommitLog } from '../github'
 import { listChatLogs, loadChatLog, saveChatLog, type ChatLogMetadata } from '../core/chat'
 import { TEMPLATES, type TemplateName } from '../scaffolder/templates'
@@ -82,6 +89,7 @@ export class ExistingProjectModal extends Modal {
   private parsedPotentialTasks: ParsedPotentialTasks | null = null
   private lastUsedWorkflowName: WorkflowName | null = null // Track workflow for post-diff processing
   private pendingHarvestedTasks: HarvestedTask[] = []
+  private pendingGroomedIdeaTasks: GroomedIdeaTask[] = []
   private roadmapSlices: RoadmapSlice[] = []
 
   // DOM Elements
@@ -924,6 +932,11 @@ export class ExistingProjectModal extends Modal {
           await this.handleHarvestTasksResponse(result.content)
         }
 
+        // Check if this was an ideas-groom workflow - handle specially
+        if (this.lastUsedWorkflowName === 'ideas-groom') {
+          await this.handleIdeasGroomResponse(result.content)
+        }
+
         this.messages.push({
           role: 'assistant',
           content: result.content,
@@ -990,6 +1003,16 @@ export class ExistingProjectModal extends Modal {
       lowerMessage.includes('suggest tasks')
     ) {
       return getWorkflowDefinition('harvest-tasks')
+    }
+
+    // Ideas Groom workflow
+    if (
+      lowerMessage.includes('groom ideas') ||
+      lowerMessage.includes('ideas groom') ||
+      lowerMessage.includes('extract tasks from ideas') ||
+      lowerMessage.includes('ideas to tasks')
+    ) {
+      return getWorkflowDefinition('ideas-groom')
     }
 
     // Check for common workflow trigger patterns
@@ -1232,6 +1255,110 @@ export class ExistingProjectModal extends Modal {
       this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
     } catch (err) {
       console.error('Failed to apply harvest task selections:', err)
+      new Notice(`Failed to add tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  // ============================================================================
+  // Ideas Groom Workflow Methods
+  // ============================================================================
+
+  /**
+   * Handle the AI response from the ideas-groom workflow.
+   * Parses the JSON response and opens the review modal.
+   */
+  private async handleIdeasGroomResponse(content: string): Promise<void> {
+    try {
+      // Parse the AI response as groomed idea tasks
+      const groomedTasks = parseIdeasGroomResponse(content)
+
+      if (groomedTasks.length === 0) {
+        new Notice('No actionable ideas found to convert to tasks.')
+        return
+      }
+
+      // Read Roadmap.md to get available slices for linking
+      const roadmapPath = `${this.projectPath}/Roadmap.md`
+      const roadmapFile = this.app.vault.getAbstractFileByPath(roadmapPath)
+
+      if (roadmapFile && roadmapFile instanceof TFile) {
+        const roadmapContent = await this.app.vault.read(roadmapFile)
+        this.roadmapSlices = parseRoadmapSlices(roadmapContent)
+      } else {
+        // No roadmap file - slices will be empty but we can still place tasks
+        this.roadmapSlices = []
+      }
+
+      this.pendingGroomedIdeaTasks = groomedTasks
+
+      // Open the ideas groom modal
+      this.openIdeasGroomModal()
+    } catch (err) {
+      console.error('Failed to process ideas groom response:', err)
+      new Notice(`Failed to process ideas: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Open the ideas groom review modal.
+   */
+  private openIdeasGroomModal(): void {
+    const modal = new IdeasGroomModal(
+      this.app,
+      this.pendingGroomedIdeaTasks,
+      this.projectPath,
+      this.roadmapSlices,
+      (selections, confirmed) => this.handleIdeasGroomAction(selections, confirmed),
+    )
+    modal.open()
+  }
+
+  /**
+   * Handle actions from the ideas groom modal.
+   */
+  private async handleIdeasGroomAction(
+    selections: GroomedIdeaSelection[],
+    confirmed: boolean,
+  ): Promise<void> {
+    if (!confirmed) return
+
+    // Filter out discarded tasks
+    const tasksToApply = selections.filter((s) => s.destination !== 'discard')
+
+    if (tasksToApply.length === 0) {
+      new Notice('No tasks selected to add.')
+      return
+    }
+
+    try {
+      // Read current Tasks.md content
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (!tasksFile || !(tasksFile instanceof TFile)) {
+        new Notice('Tasks.md not found')
+        return
+      }
+
+      const tasksContent = await this.app.vault.read(tasksFile)
+
+      // Apply the selections to Tasks.md
+      const newContent = applyIdeasGroomSelections(
+        tasksContent,
+        tasksToApply,
+        this.pendingGroomedIdeaTasks,
+      )
+
+      await this.app.vault.modify(tasksFile, newContent)
+
+      new Notice(`Added ${tasksToApply.length} task${tasksToApply.length > 1 ? 's' : ''} to Tasks.md`)
+
+      // Clear pending state and refresh snapshot
+      this.pendingGroomedIdeaTasks = []
+      this.roadmapSlices = []
+      this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
+    } catch (err) {
+      console.error('Failed to apply ideas groom task selections:', err)
       new Notice(`Failed to add tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }

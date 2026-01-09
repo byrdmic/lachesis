@@ -525,6 +525,79 @@ FILE CONTENTS (for analysis):
 ${workflowFileContents}
 ================================================================================
 `
+    } else if (activeWorkflow.name === 'ideas-groom') {
+      // Special handling for ideas-groom workflow - outputs JSON, not diffs
+      workflowSection = `
+================================================================================
+ACTIVE WORKFLOW: IDEAS: GROOM TASKS
+================================================================================
+Intent: ${activeWorkflow.intent}
+
+You are scanning Ideas.md to find actionable items that should become tasks.
+
+**YOUR GOALS:**
+1. Find ideas in Ideas.md that are concrete and actionable
+2. Ideas are typically grouped by ## headings with optional descriptions underneath
+3. De-duplicate against existing tasks in Tasks.md
+4. Suggest appropriate destinations for each item
+
+**WHAT TO LOOK FOR:**
+
+In Ideas.md:
+- ## section headings that represent discrete ideas
+- Ideas with clear action verbs or specific outcomes
+- Bullet points under headings that contain actionable items
+- Ideas that have matured enough to become tasks
+
+**WHAT TO SKIP:**
+- Items already in Tasks.md (check task descriptions for matches)
+- Vague musings ("maybe we could...", "what if...")
+- Pure questions in the Open Questions section without clear paths forward
+- Brainstorming notes that are still too raw
+
+**OUTPUT FORMAT (CRITICAL - OUTPUT ONLY JSON):**
+Return ONLY a JSON object with this exact structure (no markdown, no explanation before or after):
+
+\`\`\`json
+{
+  "tasks": [
+    {
+      "text": "Concise, actionable task description",
+      "ideaHeading": "## Original Idea Heading",
+      "ideaContext": "Brief description or notes from the idea (max 150 chars)",
+      "suggestedDestination": "future-tasks",
+      "suggestedSliceLink": null,
+      "reasoning": "Why this idea is now actionable (1 sentence)",
+      "existingSimilar": null
+    }
+  ],
+  "summary": {
+    "totalFound": 5,
+    "ideasProcessed": 10,
+    "duplicatesSkipped": 2
+  }
+}
+\`\`\`
+
+**DESTINATION OPTIONS:**
+- "discard": Not actually actionable or already done
+- "future-tasks": Actionable but not urgent, add to Future Tasks section
+- "active-tasks": Add to Active Tasks section (with optional slice link)
+- "next-actions": Urgent, small (15-60 min), can start immediately
+
+**FIELD REQUIREMENTS:**
+- text: Required. Concise task description (1-2 sentences max)
+- ideaHeading: Required. The ## heading this task came from
+- ideaContext: Optional. Brief description or notes from the idea section
+- suggestedDestination: Required. One of the destination options above
+- suggestedSliceLink: Optional. If this task relates to a Roadmap slice, suggest the link (e.g., "[[Roadmap#VS1 — Basic Modal Opens]]")
+- reasoning: Required. Why this idea is now actionable
+- existingSimilar: Optional. If you found a similar existing task, note it here
+
+FILE CONTENTS (for analysis):
+${workflowFileContents}
+================================================================================
+`
     } else {
       // Add diff format instructions for workflows that need preview/confirm
       const diffInstructions = activeWorkflow.confirmation !== 'none' ? `
