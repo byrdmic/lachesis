@@ -1809,3 +1809,38 @@
   filter: brightness(1.1);
   transform: translateY(-1px);
 }
+
+/* Harvest tasks summary in chat (history view) */
+.lachesis-harvest-tasks-summary {
+  padding: 12px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+  margin: 8px 0;
+}
+
+.lachesis-harvest-tasks-summary p {
+  margin: 0 0 12px 0;
+  color: var(--text-normal);
+}
+
+.lachesis-harvest-tasks-button-container {
+  display: flex;
+  gap: 8px;
+}
+
+.lachesis-harvest-tasks-view-btn {
+  padding: 6px 16px;
+  font-size: 0.9em;
+  font-weight: 500;
+  border-radius: 6px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lachesis-harvest-tasks-view-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}

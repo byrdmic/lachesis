@@ -31,6 +31,8 @@ import {
   parseHarvestResponse,
   parseRoadmapSlices,
   applyHarvestSelections,
+  containsHarvestResponse,
+  detectMovedHarvestTasks,
   type HarvestedTask,
   type HarvestTaskSelection,
   type RoadmapSlice,
@@ -332,6 +334,9 @@ export class ExistingProjectModal extends Modal {
     // For non-streaming messages, check if content contains diff blocks
     if (!isStreaming && containsDiffBlocks(content)) {
       this.renderMessageWithDiffs(messageEl, content)
+    } else if (!isStreaming && containsHarvestResponse(content)) {
+      // Harvest tasks response - render with a "View Tasks" button
+      this.renderMessageWithHarvestTasks(messageEl, content)
     } else if (!isStreaming && containsIdeasGroomResponse(content)) {
       // Ideas groom response - render with a "View Ideas" button
       this.renderMessageWithIdeasGroom(messageEl, content)
@@ -560,6 +565,91 @@ export class ExistingProjectModal extends Modal {
     } catch (err) {
       console.error('Failed to open ideas groom modal for history:', err)
       new Notice(`Failed to open ideas: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Render a message that contains harvest-tasks JSON response.
+   * Shows a summary with a "View Tasks" button that opens the modal.
+   */
+  private renderMessageWithHarvestTasks(container: HTMLElement, content: string) {
+    const tasks = parseHarvestResponse(content)
+
+    if (tasks.length === 0) {
+      // Couldn't parse tasks, render as plain text
+      this.renderMarkdown(content, container)
+      return
+    }
+
+    // Render summary message
+    const summaryEl = container.createDiv({ cls: 'lachesis-harvest-tasks-summary' })
+
+    const uniqueFiles = new Set(tasks.map((t) => t.sourceFile))
+    summaryEl.createEl('p', {
+      text: `Found ${tasks.length} potential task${tasks.length === 1 ? '' : 's'} from ${uniqueFiles.size} file${uniqueFiles.size === 1 ? '' : 's'}.`,
+    })
+
+    // View Tasks button
+    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-harvest-tasks-button-container' })
+    const viewBtn = btnContainer.createEl('button', {
+      text: 'View Tasks',
+      cls: 'lachesis-harvest-tasks-view-btn',
+    })
+    viewBtn.addEventListener('click', async () => {
+      await this.openHarvestTasksModalForHistory(content)
+    })
+  }
+
+  /**
+   * Open the harvest tasks modal for viewing history.
+   * Detects which tasks have been moved by checking Tasks.md.
+   * Allows acting on pending tasks that haven't been moved yet.
+   */
+  private async openHarvestTasksModalForHistory(content: string): Promise<void> {
+    try {
+      let tasks = parseHarvestResponse(content)
+
+      if (tasks.length === 0) {
+        new Notice('Could not parse tasks from response.')
+        return
+      }
+
+      // Read Tasks.md to detect which tasks have been moved
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (tasksFile && tasksFile instanceof TFile) {
+        const tasksContent = await this.app.vault.read(tasksFile)
+        tasks = detectMovedHarvestTasks(tasks, tasksContent)
+      }
+
+      // Read Roadmap.md for slice information
+      const roadmapPath = `${this.projectPath}/Roadmap.md`
+      const roadmapFile = this.app.vault.getAbstractFileByPath(roadmapPath)
+      let roadmapSlices: RoadmapSlice[] = []
+
+      if (roadmapFile && roadmapFile instanceof TFile) {
+        const roadmapContent = await this.app.vault.read(roadmapFile)
+        roadmapSlices = parseRoadmapSlices(roadmapContent)
+      }
+
+      // Store tasks for the action callback
+      this.pendingHarvestedTasks = tasks
+      this.roadmapSlices = roadmapSlices
+
+      // Open modal in view-only mode but with action callback for pending tasks
+      const modal = new HarvestTasksModal(
+        this.app,
+        tasks,
+        this.projectPath,
+        roadmapSlices,
+        (selections, confirmed) => this.handleHarvestTasksAction(selections, confirmed),
+        { viewOnly: true },
+      )
+      modal.open()
+    } catch (err) {
+      console.error('Failed to open harvest tasks modal for history:', err)
+      new Notice(`Failed to open tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 
