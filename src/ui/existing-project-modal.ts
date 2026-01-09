@@ -262,7 +262,10 @@ export class ExistingProjectModal extends Modal {
     }
 
     for (const workflow of getAllWorkflows()) {
-      const btn = workflowBar.createEl('button', {
+      // Wrapper for button + tooltip
+      const wrapper = workflowBar.createDiv({ cls: 'lachesis-workflow-button-wrapper' })
+
+      const btn = wrapper.createEl('button', {
         text: workflow.displayName,
         cls: 'lachesis-workflow-button',
       })
@@ -271,6 +274,9 @@ export class ExistingProjectModal extends Modal {
           this.triggerWorkflow(workflow.displayName)
         }
       })
+
+      // Add tooltip
+      this.renderWorkflowTooltip(wrapper, workflow)
     }
 
     // Messages container
@@ -314,6 +320,59 @@ export class ExistingProjectModal extends Modal {
     // Status bar
     this.statusEl = mainEl.createDiv({ cls: 'lachesis-status' })
     this.updateStatus('Ready')
+  }
+
+  /**
+   * Render a tooltip for a workflow button showing intent and metadata.
+   */
+  private renderWorkflowTooltip(container: HTMLElement, workflow: WorkflowDefinition): void {
+    const tooltip = container.createDiv({ cls: 'lachesis-workflow-tooltip' })
+
+    // Header with icon and title
+    const header = tooltip.createDiv({ cls: 'lachesis-tooltip-header' })
+    const icon = this.getWorkflowIcon(workflow.name)
+    header.createSpan({ cls: 'lachesis-tooltip-icon', text: icon })
+    header.createSpan({ cls: 'lachesis-tooltip-title', text: workflow.displayName })
+
+    // Description (use the short description rather than full intent for brevity)
+    tooltip.createDiv({
+      cls: 'lachesis-tooltip-description',
+      text: workflow.description,
+    })
+
+    // Meta badges (risk level, confirmation mode)
+    const meta = tooltip.createDiv({ cls: 'lachesis-tooltip-meta' })
+
+    // Risk badge
+    meta.createSpan({
+      cls: `lachesis-tooltip-badge risk-${workflow.risk}`,
+      text: `Risk: ${workflow.risk}`,
+    })
+
+    // Confirmation mode badge
+    if (workflow.confirmation !== 'none') {
+      meta.createSpan({
+        cls: 'lachesis-tooltip-badge preview',
+        text: workflow.confirmation === 'preview' ? 'Preview before applying' : 'Requires confirmation',
+      })
+    }
+  }
+
+  /**
+   * Get an icon for a workflow based on its name/category.
+   */
+  private getWorkflowIcon(workflowName: WorkflowName): string {
+    const iconMap: Record<WorkflowName, string> = {
+      'title-entries': '📝',
+      'generate-tasks': '✨',
+      'groom-tasks': '📋',
+      'fill-overview': '📄',
+      'roadmap-fill': '🗺️',
+      'tasks-fill': '✅',
+      'harvest-tasks': '🌾',
+      'ideas-groom': '💡',
+    }
+    return iconMap[workflowName] || '⚡'
   }
 
   private addMessageToUI(role: 'assistant' | 'user', content: string, isStreaming = false) {

@@ -1809,3 +1809,148 @@
   filter: brightness(1.1);
   transform: translateY(-1px);
 }
+
+/* ============================================================================
+   Workflow Tooltips
+   ============================================================================ */
+
+/* Wrapper for workflow button + tooltip */
+.lachesis-workflow-button-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+/* The tooltip container */
+.lachesis-workflow-tooltip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+
+  /* Sizing */
+  width: 280px;
+  padding: 14px 16px;
+
+  /* Visual style */
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+
+  /* Hidden by default */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+  transform: translateX(-50%) translateY(4px);
+}
+
+/* Arrow pointing down */
+.lachesis-workflow-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 8px solid transparent;
+  border-top-color: var(--background-modifier-border);
+}
+
+.lachesis-workflow-tooltip::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 7px solid transparent;
+  border-top-color: var(--background-primary);
+  z-index: 1;
+}
+
+/* Show tooltip on hover */
+.lachesis-workflow-button-wrapper:hover .lachesis-workflow-tooltip {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Tooltip header with workflow name */
+.lachesis-tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-tooltip-icon {
+  font-size: 1.1em;
+}
+
+.lachesis-tooltip-title {
+  font-weight: 600;
+  font-size: 0.95em;
+  color: var(--text-normal);
+}
+
+/* Tooltip description/intent */
+.lachesis-tooltip-description {
+  font-size: 0.85em;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+/* Tooltip meta info (risk, preview) */
+.lachesis-tooltip-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.75em;
+}
+
+.lachesis-tooltip-badge {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.lachesis-tooltip-badge.risk-low {
+  background: rgba(46, 160, 67, 0.15);
+  color: var(--text-success);
+}
+
+.lachesis-tooltip-badge.risk-medium {
+  background: rgba(255, 165, 0, 0.15);
+  color: var(--color-orange);
+}
+
+.lachesis-tooltip-badge.risk-high {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--text-error);
+}
+
+.lachesis-tooltip-badge.preview {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+}
+
+/* Adjust tooltip position for buttons near edges */
+.lachesis-workflow-button-wrapper:first-child .lachesis-workflow-tooltip {
+  left: 0;
+  transform: translateX(0) translateY(4px);
+}
+
+.lachesis-workflow-button-wrapper:first-child:hover .lachesis-workflow-tooltip {
+  transform: translateX(0) translateY(0);
+}
+
+.lachesis-workflow-button-wrapper:first-child .lachesis-workflow-tooltip::after,
+.lachesis-workflow-button-wrapper:first-child .lachesis-workflow-tooltip::before {
+  left: 24px;
+}
