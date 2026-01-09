@@ -9,7 +9,7 @@ import type {
   TaskDestination,
   RoadmapSlice,
 } from '../utils/harvest-tasks-parser'
-import { getDestinationLabel, destinationSupportsSliceLink, formatSliceLink, formatSliceDisplay } from '../utils/harvest-tasks-parser'
+import { getDestinationLabel, destinationSupportsSliceLink, formatSliceLink, formatSliceDisplay, HARVEST_MOVED_EMOJIS } from '../utils/harvest-tasks-parser'
 
 // ============================================================================
 // Types
@@ -19,6 +19,10 @@ export type HarvestTasksActionCallback = (
   selections: HarvestTaskSelection[],
   confirmed: boolean,
 ) => Promise<void>
+
+export interface HarvestTasksModalOptions {
+  viewOnly?: boolean // When true, modal is read-only for moved tasks (viewing history)
+}
 
 // ============================================================================
 // Modal
@@ -31,6 +35,7 @@ export class HarvestTasksModal extends Modal {
   private onAction: HarvestTasksActionCallback
   private selections: Map<string, HarvestTaskSelection> = new Map()
   private activeFilter: 'all' | 'log' | 'ideas' | 'other' = 'all'
+  private viewOnly: boolean
 
   constructor(
     app: App,
@@ -38,21 +43,34 @@ export class HarvestTasksModal extends Modal {
     projectPath: string,
     roadmapSlices: RoadmapSlice[],
     onAction: HarvestTasksActionCallback,
+    options: HarvestTasksModalOptions = {},
   ) {
     super(app)
     this.tasks = tasks
     this.projectPath = projectPath
     this.roadmapSlices = roadmapSlices
     this.onAction = onAction
+    this.viewOnly = options.viewOnly ?? false
 
-    // Initialize selections with AI suggestions
+    // Initialize selections based on moved state (for history) or AI suggestions
     for (const task of tasks) {
-      this.selections.set(task.id, {
-        taskId: task.id,
-        destination: task.suggestedDestination,
-        sliceLink: task.suggestedSliceLink || this.getDefaultSliceLink(task.suggestedDestination),
-        customText: null,
-      })
+      if (task.movedTo) {
+        // Task was already moved - show that destination
+        this.selections.set(task.id, {
+          taskId: task.id,
+          destination: task.movedTo,
+          sliceLink: task.suggestedSliceLink || null,
+          customText: null,
+        })
+      } else {
+        // Task not moved yet - use AI suggestion
+        this.selections.set(task.id, {
+          taskId: task.id,
+          destination: task.suggestedDestination,
+          sliceLink: task.suggestedSliceLink || this.getDefaultSliceLink(task.suggestedDestination),
+          customText: null,
+        })
+      }
     }
   }
 
@@ -95,26 +113,56 @@ export class HarvestTasksModal extends Modal {
 
   private renderHeader(container: HTMLElement) {
     const header = container.createDiv({ cls: 'lachesis-harvest-tasks-header' })
-    header.createEl('h2', { text: 'Harvest Tasks Review' })
 
+    const movedCount = this.tasks.filter((t) => t.movedTo).length
+    const pendingCount = this.tasks.length - movedCount
     const stats = this.getStats()
-    header.createEl('p', {
-      text: `Found ${this.tasks.length} potential tasks across ${stats.fileCount} files`,
-      cls: 'lachesis-harvest-tasks-subtitle',
-    })
 
-    if (stats.duplicatesSkipped > 0) {
-      header.createEl('p', {
-        text: `(${stats.duplicatesSkipped} similar to existing tasks)`,
-        cls: 'lachesis-harvest-tasks-note',
-      })
-    }
+    if (this.viewOnly) {
+      header.createEl('h2', { text: 'Harvest Tasks Review (History)' })
 
-    if (this.roadmapSlices.length > 0) {
+      if (pendingCount > 0) {
+        // Some tasks are still actionable
+        header.createEl('p', {
+          text: `${movedCount} of ${this.tasks.length} tasks already moved. ${pendingCount} still pending.`,
+          cls: 'lachesis-harvest-tasks-subtitle',
+        })
+        header.createEl('p', {
+          text: 'You can still act on pending tasks that have not been moved yet.',
+          cls: 'lachesis-harvest-tasks-note',
+        })
+      } else {
+        // All tasks have been moved - fully view-only
+        header.createEl('p', {
+          text: `All ${this.tasks.length} tasks across ${stats.fileCount} files have been moved.`,
+          cls: 'lachesis-harvest-tasks-subtitle',
+        })
+        header.createEl('p', {
+          text: 'View-only mode. All tasks from this session have been processed.',
+          cls: 'lachesis-harvest-tasks-note',
+        })
+      }
+    } else {
+      header.createEl('h2', { text: 'Harvest Tasks Review' })
+
       header.createEl('p', {
-        text: `${this.roadmapSlices.length} slices available from Roadmap.md`,
-        cls: 'lachesis-harvest-tasks-note',
+        text: `Found ${this.tasks.length} potential tasks across ${stats.fileCount} files`,
+        cls: 'lachesis-harvest-tasks-subtitle',
       })
+
+      if (stats.duplicatesSkipped > 0) {
+        header.createEl('p', {
+          text: `(${stats.duplicatesSkipped} similar to existing tasks)`,
+          cls: 'lachesis-harvest-tasks-note',
+        })
+      }
+
+      if (this.roadmapSlices.length > 0) {
+        header.createEl('p', {
+          text: `${this.roadmapSlices.length} slices available from Roadmap.md`,
+          cls: 'lachesis-harvest-tasks-note',
+        })
+      }
     }
   }
 
@@ -209,21 +257,37 @@ export class HarvestTasksModal extends Modal {
     const itemEl = container.createDiv({ cls: 'lachesis-harvest-task-item' })
     itemEl.dataset.taskId = task.id
 
+    // Add moved styling if task was moved
+    if (task.movedTo) {
+      itemEl.addClass('lachesis-harvest-task-moved')
+    }
+
     // Task content row
     const contentRow = itemEl.createDiv({ cls: 'lachesis-harvest-task-content' })
 
-    // Checkbox icon
-    const checkboxEl = contentRow.createSpan({ cls: 'lachesis-harvest-task-checkbox' })
-    if (selection.destination === 'discard') {
-      checkboxEl.setText('✗')
-      checkboxEl.addClass('discarded')
+    // Status icon - shows moved emoji or checkbox
+    const statusEl = contentRow.createSpan({ cls: 'lachesis-harvest-task-checkbox' })
+    if (task.movedTo) {
+      // Show moved emoji
+      statusEl.setText(HARVEST_MOVED_EMOJIS[task.movedTo])
+      statusEl.addClass('moved')
+      statusEl.setAttribute('title', `Moved to ${getDestinationLabel(task.movedTo)}`)
+    } else if (selection.destination === 'discard') {
+      statusEl.setText('✗')
+      statusEl.addClass('discarded')
     } else {
-      checkboxEl.setText('☐')
+      statusEl.setText('☐')
     }
 
     // Task text
     const textEl = contentRow.createSpan({ cls: 'lachesis-harvest-task-text' })
     textEl.setText(task.text)
+
+    // Moved badge for history view
+    if (task.movedTo && this.viewOnly) {
+      const badgeEl = contentRow.createSpan({ cls: 'lachesis-harvest-moved-badge' })
+      badgeEl.setText(getDestinationLabel(task.movedTo))
+    }
 
     // Source context (collapsible)
     if (task.sourceContext) {
@@ -249,15 +313,18 @@ export class HarvestTasksModal extends Modal {
       }
     }
 
-    // Controls row
-    const controlsRow = itemEl.createDiv({ cls: 'lachesis-harvest-controls' })
+    // Controls row - show if not view-only, OR if view-only but task hasn't been moved yet
+    const isTaskActionable = !task.movedTo
+    if (!this.viewOnly || isTaskActionable) {
+      const controlsRow = itemEl.createDiv({ cls: 'lachesis-harvest-controls' })
 
-    // Destination dropdown
-    this.renderDestinationDropdown(controlsRow, task, selection)
+      // Destination dropdown
+      this.renderDestinationDropdown(controlsRow, task, selection)
 
-    // Slice link dropdown (conditional)
-    if (destinationSupportsSliceLink(selection.destination) && this.roadmapSlices.length > 0) {
-      this.renderSliceLinkDropdown(controlsRow, task, selection)
+      // Slice link dropdown (conditional)
+      if (destinationSupportsSliceLink(selection.destination) && this.roadmapSlices.length > 0) {
+        this.renderSliceLinkDropdown(controlsRow, task, selection)
+      }
     }
   }
 
@@ -345,18 +412,32 @@ export class HarvestTasksModal extends Modal {
   private renderFooter(container: HTMLElement) {
     const footer = container.createDiv({ cls: 'lachesis-harvest-tasks-footer' })
 
-    const cancelBtn = footer.createEl('button', {
-      text: 'Cancel',
-      cls: 'lachesis-harvest-cancel-btn',
-    })
-    cancelBtn.addEventListener('click', () => this.handleCancel())
+    // Count pending (non-moved) tasks that can still be acted upon
+    const pendingCount = this.getPendingCount()
+    const hasActionableTasks = pendingCount > 0
 
-    const selectedCount = this.getSelectedCount()
-    const confirmBtn = footer.createEl('button', {
-      text: selectedCount > 0 ? `Apply ${selectedCount} Task${selectedCount === 1 ? '' : 's'}` : 'Apply',
-      cls: 'lachesis-harvest-confirm-btn mod-cta',
-    })
-    confirmBtn.addEventListener('click', () => this.handleConfirm())
+    if (this.viewOnly && !hasActionableTasks) {
+      // Fully view-only mode - all tasks have been moved, just show close button
+      const closeBtn = footer.createEl('button', {
+        text: 'Close',
+        cls: 'lachesis-harvest-confirm-btn mod-cta',
+      })
+      closeBtn.addEventListener('click', () => this.close())
+    } else {
+      // Has actionable tasks - show cancel and apply buttons
+      const cancelBtn = footer.createEl('button', {
+        text: this.viewOnly ? 'Close' : 'Cancel',
+        cls: 'lachesis-harvest-cancel-btn',
+      })
+      cancelBtn.addEventListener('click', () => this.viewOnly ? this.close() : this.handleCancel())
+
+      const selectedCount = this.getSelectedCount()
+      const confirmBtn = footer.createEl('button', {
+        text: selectedCount > 0 ? `Apply ${selectedCount} Task${selectedCount === 1 ? '' : 's'}` : 'Apply',
+        cls: 'lachesis-harvest-confirm-btn mod-cta',
+      })
+      confirmBtn.addEventListener('click', () => this.handleConfirm())
+    }
   }
 
   private getStats() {
@@ -368,11 +449,19 @@ export class HarvestTasksModal extends Modal {
     }
   }
 
+  private getPendingCount(): number {
+    return this.tasks.filter((t) => !t.movedTo).length
+  }
+
   private getSelectedCount(): number {
     let count = 0
-    for (const selection of this.selections.values()) {
-      if (selection.destination !== 'discard') {
-        count++
+    for (const task of this.tasks) {
+      // Only count tasks that haven't been moved yet and are not set to discard
+      if (!task.movedTo) {
+        const selection = this.selections.get(task.id)
+        if (selection && selection.destination !== 'discard') {
+          count++
+        }
       }
     }
     return count
@@ -380,8 +469,15 @@ export class HarvestTasksModal extends Modal {
 
   private async handleConfirm() {
     const selections: HarvestTaskSelection[] = []
-    for (const selection of this.selections.values()) {
-      selections.push(selection)
+
+    // Only include selections for tasks that haven't been moved yet
+    for (const task of this.tasks) {
+      if (!task.movedTo) {
+        const selection = this.selections.get(task.id)
+        if (selection) {
+          selections.push(selection)
+        }
+      }
     }
 
     await this.onAction(selections, true)
