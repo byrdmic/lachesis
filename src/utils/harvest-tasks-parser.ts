@@ -9,6 +9,18 @@
  */
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/** Emojis to denote where a task was moved */
+export const HARVEST_MOVED_EMOJIS: Record<string, string> = {
+  'discard': '🗑️',
+  'future-tasks': '📋',
+  'active-tasks': '✅',
+  'next-actions': '🎯',
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -34,6 +46,7 @@ export interface HarvestedTask {
   suggestedSliceLink: string | null // AI-suggested slice link (e.g., "[[Roadmap#VS1 — Basic Modal Opens]]")
   reasoning: string | null // Why AI thinks this is actionable
   existingSimilar: string | null // If AI detected a similar existing task
+  movedTo: TaskDestination | null // Where this task was moved (for history viewing)
 }
 
 /**
@@ -93,6 +106,19 @@ export interface HarvestTasksAIResponse {
 // ============================================================================
 
 /**
+ * Check if a message contains harvest-tasks JSON response
+ */
+export function containsHarvestResponse(content: string): boolean {
+  // Check for the distinctive JSON structure from harvest-tasks workflow
+  return (
+    content.includes('"sourceFile"') &&
+    content.includes('"tasks"') &&
+    content.includes('"suggestedDestination"') &&
+    (content.includes('"fromLog"') || content.includes('"fromIdeas"'))
+  )
+}
+
+/**
  * Parse AI JSON response into HarvestedTask array
  */
 export function parseHarvestResponse(aiResponse: string): HarvestedTask[] {
@@ -123,11 +149,82 @@ export function parseHarvestResponse(aiResponse: string): HarvestedTask[] {
       suggestedSliceLink: task.suggestedSliceLink || null,
       reasoning: task.reasoning || null,
       existingSimilar: task.existingSimilar || null,
+      movedTo: null, // Will be populated when checking Tasks.md for history viewing
     }))
   } catch (error) {
     console.error('Failed to parse harvest response:', error)
     return []
   }
+}
+
+/**
+ * Check Tasks.md content to determine which harvested tasks have been moved and where.
+ * Updates the movedTo field on each task.
+ */
+export function detectMovedHarvestTasks(
+  tasks: HarvestedTask[],
+  tasksContent: string,
+): HarvestedTask[] {
+  const structure = parseTasksStructure(tasksContent)
+  const lines = tasksContent.split('\n')
+
+  // Build a map of section ranges
+  const sectionRanges: Array<{ start: number; end: number; destination: TaskDestination }> = []
+
+  // Next Actions section
+  if (structure.nextActionsLineNumber !== -1) {
+    let end = structure.nextActionsLineNumber + 1
+    while (end < lines.length && !lines[end].startsWith('## ') && !lines[end].startsWith('---')) {
+      end++
+    }
+    sectionRanges.push({ start: structure.nextActionsLineNumber, end, destination: 'next-actions' })
+  }
+
+  // Active Tasks section
+  if (structure.activeTasksLineNumber !== -1) {
+    let end = structure.activeTasksLineNumber + 1
+    while (end < lines.length && !lines[end].startsWith('## ') && !lines[end].startsWith('---')) {
+      end++
+    }
+    sectionRanges.push({ start: structure.activeTasksLineNumber, end, destination: 'active-tasks' })
+  }
+
+  // Future Tasks section
+  if (structure.futureTasksLineNumber !== -1) {
+    let end = structure.futureTasksLineNumber + 1
+    while (end < lines.length && !lines[end].startsWith('## ')) {
+      end++
+    }
+    sectionRanges.push({ start: structure.futureTasksLineNumber, end, destination: 'future-tasks' })
+  }
+
+  // Check each task to see if it was moved
+  return tasks.map((task) => {
+    // Look for the source comment pattern: <!-- from <sourceFile> --> or <!-- from <sourceFile> <date> -->
+    // We need to match the task text AND the source file to be sure it's the same task
+    const sourceFile = task.sourceFile
+    const sourcePatternBase = `<!-- from ${sourceFile}`
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      // Check if line contains both the task text (or similar) and the source comment
+      if (line.includes(sourcePatternBase)) {
+        // Also verify the task text is similar (first few words)
+        const taskWords = task.text.split(/\s+/).slice(0, 4).join(' ').toLowerCase()
+        const lineText = line.toLowerCase()
+        if (lineText.includes(taskWords.slice(0, 20))) {
+          // Found a match, determine which section it's in
+          for (const range of sectionRanges) {
+            if (i >= range.start && i < range.end) {
+              return { ...task, movedTo: range.destination }
+            }
+          }
+        }
+      }
+    }
+
+    return task
+  })
 }
 
 /**
