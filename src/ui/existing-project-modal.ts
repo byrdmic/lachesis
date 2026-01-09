@@ -27,6 +27,7 @@ import { PotentialTasksModal, type TaskSelection } from './potential-tasks-modal
 import { HarvestTasksModal } from './harvest-tasks-modal'
 import { IdeasGroomModal } from './ideas-groom-modal'
 import { GitLogModal } from './git-log-modal'
+import { SyncCommitsModal } from './sync-commits-modal'
 import {
   parseHarvestResponse,
   parseRoadmapSlices,
@@ -45,6 +46,17 @@ import {
   type GroomedIdeaTask,
   type GroomedIdeaSelection,
 } from '../utils/ideas-groom-parser'
+import {
+  containsSyncCommitsResponse,
+  parseSyncCommitsResponse,
+  applyTaskCompletions,
+  buildArchiveEntries,
+  applyArchiveEntries,
+  type CommitMatch,
+  type UnmatchedCommit,
+  type SyncCommitSelection,
+  type GitCommit,
+} from '../utils/sync-commits-parser'
 import { fetchCommits, formatCommitLog } from '../github'
 import { listChatLogs, loadChatLog, saveChatLog, type ChatLogMetadata } from '../core/chat'
 import { TEMPLATES, type TemplateName } from '../scaffolder/templates'
@@ -95,6 +107,9 @@ export class ExistingProjectModal extends Modal {
   private pendingHarvestedTasks: HarvestedTask[] = []
   private pendingGroomedIdeaTasks: GroomedIdeaTask[] = []
   private roadmapSlices: RoadmapSlice[] = []
+  private pendingSyncCommitMatches: CommitMatch[] = []
+  private pendingUnmatchedCommits: UnmatchedCommit[] = []
+  private recentGitCommits: GitCommit[] = []
 
   // DOM Elements
   private messagesContainer: HTMLElement | null = null
@@ -340,6 +355,9 @@ export class ExistingProjectModal extends Modal {
     } else if (!isStreaming && containsIdeasGroomResponse(content)) {
       // Ideas groom response - render with a "View Ideas" button
       this.renderMessageWithIdeasGroom(messageEl, content)
+    } else if (!isStreaming && containsSyncCommitsResponse(content)) {
+      // Sync commits response - render with a "View Matches" button
+      this.renderMessageWithSyncCommits(messageEl, content)
     } else {
       // Parse hint tags and render them specially
       const hintMatch = content.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
@@ -402,11 +420,23 @@ export class ExistingProjectModal extends Modal {
     if (streamingEl) {
       streamingEl.removeClass('streaming')
 
-      // Check if content contains diffs
+      // Check if content contains special responses that need custom rendering
       if (containsDiffBlocks(this.streamingText)) {
         // Clear and re-render with diff blocks
         streamingEl.empty()
         this.renderMessageWithDiffs(streamingEl, this.streamingText)
+      } else if (containsHarvestResponse(this.streamingText)) {
+        // Clear and re-render with harvest tasks button
+        streamingEl.empty()
+        this.renderMessageWithHarvestTasks(streamingEl, this.streamingText)
+      } else if (containsIdeasGroomResponse(this.streamingText)) {
+        // Clear and re-render with ideas groom button
+        streamingEl.empty()
+        this.renderMessageWithIdeasGroom(streamingEl, this.streamingText)
+      } else if (containsSyncCommitsResponse(this.streamingText)) {
+        // Clear and re-render with sync commits button
+        streamingEl.empty()
+        this.renderMessageWithSyncCommits(streamingEl, this.streamingText)
       } else {
         // Re-render with markdown + hint styling
         streamingEl.empty()
@@ -565,6 +595,134 @@ export class ExistingProjectModal extends Modal {
     } catch (err) {
       console.error('Failed to open ideas groom modal for history:', err)
       new Notice(`Failed to open ideas: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Render a message that contains sync-commits JSON response.
+   * Shows a summary with a "View Matches" button that opens the modal.
+   */
+  private renderMessageWithSyncCommits(container: HTMLElement, content: string) {
+    const parsed = parseSyncCommitsResponse(content, this.recentGitCommits)
+
+    // Check if we have any data at all (matches OR unmatched commits)
+    if (parsed.matches.length === 0 && parsed.unmatchedCommits.length === 0) {
+      // Couldn't parse anything, render as plain text
+      this.renderMarkdown(content, container)
+      return
+    }
+
+    // Render summary message
+    const summaryEl = container.createDiv({ cls: 'lachesis-sync-commits-summary' })
+
+    if (parsed.matches.length > 0) {
+      const highCount = parsed.matches.filter((m) => m.confidence === 'high').length
+      const mediumCount = parsed.matches.filter((m) => m.confidence === 'medium').length
+      const lowCount = parsed.matches.filter((m) => m.confidence === 'low').length
+
+      let summaryText = `Found ${parsed.matches.length} commit${parsed.matches.length === 1 ? '' : 's'} matching tasks`
+      if (highCount > 0 || mediumCount > 0 || lowCount > 0) {
+        const parts: string[] = []
+        if (highCount > 0) parts.push(`${highCount} high`)
+        if (mediumCount > 0) parts.push(`${mediumCount} medium`)
+        if (lowCount > 0) parts.push(`${lowCount} low`)
+        summaryText += ` (${parts.join(', ')} confidence)`
+      }
+      summaryText += '.'
+      summaryEl.createEl('p', { text: summaryText })
+    } else {
+      // No matches found
+      summaryEl.createEl('p', { text: 'No commits matched any unchecked tasks.' })
+    }
+
+    if (parsed.unmatchedCommits.length > 0) {
+      summaryEl.createEl('p', {
+        text: `${parsed.unmatchedCommits.length} commit${parsed.unmatchedCommits.length === 1 ? '' : 's'} did not match any task.`,
+        cls: 'lachesis-sync-commits-note',
+      })
+    }
+
+    // View button - show appropriate text based on what we have
+    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-sync-commits-button-container' })
+    const btnText = parsed.matches.length > 0 ? 'View Matches' : 'View Results'
+    const viewBtn = btnContainer.createEl('button', {
+      text: btnText,
+      cls: 'lachesis-sync-commits-view-btn',
+    })
+    viewBtn.addEventListener('click', async () => {
+      await this.openSyncCommitsModalForHistory(content)
+    })
+  }
+
+  /**
+   * Open the sync commits modal for viewing history.
+   * Detects which tasks have already been completed by checking Tasks.md.
+   * Allows acting on pending tasks that haven't been completed yet.
+   */
+  private async openSyncCommitsModalForHistory(content: string): Promise<void> {
+    try {
+      // We need commits data to parse the response properly
+      // If we don't have cached commits, try to fetch them
+      if (this.recentGitCommits.length === 0) {
+        const githubRepo = this.snapshot.aiConfig?.github_repo
+        if (githubRepo) {
+          const result = await fetchCommits(githubRepo, {
+            token: this.plugin.settings.githubToken || undefined,
+            perPage: 50,
+          })
+          if (result.success && result.data.length > 0) {
+            this.recentGitCommits = result.data.map((c) => ({
+              sha: c.sha,
+              message: c.message,
+              date: c.date instanceof Date ? c.date.toISOString() : '',
+              url: c.url,
+            }))
+          }
+        }
+      }
+
+      let parsed = parseSyncCommitsResponse(content, this.recentGitCommits)
+
+      if (parsed.matches.length === 0) {
+        new Notice('Could not parse commit matches from response.')
+        return
+      }
+
+      // Read Tasks.md to detect which tasks have already been completed
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (tasksFile && tasksFile instanceof TFile) {
+        const tasksContent = await this.app.vault.read(tasksFile)
+        // Mark matches as already completed if the task is checked in Tasks.md
+        parsed.matches = parsed.matches.map((match) => {
+          // Check if task is already completed (has [x] in Tasks.md)
+          const taskPattern = match.taskText.slice(0, 30).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const completedPattern = new RegExp(`^\\s*-\\s*\\[x\\]\\s+${taskPattern}`, 'im')
+          if (completedPattern.test(tasksContent)) {
+            return { ...match, alreadyCompleted: true }
+          }
+          return match
+        })
+      }
+
+      // Store for the action callback
+      this.pendingSyncCommitMatches = parsed.matches
+      this.pendingUnmatchedCommits = parsed.unmatchedCommits
+
+      // Open modal with viewOnly support
+      const modal = new SyncCommitsModal(
+        this.app,
+        parsed.matches,
+        parsed.unmatchedCommits,
+        this.projectPath,
+        (selections, confirmed) => this.handleSyncCommitsAction(selections, confirmed),
+        { viewOnly: true },
+      )
+      modal.open()
+    } catch (err) {
+      console.error('Failed to open sync commits modal for history:', err)
+      new Notice(`Failed to open matches: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 
@@ -1034,6 +1192,47 @@ export class ExistingProjectModal extends Modal {
           }
         }
 
+        // For sync-commits: fetch recent commits and include them in the file contents
+        if (this.activeWorkflow.name === 'sync-commits') {
+          const githubRepo = this.snapshot.aiConfig?.github_repo
+          if (githubRepo) {
+            this.updateStatus('Fetching recent commits...')
+            const result = await fetchCommits(githubRepo, {
+              token: this.plugin.settings.githubToken || undefined,
+              perPage: 50, // Get more commits for better matching
+            })
+
+            if (result.success && result.data.length > 0) {
+              // Store commits for later parsing
+              // CommitLogEntry has: sha, shortSha, message, author, authorEmail, date (Date), url
+              this.recentGitCommits = result.data.map((c) => ({
+                sha: c.sha,
+                message: c.message,
+                date: c.date instanceof Date ? c.date.toISOString() : '',
+                url: c.url,
+              }))
+
+              // Format commits for AI analysis
+              const commitsSection = this.recentGitCommits.map((c) => {
+                const date = c.date ? new Date(c.date).toISOString().split('T')[0] : 'unknown'
+                return `COMMIT ${c.sha} (${date}):\n${c.message}`
+              }).join('\n\n---\n\n')
+
+              fileContents['RECENT_COMMITS'] = commitsSection
+              console.log(`Fetched ${this.recentGitCommits.length} commits for sync-commits workflow`)
+            } else if (!result.success) {
+              console.warn('Failed to fetch commits:', result.error)
+              this.recentGitCommits = []
+            } else {
+              console.warn('No commits found')
+              this.recentGitCommits = []
+            }
+          } else {
+            console.warn('No GitHub repo configured for sync-commits workflow')
+            this.recentGitCommits = []
+          }
+        }
+
         workflowFileContents = formatFileContentsForModel(fileContents)
       } catch (err) {
         console.error('Failed to fetch workflow files:', err)
@@ -1117,6 +1316,11 @@ export class ExistingProjectModal extends Modal {
           await this.handleIdeasGroomResponse(result.content)
         }
 
+        // Check if this was a sync-commits workflow - handle specially
+        if (this.lastUsedWorkflowName === 'sync-commits') {
+          await this.handleSyncCommitsResponse(result.content)
+        }
+
         this.messages.push({
           role: 'assistant',
           content: result.content,
@@ -1193,6 +1397,18 @@ export class ExistingProjectModal extends Modal {
       lowerMessage.includes('ideas to tasks')
     ) {
       return getWorkflowDefinition('ideas-groom')
+    }
+
+    // Sync Commits workflow
+    if (
+      lowerMessage.includes('sync commits') ||
+      lowerMessage.includes('sync tasks') ||
+      lowerMessage.includes('sync from git') ||
+      lowerMessage.includes('update from git') ||
+      lowerMessage.includes('update from commits') ||
+      lowerMessage.includes('mark completed from git')
+    ) {
+      return getWorkflowDefinition('sync-commits')
     }
 
     // Check for common workflow trigger patterns
@@ -1540,6 +1756,119 @@ export class ExistingProjectModal extends Modal {
     } catch (err) {
       console.error('Failed to apply ideas groom task selections:', err)
       new Notice(`Failed to add tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  // ============================================================================
+  // Sync Commits Workflow Methods
+  // ============================================================================
+
+  /**
+   * Handle the AI response from the sync-commits workflow.
+   * Parses the JSON response and opens the review modal.
+   */
+  private async handleSyncCommitsResponse(content: string): Promise<void> {
+    try {
+      // Parse the AI response using stored commits for lookup
+      const parsed = parseSyncCommitsResponse(content, this.recentGitCommits)
+
+      if (parsed.matches.length === 0) {
+        new Notice('No commits matched any unchecked tasks.')
+        return
+      }
+
+      this.pendingSyncCommitMatches = parsed.matches
+      this.pendingUnmatchedCommits = parsed.unmatchedCommits
+
+      // Open the sync commits modal
+      this.openSyncCommitsModal()
+    } catch (err) {
+      console.error('Failed to process sync commits response:', err)
+      new Notice(`Failed to process commits: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Open the sync commits review modal.
+   */
+  private openSyncCommitsModal(): void {
+    const modal = new SyncCommitsModal(
+      this.app,
+      this.pendingSyncCommitMatches,
+      this.pendingUnmatchedCommits,
+      this.projectPath,
+      (selections, confirmed) => this.handleSyncCommitsAction(selections, confirmed),
+    )
+    modal.open()
+  }
+
+  /**
+   * Handle actions from the sync commits modal.
+   */
+  private async handleSyncCommitsAction(
+    selections: SyncCommitSelection[],
+    confirmed: boolean,
+  ): Promise<void> {
+    if (!confirmed) return
+
+    // Filter out skipped tasks
+    const actionsToApply = selections.filter((s) => s.action !== 'skip')
+
+    if (actionsToApply.length === 0) {
+      new Notice('No changes to apply.')
+      return
+    }
+
+    try {
+      // Read current Tasks.md content
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (!tasksFile || !(tasksFile instanceof TFile)) {
+        new Notice('Tasks.md not found')
+        return
+      }
+
+      let tasksContent = await this.app.vault.read(tasksFile)
+
+      // Apply task completions to Tasks.md
+      tasksContent = applyTaskCompletions(
+        tasksContent,
+        actionsToApply,
+        this.pendingSyncCommitMatches,
+      )
+
+      await this.app.vault.modify(tasksFile, tasksContent)
+
+      // Build and apply archive entries if any tasks are being archived
+      const archiveSelections = actionsToApply.filter((s) => s.action === 'mark-archive')
+      if (archiveSelections.length > 0) {
+        const archivePath = `${this.projectPath}/Archive.md`
+        const archiveFile = this.app.vault.getAbstractFileByPath(archivePath)
+
+        if (archiveFile && archiveFile instanceof TFile) {
+          const archiveContent = await this.app.vault.read(archiveFile)
+          const archiveEntries = buildArchiveEntries(archiveSelections, this.pendingSyncCommitMatches)
+          const newArchiveContent = applyArchiveEntries(archiveContent, archiveEntries)
+          await this.app.vault.modify(archiveFile, newArchiveContent)
+        }
+      }
+
+      const completedCount = actionsToApply.filter((s) => s.action === 'mark-complete').length
+      const archivedCount = archiveSelections.length
+      const parts: string[] = []
+      if (completedCount > 0) parts.push(`${completedCount} marked complete`)
+      if (archivedCount > 0) parts.push(`${archivedCount} archived`)
+      new Notice(`Tasks updated: ${parts.join(', ')}`)
+
+      // Clear pending state and refresh snapshot
+      this.pendingSyncCommitMatches = []
+      this.pendingUnmatchedCommits = []
+      this.recentGitCommits = []
+      this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
+    } catch (err) {
+      console.error('Failed to apply sync commits selections:', err)
+      new Notice(`Failed to update tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 
