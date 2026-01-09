@@ -1919,6 +1919,103 @@
 }
 
 /* Harvest tasks summary in chat (history view) */
+=======
+   Setup Phase Improvements
+   ============================================================================ */
+
+/* Time estimate */
+.lachesis-time-estimate {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  text-align: center;
+  margin: 20px 0 8px 0;
+}
+
+/* Quick Start button */
+.lachesis-quick-start-button {
+  padding: 10px 24px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.lachesis-quick-start-button:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+/* Quick Start hint */
+.lachesis-quick-start-hint {
+  font-size: 0.75em;
+  color: var(--text-faint);
+  text-align: center;
+  margin-top: 16px;
+  font-style: italic;
+}
+
+/* ============================================================================
+   Progress Indicator
+   ============================================================================ */
+
+.lachesis-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lachesis-progress-indicator {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.lachesis-progress-topic {
+  padding: 4px 8px;
+  font-size: 0.65em;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.lachesis-progress-topic.covered {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+/* ============================================================================
+   Skip Button
+   ============================================================================ */
+
+.lachesis-skip-button {
+  padding: 10px 16px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85em;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.lachesis-skip-button:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+}
+
+/* ============================================================================
+   Harvest tasks summary in chat (history view)
+   ============================================================================ */
+
 .lachesis-harvest-tasks-summary {
   padding: 12px;
   background: var(--background-secondary);
@@ -2133,6 +2230,10 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-radius: 12px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+  transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
