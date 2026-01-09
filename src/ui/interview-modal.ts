@@ -15,6 +15,7 @@ import type {
 } from '../core/session/types'
 import { initializeStore, loadFromDisk } from '../core/session/session-store'
 import { isProviderAvailable } from '../ai/providers/factory'
+import { DISCOVERY_TOPICS, type DiscoveryTopic } from '../core/interview/phases'
 
 // ============================================================================
 // Planning Level Options
@@ -25,6 +26,16 @@ const PLANNING_LEVELS = [
   { value: 'Some notes', label: 'Some notes', description: 'Have some thoughts written down' },
   { value: 'Well defined', label: 'Well defined', description: 'Pretty clear on what I want' },
 ] as const
+
+// Human-readable labels for discovery topics
+const TOPIC_LABELS: Record<DiscoveryTopic, string> = {
+  elevator_pitch: 'What',
+  problem_statement: 'Why',
+  target_users: 'Who',
+  value_proposition: 'Value',
+  scope_and_antigoals: 'Scope',
+  constraints: 'Constraints',
+}
 
 // ============================================================================
 // Interview Modal
@@ -49,6 +60,7 @@ export class InterviewModal extends Modal {
   private inputContainer: HTMLElement | null = null
   private inputEl: HTMLInputElement | null = null
   private statusEl: HTMLElement | null = null
+  private progressContainer: HTMLElement | null = null
 
   constructor(app: App, plugin: LachesisPlugin) {
     super(app)
@@ -154,22 +166,48 @@ export class InterviewModal extends Modal {
       })
     }
 
-    // Start button
+    // Estimated time
+    contentEl.createEl('p', {
+      text: 'Full interview takes ~5 minutes',
+      cls: 'lachesis-time-estimate',
+    })
+
+    // Button container
     const buttonContainer = contentEl.createDiv({ cls: 'lachesis-button-container' })
+
+    // Quick Start button
+    const quickStartButton = buttonContainer.createEl('button', {
+      text: 'Quick Start',
+      cls: 'lachesis-quick-start-button',
+    })
+    quickStartButton.addEventListener('click', () => this.startQuickStart())
+
+    // Start Interview button
     const startButton = buttonContainer.createEl('button', {
       text: 'Start Interview',
       cls: 'mod-cta',
     })
     startButton.addEventListener('click', () => this.startInterview())
+
+    // Quick Start description
+    contentEl.createEl('p', {
+      text: 'Quick Start skips the interview and creates project files immediately',
+      cls: 'lachesis-quick-start-hint',
+    })
   }
 
   private renderConversationPhase() {
     const { contentEl } = this
     contentEl.empty()
 
-    // Header
+    // Header with progress indicator
     const header = contentEl.createDiv({ cls: 'lachesis-header' })
-    header.createEl('h2', { text: 'Project Discovery' })
+    const headerLeft = header.createDiv({ cls: 'lachesis-header-left' })
+    headerLeft.createEl('h2', { text: 'Project Discovery' })
+
+    // Progress indicator
+    this.progressContainer = header.createDiv({ cls: 'lachesis-progress-indicator' })
+    this.updateProgressIndicator()
 
     // Messages container
     this.messagesContainer = contentEl.createDiv({ cls: 'lachesis-messages' })
@@ -194,6 +232,17 @@ export class InterviewModal extends Modal {
       if (e.key === 'Enter' && !e.shiftKey && !this.isProcessing) {
         e.preventDefault()
         this.handleUserInput()
+      }
+    })
+
+    // Skip button
+    const skipButton = this.inputContainer.createEl('button', {
+      text: "I don't know yet",
+      cls: 'lachesis-skip-button',
+    })
+    skipButton.addEventListener('click', () => {
+      if (!this.isProcessing) {
+        this.handleSkipTopic()
       }
     })
 
@@ -402,6 +451,22 @@ export class InterviewModal extends Modal {
     this.isProcessing = !enabled
   }
 
+  private updateProgressIndicator() {
+    if (!this.progressContainer) return
+
+    this.progressContainer.empty()
+    const coveredTopics = this.currentSession?.coveredTopics || []
+
+    for (const topic of DISCOVERY_TOPICS) {
+      const isCovered = coveredTopics.includes(topic)
+      const topicEl = this.progressContainer.createDiv({
+        cls: `lachesis-progress-topic ${isCovered ? 'covered' : ''}`,
+      })
+      topicEl.setText(TOPIC_LABELS[topic])
+      topicEl.setAttribute('title', topic.replace(/_/g, ' '))
+    }
+  }
+
   // ============================================================================
   // Interview Flow
   // ============================================================================
@@ -428,6 +493,56 @@ export class InterviewModal extends Modal {
     }
   }
 
+  private async startQuickStart() {
+    if (!this.sessionManager) return
+
+    try {
+      // Create session with Quick Start planning level
+      this.currentSession = await this.sessionManager.createSession({
+        type: 'new_project',
+        planningLevel: 'Quick Start',
+      })
+
+      // Go directly to naming phase
+      this.updateStatus('Getting name suggestions...')
+      this.phase = 'naming'
+
+      this.currentSession = await this.sessionManager.requestNameSuggestions(
+        this.currentSession.id,
+      )
+
+      this.renderNamingPhase()
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Failed to start quick project'
+      this.phase = 'error'
+      this.renderErrorPhase(error)
+    }
+  }
+
+  private async handleSkipTopic() {
+    if (!this.sessionManager || !this.currentSession || !this.inputEl) return
+
+    // Clear any existing input
+    this.inputEl.value = ''
+
+    // Add a skip message that the AI will handle gracefully
+    this.addMessageToUI('user', "I don't know yet, let's move on")
+
+    try {
+      this.currentSession = await this.sessionManager.sendMessage(
+        this.currentSession.id,
+        "I don't know yet, let's move on to the next topic",
+      )
+
+      // Stream next question
+      await this.streamNextQuestion()
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Failed to skip topic'
+      this.updateStatus(`Error: ${error}`)
+      this.setInputEnabled(true)
+    }
+  }
+
   private async streamNextQuestion() {
     if (!this.sessionManager || !this.currentSession) return
 
@@ -447,6 +562,9 @@ export class InterviewModal extends Modal {
       )
 
       this.finalizeStreamingMessage()
+
+      // Update progress indicator with new topics
+      this.updateProgressIndicator()
 
       // Check if we should transition to naming
       if (this.shouldTransitionToNaming()) {
