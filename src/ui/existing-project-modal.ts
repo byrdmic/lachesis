@@ -227,6 +227,7 @@ export class ExistingProjectModal extends Modal {
         onSubmit: (message) => this.handleUserInput(message),
         onDiffAction: (diffBlock, action) => this.handleDiffAction(diffBlock, action),
         onViewIdeasGroom: (content) => this.workflowExecutor?.openIdeasGroomModalForHistory(content),
+        onViewSyncCommits: (content) => this.openSyncCommitsModalForHistory(content),
       },
       this.renderComponent
     )
@@ -355,62 +356,6 @@ export class ExistingProjectModal extends Modal {
       this.statusEl.setText(text)
     }
     this.chatInterface?.updateStatus(text)
-  }
-
-  /**
-   * Render a message that contains sync-commits JSON response.
-   * Shows a summary with a "View Matches" button that opens the modal.
-   */
-  private renderMessageWithSyncCommits(container: HTMLElement, content: string) {
-    const parsed = parseSyncCommitsResponse(content, this.recentGitCommits)
-
-    // Check if we have any data at all (matches OR unmatched commits)
-    if (parsed.matches.length === 0 && parsed.unmatchedCommits.length === 0) {
-      // Couldn't parse anything, render as plain text
-      this.renderMarkdown(content, container)
-      return
-    }
-
-    // Render summary message
-    const summaryEl = container.createDiv({ cls: 'lachesis-sync-commits-summary' })
-
-    if (parsed.matches.length > 0) {
-      const highCount = parsed.matches.filter((m) => m.confidence === 'high').length
-      const mediumCount = parsed.matches.filter((m) => m.confidence === 'medium').length
-      const lowCount = parsed.matches.filter((m) => m.confidence === 'low').length
-
-      let summaryText = `Found ${parsed.matches.length} commit${parsed.matches.length === 1 ? '' : 's'} matching tasks`
-      if (highCount > 0 || mediumCount > 0 || lowCount > 0) {
-        const parts: string[] = []
-        if (highCount > 0) parts.push(`${highCount} high`)
-        if (mediumCount > 0) parts.push(`${mediumCount} medium`)
-        if (lowCount > 0) parts.push(`${lowCount} low`)
-        summaryText += ` (${parts.join(', ')} confidence)`
-      }
-      summaryText += '.'
-      summaryEl.createEl('p', { text: summaryText })
-    } else {
-      // No matches found
-      summaryEl.createEl('p', { text: 'No commits matched any unchecked tasks.' })
-    }
-
-    if (parsed.unmatchedCommits.length > 0) {
-      summaryEl.createEl('p', {
-        text: `${parsed.unmatchedCommits.length} commit${parsed.unmatchedCommits.length === 1 ? '' : 's'} did not match any task.`,
-        cls: 'lachesis-sync-commits-note',
-      })
-    }
-
-    // View button - show appropriate text based on what we have
-    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-sync-commits-button-container' })
-    const btnText = parsed.matches.length > 0 ? 'View Matches' : 'View Results'
-    const viewBtn = btnContainer.createEl('button', {
-      text: btnText,
-      cls: 'lachesis-sync-commits-view-btn',
-    })
-    viewBtn.addEventListener('click', async () => {
-      await this.openSyncCommitsModalForHistory(content)
-    })
   }
 
   /**

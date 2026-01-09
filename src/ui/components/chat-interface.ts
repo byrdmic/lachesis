@@ -13,6 +13,10 @@ import {
   parseIdeasGroomResponse,
   containsIdeasGroomResponse,
 } from '../../utils/ideas-groom-parser'
+import {
+  containsSyncCommitsResponse,
+  extractSyncCommitsSummary,
+} from '../../utils/sync-commits-parser'
 import { DiffViewerModal, type DiffAction } from '../diff-viewer-modal'
 
 // ============================================================================
@@ -26,6 +30,8 @@ export type ChatInterfaceCallbacks = {
   onDiffAction: (diffBlock: DiffBlock, action: DiffAction) => void
   /** Called when user clicks "View Ideas" for an ideas groom response */
   onViewIdeasGroom: (content: string) => void
+  /** Called when user clicks "View Matches" for a sync-commits response */
+  onViewSyncCommits: (content: string) => void
 }
 
 // ============================================================================
@@ -182,6 +188,9 @@ export class ChatInterface {
     } else if (!isStreaming && containsIdeasGroomResponse(content)) {
       // Ideas groom response - render with a "View Ideas" button
       this.renderMessageWithIdeasGroom(messageEl, content)
+    } else if (!isStreaming && containsSyncCommitsResponse(content)) {
+      // Sync commits response - render with a "View Matches" button
+      this.renderMessageWithSyncCommits(messageEl, content)
     } else {
       // Parse hint tags and render them specially
       const hintMatch = content.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
@@ -251,11 +260,19 @@ export class ChatInterface {
     if (streamingEl) {
       streamingEl.removeClass('streaming')
 
-      // Check if content contains diffs
+      // Check if content contains special response types
       if (containsDiffBlocks(this.streamingText)) {
         // Clear and re-render with diff blocks
         streamingEl.empty()
         this.renderMessageWithDiffs(streamingEl, this.streamingText)
+      } else if (containsIdeasGroomResponse(this.streamingText)) {
+        // Clear and re-render with ideas groom summary
+        streamingEl.empty()
+        this.renderMessageWithIdeasGroom(streamingEl, this.streamingText)
+      } else if (containsSyncCommitsResponse(this.streamingText)) {
+        // Clear and re-render with sync commits summary
+        streamingEl.empty()
+        this.renderMessageWithSyncCommits(streamingEl, this.streamingText)
       } else {
         // Re-render with markdown + hint styling
         streamingEl.empty()
@@ -513,6 +530,56 @@ export class ChatInterface {
     })
     viewBtn.addEventListener('click', () => {
       this.callbacks.onViewIdeasGroom(content)
+    })
+  }
+
+  /**
+   * Render a message that contains sync-commits JSON response.
+   * Shows a summary with a "View Matches" button that opens the modal.
+   */
+  private renderMessageWithSyncCommits(container: HTMLElement, content: string): void {
+    const summary = extractSyncCommitsSummary(content)
+
+    if (!summary) {
+      // Couldn't parse summary, render as plain text
+      this.renderMarkdown(content, container)
+      return
+    }
+
+    // Render summary message
+    const summaryEl = container.createDiv({ cls: 'lachesis-sync-commits-summary' })
+
+    if (summary.matchedCount > 0) {
+      let summaryText = `Found ${summary.matchedCount} commit${summary.matchedCount === 1 ? '' : 's'} matching tasks`
+      if (summary.highCount > 0 || summary.mediumCount > 0 || summary.lowCount > 0) {
+        const parts: string[] = []
+        if (summary.highCount > 0) parts.push(`${summary.highCount} high`)
+        if (summary.mediumCount > 0) parts.push(`${summary.mediumCount} medium`)
+        if (summary.lowCount > 0) parts.push(`${summary.lowCount} low`)
+        summaryText += ` (${parts.join(', ')} confidence)`
+      }
+      summaryText += '.'
+      summaryEl.createEl('p', { text: summaryText })
+    } else {
+      summaryEl.createEl('p', { text: 'No commits matched any unchecked tasks.' })
+    }
+
+    if (summary.unmatchedCount > 0) {
+      summaryEl.createEl('p', {
+        text: `${summary.unmatchedCount} commit${summary.unmatchedCount === 1 ? '' : 's'} did not match any task.`,
+        cls: 'lachesis-sync-commits-note',
+      })
+    }
+
+    // View button
+    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-sync-commits-button-container' })
+    const btnText = summary.matchedCount > 0 ? 'View Matches' : 'View Results'
+    const viewBtn = btnContainer.createEl('button', {
+      text: btnText,
+      cls: 'lachesis-sync-commits-view-btn',
+    })
+    viewBtn.addEventListener('click', () => {
+      this.callbacks.onViewSyncCommits(content)
     })
   }
 }

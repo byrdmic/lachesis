@@ -148,6 +148,54 @@ export function containsSyncCommitsResponse(content: string): boolean {
 }
 
 /**
+ * Summary data extracted from sync-commits response for display purposes.
+ * Does not require commits data - just extracts counts from the JSON.
+ */
+export type SyncCommitsSummary = {
+  matchedCount: number
+  unmatchedCount: number
+  highCount: number
+  mediumCount: number
+  lowCount: number
+}
+
+/**
+ * Extract summary information from sync-commits response for display.
+ * This is a lightweight alternative to parseSyncCommitsResponse that
+ * doesn't need the commits array - just extracts counts for UI display.
+ */
+export function extractSyncCommitsSummary(content: string): SyncCommitsSummary | null {
+  try {
+    // Extract JSON from the response (might be wrapped in markdown code blocks)
+    let jsonStr = content.trim()
+
+    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1].trim()
+    }
+
+    const parsed = JSON.parse(jsonStr)
+
+    if (!parsed.matches || !Array.isArray(parsed.matches)) {
+      return null
+    }
+
+    const matches = parsed.matches as Array<{ confidence?: string }>
+    const unmatchedCommits = (parsed.unmatchedCommits || []) as Array<unknown>
+
+    return {
+      matchedCount: matches.length,
+      unmatchedCount: unmatchedCommits.length,
+      highCount: matches.filter((m) => m.confidence === 'high').length,
+      mediumCount: matches.filter((m) => m.confidence === 'medium').length,
+      lowCount: matches.filter((m) => m.confidence === 'low').length,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Parse AI JSON response into CommitMatch array
  */
 export function parseSyncCommitsResponse(
