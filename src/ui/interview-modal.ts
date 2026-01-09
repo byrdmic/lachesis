@@ -550,6 +550,9 @@ export class InterviewModal extends Modal {
 
   private async handleSkipTopic() {
     if (!this.sessionManager || !this.currentSession || !this.inputEl) return
+    if (this.isProcessing) return
+
+    this.setInputEnabled(false)
 
     // Clear any existing input
     this.inputEl.value = ''
