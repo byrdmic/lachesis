@@ -38,6 +38,8 @@ import {
 import {
   parseIdeasGroomResponse,
   applyIdeasGroomSelections,
+  containsIdeasGroomResponse,
+  detectMovedIdeas,
   type GroomedIdeaTask,
   type GroomedIdeaSelection,
 } from '../utils/ideas-groom-parser'
@@ -330,6 +332,9 @@ export class ExistingProjectModal extends Modal {
     // For non-streaming messages, check if content contains diff blocks
     if (!isStreaming && containsDiffBlocks(content)) {
       this.renderMessageWithDiffs(messageEl, content)
+    } else if (!isStreaming && containsIdeasGroomResponse(content)) {
+      // Ideas groom response - render with a "View Ideas" button
+      this.renderMessageWithIdeasGroom(messageEl, content)
     } else {
       // Parse hint tags and render them specially
       const hintMatch = content.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
@@ -470,6 +475,91 @@ export class ExistingProjectModal extends Modal {
         const textEl = container.createDiv({ cls: 'lachesis-diff-text' })
         this.renderMarkdown(textAfter, textEl)
       }
+    }
+  }
+
+  /**
+   * Render a message that contains ideas-groom JSON response.
+   * Shows a summary with a "View Ideas" button that opens the modal.
+   */
+  private renderMessageWithIdeasGroom(container: HTMLElement, content: string) {
+    const tasks = parseIdeasGroomResponse(content)
+
+    if (tasks.length === 0) {
+      // Couldn't parse tasks, render as plain text
+      this.renderMarkdown(content, container)
+      return
+    }
+
+    // Render summary message
+    const summaryEl = container.createDiv({ cls: 'lachesis-ideas-groom-summary' })
+
+    const uniqueHeadings = new Set(tasks.map((t) => t.ideaHeading))
+    summaryEl.createEl('p', {
+      text: `Found ${tasks.length} potential task${tasks.length === 1 ? '' : 's'} from ${uniqueHeadings.size} idea${uniqueHeadings.size === 1 ? '' : 's'} in Ideas.md.`,
+    })
+
+    // View Ideas button
+    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-ideas-groom-button-container' })
+    const viewBtn = btnContainer.createEl('button', {
+      text: 'View Ideas',
+      cls: 'lachesis-ideas-groom-view-btn',
+    })
+    viewBtn.addEventListener('click', async () => {
+      await this.openIdeasGroomModalForHistory(content)
+    })
+  }
+
+  /**
+   * Open the ideas groom modal for viewing history.
+   * Detects which tasks have been moved by checking Tasks.md.
+   * Allows acting on pending tasks that haven't been moved yet.
+   */
+  private async openIdeasGroomModalForHistory(content: string): Promise<void> {
+    try {
+      let tasks = parseIdeasGroomResponse(content)
+
+      if (tasks.length === 0) {
+        new Notice('Could not parse ideas from response.')
+        return
+      }
+
+      // Read Tasks.md to detect which ideas have been moved
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (tasksFile && tasksFile instanceof TFile) {
+        const tasksContent = await this.app.vault.read(tasksFile)
+        tasks = detectMovedIdeas(tasks, tasksContent)
+      }
+
+      // Read Roadmap.md for slice information
+      const roadmapPath = `${this.projectPath}/Roadmap.md`
+      const roadmapFile = this.app.vault.getAbstractFileByPath(roadmapPath)
+      let roadmapSlices: RoadmapSlice[] = []
+
+      if (roadmapFile && roadmapFile instanceof TFile) {
+        const roadmapContent = await this.app.vault.read(roadmapFile)
+        roadmapSlices = parseRoadmapSlices(roadmapContent)
+      }
+
+      // Store tasks for the action callback
+      this.pendingGroomedIdeaTasks = tasks
+      this.roadmapSlices = roadmapSlices
+
+      // Open modal in view-only mode but with action callback for pending tasks
+      const modal = new IdeasGroomModal(
+        this.app,
+        tasks,
+        this.projectPath,
+        roadmapSlices,
+        (selections, confirmed) => this.handleIdeasGroomAction(selections, confirmed),
+        { viewOnly: true },
+      )
+      modal.open()
+    } catch (err) {
+      console.error('Failed to open ideas groom modal for history:', err)
+      new Notice(`Failed to open ideas: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 

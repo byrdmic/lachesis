@@ -27,6 +27,18 @@ export {
 }
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/** Emojis to denote where a task was moved */
+export const MOVED_EMOJIS: Record<TaskDestination, string> = {
+  'discard': '🗑️',
+  'future-tasks': '📋',
+  'active-tasks': '✅',
+  'next-actions': '🎯',
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -42,6 +54,7 @@ export interface GroomedIdeaTask {
   suggestedSliceLink: string | null // AI-suggested slice link (e.g., "[[Roadmap#VS1 — Basic Modal Opens]]")
   reasoning: string | null // Why AI thinks this is actionable
   existingSimilar: string | null // If AI detected a similar existing task
+  movedTo: TaskDestination | null // Where this task was moved (for history viewing)
 }
 
 /**
@@ -79,6 +92,18 @@ export interface IdeasGroomAIResponse {
 // ============================================================================
 
 /**
+ * Check if a message contains ideas-groom JSON response
+ */
+export function containsIdeasGroomResponse(content: string): boolean {
+  // Check for the distinctive JSON structure from ideas-groom workflow
+  return (
+    content.includes('"ideaHeading"') &&
+    content.includes('"tasks"') &&
+    (content.includes('"suggestedDestination"') || content.includes('"ideasProcessed"'))
+  )
+}
+
+/**
  * Parse AI JSON response into GroomedIdeaTask array
  */
 export function parseIdeasGroomResponse(aiResponse: string): GroomedIdeaTask[] {
@@ -108,11 +133,74 @@ export function parseIdeasGroomResponse(aiResponse: string): GroomedIdeaTask[] {
       suggestedSliceLink: task.suggestedSliceLink || null,
       reasoning: task.reasoning || null,
       existingSimilar: task.existingSimilar || null,
+      movedTo: null, // Will be populated when checking Tasks.md for history viewing
     }))
   } catch (error) {
     console.error('Failed to parse ideas groom response:', error)
     return []
   }
+}
+
+/**
+ * Check Tasks.md content to determine which ideas have been moved and where.
+ * Updates the movedTo field on each task.
+ */
+export function detectMovedIdeas(
+  tasks: GroomedIdeaTask[],
+  tasksContent: string,
+): GroomedIdeaTask[] {
+  const structure = parseTasksStructure(tasksContent)
+  const lines = tasksContent.split('\n')
+
+  // Build a map of section ranges
+  const sectionRanges: Array<{ start: number; end: number; destination: TaskDestination }> = []
+
+  // Next Actions section
+  if (structure.nextActionsLineNumber !== -1) {
+    let end = structure.nextActionsLineNumber + 1
+    while (end < lines.length && !lines[end].startsWith('## ') && !lines[end].startsWith('---')) {
+      end++
+    }
+    sectionRanges.push({ start: structure.nextActionsLineNumber, end, destination: 'next-actions' })
+  }
+
+  // Active Tasks section
+  if (structure.activeTasksLineNumber !== -1) {
+    let end = structure.activeTasksLineNumber + 1
+    while (end < lines.length && !lines[end].startsWith('## ') && !lines[end].startsWith('---')) {
+      end++
+    }
+    sectionRanges.push({ start: structure.activeTasksLineNumber, end, destination: 'active-tasks' })
+  }
+
+  // Future Tasks section
+  if (structure.futureTasksLineNumber !== -1) {
+    let end = structure.futureTasksLineNumber + 1
+    while (end < lines.length && !lines[end].startsWith('## ')) {
+      end++
+    }
+    sectionRanges.push({ start: structure.futureTasksLineNumber, end, destination: 'future-tasks' })
+  }
+
+  // Check each task to see if it was moved
+  return tasks.map((task) => {
+    const cleanedHeading = cleanHeading(task.ideaHeading)
+    // Look for the source comment pattern: <!-- from Ideas.md: <heading> -->
+    const sourcePattern = `<!-- from Ideas.md: ${cleanedHeading} -->`
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes(sourcePattern)) {
+        // Found a match, determine which section it's in
+        for (const range of sectionRanges) {
+          if (i >= range.start && i < range.end) {
+            return { ...task, movedTo: range.destination }
+          }
+        }
+      }
+    }
+
+    return task
+  })
 }
 
 // ============================================================================
