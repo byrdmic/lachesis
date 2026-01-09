@@ -52,6 +52,7 @@ export class InterviewModal extends Modal {
   // UI State
   private phase: ModalPhase = 'setup'
   private selectedPlanningLevel: string = 'Light spark'
+  private isLaunching = false
   private isProcessing = false
   private streamingText = ''
 
@@ -194,6 +195,24 @@ export class InterviewModal extends Modal {
       text: 'Quick Start skips the interview and creates project files immediately',
       cls: 'lachesis-quick-start-hint',
     })
+  }
+
+  /**
+   * Lightweight loading view shown while quick start prepares the naming step.
+   * This replaces the setup UI immediately to avoid duplicate launches.
+   */
+  private renderQuickStartLoading() {
+    const { contentEl } = this
+    contentEl.empty()
+
+    contentEl.createEl('h2', { text: 'Quick Start' })
+    contentEl.createEl('p', {
+      text: 'Setting up your project...',
+      cls: 'lachesis-subtitle',
+    })
+
+    this.statusEl = contentEl.createDiv({ cls: 'lachesis-status' })
+    this.updateStatus('Creating session...')
   }
 
   private renderConversationPhase() {
@@ -472,7 +491,9 @@ export class InterviewModal extends Modal {
   // ============================================================================
 
   private async startInterview() {
-    if (!this.sessionManager) return
+    if (!this.sessionManager || this.isLaunching || this.phase !== 'setup') return
+
+    this.isLaunching = true
 
     this.phase = 'conversation'
     this.renderConversationPhase()
@@ -490,11 +511,18 @@ export class InterviewModal extends Modal {
       const error = err instanceof Error ? err.message : 'Failed to start interview'
       this.phase = 'error'
       this.renderErrorPhase(error)
+    } finally {
+      this.isLaunching = false
     }
   }
 
   private async startQuickStart() {
-    if (!this.sessionManager) return
+    if (!this.sessionManager || this.isLaunching || this.phase !== 'setup') return
+
+    this.isLaunching = true
+    // Replace setup UI immediately to prevent concurrent launches
+    this.phase = 'naming'
+    this.renderQuickStartLoading()
 
     try {
       // Create session with Quick Start planning level
@@ -505,7 +533,6 @@ export class InterviewModal extends Modal {
 
       // Go directly to naming phase
       this.updateStatus('Getting name suggestions...')
-      this.phase = 'naming'
 
       this.currentSession = await this.sessionManager.requestNameSuggestions(
         this.currentSession.id,
@@ -516,6 +543,8 @@ export class InterviewModal extends Modal {
       const error = err instanceof Error ? err.message : 'Failed to start quick project'
       this.phase = 'error'
       this.renderErrorPhase(error)
+    } finally {
+      this.isLaunching = false
     }
   }
 
