@@ -71,7 +71,7 @@ import { fetchCommits, formatCommitLog } from '../github'
 
 // Components
 import { ChatSidebar } from './components/chat-sidebar'
-import { IssuesPanel } from './components/issues-panel'
+import { IssuesPanel, type ProjectIssue } from './components/issues-panel'
 import { WorkflowExecutor } from './components/workflow-executor'
 import { ChatInterface } from './components/chat-interface'
 
@@ -188,7 +188,7 @@ export class ExistingProjectModal extends Modal {
     // Chat Sidebar
     this.chatSidebar = new ChatSidebar(this.app, this.projectPath, {
       onNewChat: () => this.startNewChat(),
-      onLoadChat: (filename, messages) => this.loadChat(filename, messages),
+      onLoadChat: (filename, messages) => this.applyLoadedChat(filename, messages),
     })
     await this.chatSidebar.initialize()
 
@@ -302,84 +302,11 @@ export class ExistingProjectModal extends Modal {
       }
     })
 
-    // Git Log button - show recent commits if GitHub repo is configured
-    if (this.snapshot.aiConfig?.github_repo) {
-      const gitLogBtn = workflowBar.createEl('button', {
-        text: 'Git Log',
-        cls: 'lachesis-workflow-button lachesis-git-log-button',
-      })
-      gitLogBtn.addEventListener('click', () => {
-        const modal = new GitLogModal(
-          this.app,
-          this.snapshot.aiConfig!.github_repo!,
-          this.plugin.settings.githubToken
-        )
-        modal.open()
-      })
-    }
-
-    for (const workflow of getAllWorkflows()) {
-      // Wrapper for button + tooltip
-      const wrapper = workflowBar.createDiv({ cls: 'lachesis-workflow-button-wrapper' })
-
-      const btn = wrapper.createEl('button', {
-        text: workflow.displayName,
-        cls: 'lachesis-workflow-button',
-      })
-      btn.addEventListener('click', () => {
-        if (!this.isProcessing) {
-          this.triggerWorkflow(workflow.displayName)
-        }
-      })
-
-      // Add tooltip
-      this.renderWorkflowTooltip(wrapper, workflow)
-    }
-
-    // Messages container
-    this.messagesContainer = mainEl.createDiv({ cls: 'lachesis-messages' })
-
-    // Render existing messages
-    if (this.messages.length === 0) {
-      this.renderEmptyState()
-    } else {
-      for (const msg of this.messages) {
-        this.addMessageToUI(msg.role, msg.content)
-      }
-    }
-
-    // Input area
-    const inputContainer = mainEl.createDiv({ cls: 'lachesis-input-area' })
-
-    this.inputEl = inputContainer.createEl('input', {
-      type: 'text',
-      placeholder: 'Ask about the project or request changes...',
-      cls: 'lachesis-input',
-    })
-
-    this.inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey && !this.isProcessing) {
-        e.preventDefault()
-        this.handleUserInput()
-      }
-    })
-
-    const sendButton = inputContainer.createEl('button', {
-      text: 'Send',
-      cls: 'lachesis-send-button',
-    })
-    sendButton.addEventListener('click', () => {
-      if (!this.isProcessing) {
-        this.handleUserInput()
-      }
-    })
-
-    // Status bar
-    this.statusEl = mainEl.createDiv({ cls: 'lachesis-status' })
-    this.updateStatus('Ready')
+    // Render chat interface (messages, input, status)
+    this.chatInterface?.render(mainEl, this.messages, this.snapshot.projectName, isReady)
   }
 
-  private loadChat(filename: string, messages: ConversationMessage[]): void {
+  private applyLoadedChat(filename: string, messages: ConversationMessage[]): void {
     this.messages = messages
     this.activeWorkflow = null
     this.focusedFile = null
@@ -387,52 +314,6 @@ export class ExistingProjectModal extends Modal {
     this.chatSidebar?.setCurrentChatFilename(filename)
     this.chatInterface?.setViewingLoadedChat(true)
     this.renderChatPhase()
-  }
-
-  private finalizeStreamingMessage() {
-    if (!this.messagesContainer) return
-
-    const streamingEl = this.messagesContainer.querySelector('.lachesis-message.streaming') as HTMLElement | null
-    if (streamingEl) {
-      streamingEl.removeClass('streaming')
-
-      // Check if content contains special responses that need custom rendering
-      if (containsDiffBlocks(this.streamingText)) {
-        // Clear and re-render with diff blocks
-        streamingEl.empty()
-        this.renderMessageWithDiffs(streamingEl, this.streamingText)
-      } else if (containsHarvestResponse(this.streamingText)) {
-        // Clear and re-render with harvest tasks button
-        streamingEl.empty()
-        this.renderMessageWithHarvestTasks(streamingEl, this.streamingText)
-      } else if (containsIdeasGroomResponse(this.streamingText)) {
-        // Clear and re-render with ideas groom button
-        streamingEl.empty()
-        this.renderMessageWithIdeasGroom(streamingEl, this.streamingText)
-      } else if (containsSyncCommitsResponse(this.streamingText)) {
-        // Clear and re-render with sync commits button
-        streamingEl.empty()
-        this.renderMessageWithSyncCommits(streamingEl, this.streamingText)
-      } else {
-        // Re-render with markdown + hint styling
-        streamingEl.empty()
-        const hintMatch = this.streamingText.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
-        if (hintMatch) {
-          const mainContent = this.streamingText.replace(/\{\{hint\}\}[\s\S]*?\{\{\/hint\}\}/, '').trim()
-          if (mainContent) {
-            this.renderMarkdown(mainContent, streamingEl)
-          }
-
-          const hintEl = streamingEl.createDiv({ cls: 'lachesis-hint' })
-          const hintContent = hintMatch[1].trim()
-          if (hintContent) {
-            this.renderMarkdown(hintContent, hintEl)
-          }
-        } else if (this.streamingText) {
-          this.renderMarkdown(this.streamingText, streamingEl)
-        }
-      }
-    }
   }
 
   private startAIChat(message: string, focusedFile?: ExpectedCoreFile): void {
@@ -1065,8 +946,8 @@ export class ExistingProjectModal extends Modal {
       this.chatInterface.focusInput()
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to generate response'
-      this.finalizeStreamingMessage()
-      this.updateStatus(`Error: ${error}`)
+      this.chatInterface?.finalizeStreamingMessage()
+      this.chatInterface?.updateStatus(`Error: ${error}`)
       this.setInputEnabled(true)
     }
   }
@@ -1168,117 +1049,6 @@ export class ExistingProjectModal extends Modal {
     }
 
     return null
-  }
-
-  private triggerWorkflow(workflowDisplayName: string) {
-    if (!this.inputEl) return
-
-    // Find the workflow by display name
-    const workflow = getAllWorkflows().find(w => w.displayName === workflowDisplayName)
-    if (!workflow) return
-
-    // Check if this is a non-AI workflow
-    if (!workflow.usesAI) {
-      this.handleNonAIWorkflow(workflow)
-      return
-    }
-
-    // Special handling for fill-overview: use focusedFile mechanism
-    // This reuses the existing system prompt instructions for filling files
-    if (workflow.name === 'fill-overview') {
-      this.focusedFile = 'Overview.md'
-      this.inputEl.value = `Help me fill in Overview.md. It currently only has template placeholders. Let's work through it section by section.`
-      this.handleUserInput()
-      return
-    }
-
-    // Special handling for roadmap-fill: use focusedFile mechanism
-    // Similar to fill-overview but for Roadmap.md
-    if (workflow.name === 'roadmap-fill') {
-      this.focusedFile = 'Roadmap.md'
-      this.inputEl.value = `Help me fill in Roadmap.md. I need to define milestones for my project from scratch. Let's work through it step by step.`
-      this.handleUserInput()
-      return
-    }
-
-    // Special handling for tasks-fill: use focusedFile mechanism
-    // Similar to fill-overview but for Tasks.md
-    if (workflow.name === 'tasks-fill') {
-      this.focusedFile = 'Tasks.md'
-      this.inputEl.value = `Help me fill in Tasks.md. I need to create vertical slices and tasks aligned with my roadmap. Let's work through it step by step.`
-      this.handleUserInput()
-      return
-    }
-
-    // Standard AI workflow handling
-    this.activeWorkflow = workflow
-    this.focusedFile = null  // Clear any active "fill file" mode - workflow takes precedence
-    this.inputEl.value = `Run the ${workflowDisplayName} workflow`
-    this.handleUserInput()
-  }
-
-  /**
-   * Handle workflows that don't require AI processing.
-   * These workflows perform local operations immediately.
-   */
-  private async handleNonAIWorkflow(workflow: WorkflowDefinition): Promise<void> {
-    if (workflow.name === 'groom-tasks') {
-      await this.handleGroomTasksWorkflow()
-    }
-    // Future non-AI workflows can be added here
-  }
-
-  /**
-   * Handle the Groom Tasks workflow.
-   * Parses Log.md for existing potential tasks and opens the review modal.
-   */
-  private async handleGroomTasksWorkflow(): Promise<void> {
-    try {
-      this.setInputEnabled(false)
-      this.updateStatus('Scanning Log.md for potential tasks...')
-
-      // Read Log.md content
-      const logPath = `${this.projectPath}/Log.md`
-      const logFile = this.app.vault.getAbstractFileByPath(logPath)
-
-      if (!logFile || !(logFile instanceof TFile)) {
-        this.updateStatus('Log.md not found')
-        this.setInputEnabled(true)
-        new Notice('Log.md not found in project')
-        return
-      }
-
-      const content = await this.app.vault.read(logFile)
-      const parsed = parsePotentialTasks(content)
-
-      if (parsed.actionableTaskCount === 0) {
-        this.updateStatus('No potential tasks found')
-        this.setInputEnabled(true)
-        new Notice('No actionable potential tasks found in Log.md. Run "Generate Tasks" first to create some.')
-        return
-      }
-
-      // Store parsed data for modal callback
-      this.pendingPotentialTasks = parsed.allTasks
-      this.parsedPotentialTasks = parsed
-
-      // Add a message to the UI indicating what we're doing
-      this.addMessageToUI(
-        'assistant',
-        `Found ${parsed.actionableTaskCount} potential task${parsed.actionableTaskCount > 1 ? 's' : ''} in Log.md. Opening review modal...`,
-      )
-
-      // Open the modal directly
-      this.openPotentialTasksModal()
-
-      this.updateStatus('Ready')
-      this.setInputEnabled(true)
-    } catch (err) {
-      console.error('Failed to run Groom Tasks workflow:', err)
-      this.updateStatus('Error scanning for tasks')
-      this.setInputEnabled(true)
-      new Notice(`Failed to scan for tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    }
   }
 
   // ============================================================================
@@ -1627,18 +1397,6 @@ export class ExistingProjectModal extends Modal {
   // ============================================================================
 
   /**
-   * Load list of existing chat logs for sidebar.
-   */
-  private async loadChatHistory(): Promise<void> {
-    try {
-      this.chatLogs = await listChatLogs(this.app.vault, this.projectPath)
-    } catch (err) {
-      console.warn('Failed to load chat history:', err)
-      this.chatLogs = []
-    }
-  }
-
-  /**
    * Start a new chat (clears current conversation).
    */
   private startNewChat(): void {
@@ -1689,131 +1447,7 @@ export class ExistingProjectModal extends Modal {
       if (wasNewChat) {
         this.currentChatFilename = result.filename
       }
-      // Note: Sidebar refresh is handled by vault event listeners
-    }
-  }
-
-  /**
-   * Render the sidebar with chat history.
-   */
-  private renderSidebar(container?: HTMLElement): void {
-    const parent = container ?? this.sidebarEl
-    if (!parent) return
-
-    parent.empty()
-
-    // Sidebar header
-    const header = parent.createDiv({ cls: 'lachesis-sidebar-header' })
-    header.createSpan({ text: 'Chat History' })
-
-    // New Chat button
-    const newChatBtn = parent.createEl('button', {
-      text: '+ New Chat',
-      cls: 'lachesis-new-chat-button',
-    })
-    newChatBtn.addEventListener('click', () => this.startNewChat())
-
-    // Chat list container
-    this.chatListEl = parent.createDiv({ cls: 'lachesis-chat-list' })
-
-    if (this.chatLogs.length === 0) {
-      this.chatListEl.createDiv({
-        text: 'No previous chats',
-        cls: 'lachesis-chat-empty',
-      })
-    } else {
-      for (const log of this.chatLogs) {
-        this.renderChatItem(log)
-      }
-    }
-  }
-
-  /**
-   * Render a single chat item in the sidebar.
-   */
-  private renderChatItem(log: ChatLogMetadata): void {
-    if (!this.chatListEl) return
-
-    const isActive = log.filename === this.currentChatFilename
-    const item = this.chatListEl.createDiv({
-      cls: `lachesis-chat-item ${isActive ? 'active' : ''}`,
-    })
-
-    item.createEl('span', { text: log.displayDate, cls: 'lachesis-chat-date' })
-    item.createEl('span', { text: log.preview, cls: 'lachesis-chat-preview' })
-
-    item.addEventListener('click', () => {
-      if (log.filename !== this.currentChatFilename) {
-        this.loadChat(log.filename)
-      }
-    })
-  }
-
-  /**
-   * Highlight the current chat in the sidebar.
-   */
-  private highlightCurrentChat(): void {
-    if (!this.chatListEl) return
-
-    const items = this.chatListEl.querySelectorAll('.lachesis-chat-item')
-    items.forEach((el, idx) => {
-      const isActive = this.chatLogs[idx]?.filename === this.currentChatFilename
-      el.toggleClass('active', isActive)
-    })
-  }
-
-  // ============================================================================
-  // Filesystem Watcher (Real-time Sidebar Updates)
-  // ============================================================================
-
-  /**
-   * Set up filesystem watcher for changes in the .ai/logs folder.
-   * Uses Node.js fs.watch instead of Obsidian's vault events to bypass cache.
-   */
-  private setupVaultListeners(): void {
-    // Get absolute path to the logs folder
-    const basePath = (this.app.vault.adapter as any).getBasePath()
-    const logsPath = path.join(basePath, this.projectPath, '.ai', 'logs')
-
-    // Ensure the directory exists before watching
-    if (!fs.existsSync(logsPath)) {
-      try {
-        fs.mkdirSync(logsPath, { recursive: true })
-      } catch (err) {
-        console.warn('Could not create logs directory for watching:', err)
-        return
-      }
-    }
-
-    try {
-      // Watch the logs directory for any changes
-      this.fsWatcher = fs.watch(logsPath, { persistent: false }, async (eventType, filename) => {
-        // Only react to .md file changes
-        if (filename && filename.endsWith('.md')) {
-          console.log(`File system change detected: ${eventType} ${filename}`)
-          await this.loadChatHistory()
-          this.renderSidebar()
-          this.highlightCurrentChat()
-        }
-      })
-
-      this.fsWatcher.on('error', (err) => {
-        console.warn('File watcher error:', err)
-      })
-
-      console.log(`Watching for chat log changes: ${logsPath}`)
-    } catch (err) {
-      console.warn('Could not set up file watcher:', err)
-    }
-  }
-
-  /**
-   * Clean up filesystem watcher.
-   */
-  private cleanupVaultListeners(): void {
-    if (this.fsWatcher) {
-      this.fsWatcher.close()
-      this.fsWatcher = null
+      // Note: Sidebar refresh is handled by ChatSidebar component
     }
   }
 
@@ -2167,11 +1801,8 @@ export class ExistingProjectModal extends Modal {
     // Set the focused file so handleUserInput will fetch its contents
     this.focusedFile = fileName
 
-    // Set up the input to trigger a focused conversation
-    if (this.inputEl) {
-      this.inputEl.value = `Help me fill in ${fileName}. It currently only has template placeholders. Let's work through it section by section.`
-      this.handleUserInput()
-    }
+    // Trigger a focused conversation
+    this.handleUserInput(`Help me fill in ${fileName}. It currently only has template placeholders. Let's work through it section by section.`)
   }
 
   /**
@@ -2183,11 +1814,8 @@ export class ExistingProjectModal extends Modal {
     // Set the focused file so handleUserInput will fetch its contents
     this.focusedFile = fileName
 
-    // Set up the input to trigger a focused conversation
-    if (this.inputEl) {
-      this.inputEl.value = `Help me expand ${fileName}. It has some content but needs more detail. Let's review what's there and add more.`
-      this.handleUserInput()
-    }
+    // Trigger a focused conversation
+    this.handleUserInput(`Help me expand ${fileName}. It has some content but needs more detail. Let's review what's there and add more.`)
   }
 
   /**
@@ -2208,11 +1836,8 @@ export class ExistingProjectModal extends Modal {
       .map(h => `- ${h}`)
       .join('\n')
 
-    // Set up the input to trigger a focused conversation asking for targeted diffs
-    if (this.inputEl) {
-      this.inputEl.value = `${fileName} is missing the following headings:\n\n${headingsList}\n\nPlease propose a diff to add ONLY these missing headings with appropriate placeholder content. Do not modify existing content—just add the missing sections in the correct locations.`
-      this.handleUserInput()
-    }
+    // Trigger a focused conversation asking for targeted diffs
+    this.handleUserInput(`${fileName} is missing the following headings:\n\n${headingsList}\n\nPlease propose a diff to add ONLY these missing headings with appropriate placeholder content. Do not modify existing content—just add the missing sections in the correct locations.`)
   }
 
   /**
@@ -2305,10 +1930,7 @@ export class ExistingProjectModal extends Modal {
       if (configExists) {
         // Config exists but needs github_repo configured
         // Start a conversation with the AI to help configure it
-        if (this.inputEl) {
-          this.inputEl.value = 'Help me configure my .ai/config.json - I need to set up the GitHub repository.'
-          this.handleUserInput()
-        }
+        this.handleUserInput('Help me configure my .ai/config.json - I need to set up the GitHub repository.')
         return
       }
 
@@ -2347,10 +1969,7 @@ export class ExistingProjectModal extends Modal {
       await this.refreshAfterFix()
 
       // Now start a conversation with the AI to configure it
-      if (this.inputEl) {
-        this.inputEl.value = 'Help me configure my .ai/config.json - I need to set up the GitHub repository.'
-        this.handleUserInput()
-      }
+      this.handleUserInput('Help me configure my .ai/config.json - I need to set up the GitHub repository.')
     } catch (err) {
       new Notice(`Failed to create config: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
