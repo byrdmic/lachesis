@@ -31,8 +31,34 @@ import {
   type GroomedIdeaTask,
   type GroomedIdeaSelection,
 } from '../../utils/ideas-groom-parser'
+import {
+  parseSyncCommitsResponse,
+  applyTaskCompletions,
+  buildArchiveEntries,
+  applyArchiveEntries,
+  type CommitMatch,
+  type UnmatchedCommit,
+  type SyncCommitSelection,
+  type GitCommit,
+} from '../../utils/sync-commits-parser'
+import {
+  extractCompletedTasks,
+  groupTasksBySlice,
+  containsArchiveCompletedResponse,
+  parseArchiveCompletedResponse,
+  applyArchiveRemoval,
+  buildArchiveEntries as buildArchiveCompletedEntries,
+  applyArchiveAdditions,
+  getAllTasks,
+  type CompletedTask,
+  type SliceGroup,
+  type ArchiveSelection,
+} from '../../utils/archive-completed-parser'
+import { fetchCommits } from '../../github'
 import { HarvestTasksModal } from '../harvest-tasks-modal'
 import { IdeasGroomModal } from '../ideas-groom-modal'
+import { SyncCommitsModal } from '../sync-commits-modal'
+import { ArchiveCompletedModal } from '../archive-completed-modal'
 import { GitLogModal } from '../git-log-modal'
 
 // ============================================================================
@@ -69,6 +95,16 @@ export class WorkflowExecutor {
   private pendingHarvestedTasks: HarvestedTask[] = []
   private pendingGroomedIdeaTasks: GroomedIdeaTask[] = []
   private roadmapSlices: RoadmapSlice[] = []
+
+  // State for sync-commits workflow
+  private pendingSyncCommitMatches: CommitMatch[] = []
+  private pendingUnmatchedCommits: UnmatchedCommit[] = []
+  private recentGitCommits: GitCommit[] = []
+
+  // State for archive-completed workflow
+  private pendingArchiveCompletedTasks: CompletedTask[] = []
+  private pendingSliceGroups: SliceGroup[] = []
+  private pendingStandaloneTasks: CompletedTask[] = []
 
   constructor(
     app: App,
@@ -652,6 +688,388 @@ export class WorkflowExecutor {
     } catch (err) {
       console.error('Failed to apply ideas groom task selections:', err)
       new Notice(`Failed to add tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  // ============================================================================
+  // Sync Commits Workflow
+  // ============================================================================
+
+  /**
+   * Set the recent git commits (called by modal after fetching).
+   */
+  setRecentGitCommits(commits: GitCommit[]): void {
+    this.recentGitCommits = commits
+  }
+
+  /**
+   * Handle the AI response from the sync-commits workflow.
+   * Parses the JSON response and opens the review modal.
+   */
+  async handleSyncCommitsResponse(content: string): Promise<void> {
+    try {
+      // Parse the AI response using stored commits for lookup
+      const parsed = parseSyncCommitsResponse(content, this.recentGitCommits)
+
+      if (parsed.matches.length === 0) {
+        new Notice('No commits matched any unchecked tasks.')
+        return
+      }
+
+      this.pendingSyncCommitMatches = parsed.matches
+      this.pendingUnmatchedCommits = parsed.unmatchedCommits
+
+      // Open the sync commits modal
+      this.openSyncCommitsModal()
+    } catch (err) {
+      console.error('Failed to process sync commits response:', err)
+      new Notice(`Failed to process commits: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Open the sync commits review modal.
+   */
+  private openSyncCommitsModal(): void {
+    const modal = new SyncCommitsModal(
+      this.app,
+      this.pendingSyncCommitMatches,
+      this.pendingUnmatchedCommits,
+      this.projectPath,
+      (selections, confirmed) => this.handleSyncCommitsAction(selections, confirmed)
+    )
+    modal.open()
+  }
+
+  /**
+   * Open the sync commits modal for viewing history.
+   * Detects which tasks have already been completed by checking Tasks.md.
+   * Allows acting on pending tasks that haven't been completed yet.
+   */
+  async openSyncCommitsModalForHistory(content: string): Promise<void> {
+    try {
+      // We need commits data to parse the response properly
+      // If we don't have cached commits, try to fetch them
+      if (this.recentGitCommits.length === 0) {
+        const githubRepo = this.snapshot.aiConfig?.github_repo
+        if (githubRepo) {
+          const result = await fetchCommits(githubRepo, {
+            token: this.githubToken || undefined,
+            perPage: 50,
+          })
+          if (result.success && result.data.length > 0) {
+            this.recentGitCommits = result.data.map((c) => ({
+              sha: c.sha,
+              message: c.message,
+              date: c.date instanceof Date ? c.date.toISOString() : '',
+              url: c.url,
+            }))
+          }
+        }
+      }
+
+      let parsed = parseSyncCommitsResponse(content, this.recentGitCommits)
+
+      if (parsed.matches.length === 0) {
+        new Notice('Could not parse commit matches from response.')
+        return
+      }
+
+      // Read Tasks.md to detect which tasks have already been completed
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (tasksFile && tasksFile instanceof TFile) {
+        const tasksContent = await this.app.vault.read(tasksFile)
+        // Mark matches as already completed if the task is checked in Tasks.md
+        parsed.matches = parsed.matches.map((match) => {
+          // Check if task is already completed (has [x] in Tasks.md)
+          const taskPattern = match.taskText.slice(0, 30).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const completedPattern = new RegExp(`^\\s*-\\s*\\[x\\]\\s+${taskPattern}`, 'im')
+          if (completedPattern.test(tasksContent)) {
+            return { ...match, alreadyCompleted: true }
+          }
+          return match
+        })
+      }
+
+      // Store for the action callback
+      this.pendingSyncCommitMatches = parsed.matches
+      this.pendingUnmatchedCommits = parsed.unmatchedCommits
+
+      // Open modal with viewOnly support
+      const modal = new SyncCommitsModal(
+        this.app,
+        parsed.matches,
+        parsed.unmatchedCommits,
+        this.projectPath,
+        (selections, confirmed) => this.handleSyncCommitsAction(selections, confirmed),
+        { viewOnly: true }
+      )
+      modal.open()
+    } catch (err) {
+      console.error('Failed to open sync commits modal for history:', err)
+      new Notice(`Failed to open matches: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Handle actions from the sync commits modal.
+   */
+  private async handleSyncCommitsAction(
+    selections: SyncCommitSelection[],
+    confirmed: boolean
+  ): Promise<void> {
+    if (!confirmed) return
+
+    // Filter out skipped tasks
+    const actionsToApply = selections.filter((s) => s.action !== 'skip')
+
+    if (actionsToApply.length === 0) {
+      new Notice('No changes to apply.')
+      return
+    }
+
+    try {
+      // Read current Tasks.md content
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (!tasksFile || !(tasksFile instanceof TFile)) {
+        new Notice('Tasks.md not found')
+        return
+      }
+
+      let tasksContent = await this.app.vault.read(tasksFile)
+
+      // Apply task completions to Tasks.md
+      tasksContent = applyTaskCompletions(
+        tasksContent,
+        actionsToApply,
+        this.pendingSyncCommitMatches
+      )
+
+      await this.app.vault.modify(tasksFile, tasksContent)
+
+      // Build and apply archive entries if any tasks are being archived
+      const archiveSelections = actionsToApply.filter((s) => s.action === 'mark-archive')
+      if (archiveSelections.length > 0) {
+        const archivePath = `${this.projectPath}/Archive.md`
+        const archiveFile = this.app.vault.getAbstractFileByPath(archivePath)
+
+        if (archiveFile && archiveFile instanceof TFile) {
+          const archiveContent = await this.app.vault.read(archiveFile)
+          const archiveEntries = buildArchiveEntries(archiveSelections, this.pendingSyncCommitMatches)
+          const newArchiveContent = applyArchiveEntries(archiveContent, archiveEntries)
+          await this.app.vault.modify(archiveFile, newArchiveContent)
+        }
+      }
+
+      const completedCount = actionsToApply.filter((s) => s.action === 'mark-complete').length
+      const archivedCount = archiveSelections.length
+      const parts: string[] = []
+      if (completedCount > 0) parts.push(`${completedCount} marked complete`)
+      if (archivedCount > 0) parts.push(`${archivedCount} archived`)
+      new Notice(`Tasks updated: ${parts.join(', ')}`)
+
+      // Clear pending state and refresh snapshot
+      this.pendingSyncCommitMatches = []
+      this.pendingUnmatchedCommits = []
+      this.recentGitCommits = []
+      await this.callbacks.onSnapshotRefresh()
+    } catch (err) {
+      console.error('Failed to apply sync commits selections:', err)
+      new Notice(`Failed to update tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  // ============================================================================
+  // Archive Completed Workflow
+  // ============================================================================
+
+  /**
+   * Handle the AI response from archive-completed workflow.
+   * Parses completed tasks locally and groups them, then opens review modal.
+   */
+  async handleArchiveCompletedResponse(content: string): Promise<void> {
+    try {
+      // First, extract completed tasks locally from Tasks.md
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (!tasksFile || !(tasksFile instanceof TFile)) {
+        new Notice('Tasks.md not found')
+        return
+      }
+
+      const tasksContent = await this.app.vault.read(tasksFile)
+      const completedTasks = extractCompletedTasks(tasksContent)
+
+      if (completedTasks.length === 0) {
+        new Notice('No completed tasks found to archive.')
+        return
+      }
+
+      // Try to parse AI response for enriched data (summaries, etc.)
+      let result: { sliceGroups: SliceGroup[]; standaloneTasks: CompletedTask[] }
+
+      if (containsArchiveCompletedResponse(content)) {
+        // Use AI-enriched parsing
+        const parsed = parseArchiveCompletedResponse(content, completedTasks)
+        result = {
+          sliceGroups: parsed.sliceGroups,
+          standaloneTasks: parsed.standaloneTasks,
+        }
+      } else {
+        // Fall back to local grouping
+        result = groupTasksBySlice(completedTasks)
+      }
+
+      this.pendingArchiveCompletedTasks = completedTasks
+      this.pendingSliceGroups = result.sliceGroups
+      this.pendingStandaloneTasks = result.standaloneTasks
+
+      // Open the archive completed modal
+      this.openArchiveCompletedModal()
+    } catch (err) {
+      console.error('Failed to process archive completed response:', err)
+      new Notice(`Failed to process completed tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Open the archive completed review modal.
+   */
+  private openArchiveCompletedModal(): void {
+    const modal = new ArchiveCompletedModal(
+      this.app,
+      this.pendingSliceGroups,
+      this.pendingStandaloneTasks,
+      this.projectPath,
+      (selections, confirmed) => this.handleArchiveCompletedAction(selections, confirmed)
+    )
+    modal.open()
+  }
+
+  /**
+   * Open the archive completed modal for viewing from chat history.
+   * Re-parses Tasks.md to detect which tasks have already been archived.
+   */
+  async openArchiveCompletedModalForHistory(content: string): Promise<void> {
+    try {
+      // Read current Tasks.md to get fresh completed tasks
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (!tasksFile || !(tasksFile instanceof TFile)) {
+        new Notice('Tasks.md not found')
+        return
+      }
+
+      const tasksContent = await this.app.vault.read(tasksFile)
+      const completedTasks = extractCompletedTasks(tasksContent)
+
+      if (completedTasks.length === 0) {
+        new Notice('No completed tasks found. They may have already been archived.')
+        return
+      }
+
+      // Try to parse AI response for enriched data (summaries, etc.)
+      let result: { sliceGroups: SliceGroup[]; standaloneTasks: CompletedTask[] }
+
+      if (containsArchiveCompletedResponse(content)) {
+        // Use AI-enriched parsing
+        const parsed = parseArchiveCompletedResponse(content, completedTasks)
+        result = {
+          sliceGroups: parsed.sliceGroups,
+          standaloneTasks: parsed.standaloneTasks,
+        }
+      } else {
+        // Fall back to local grouping
+        result = groupTasksBySlice(completedTasks)
+      }
+
+      // Store for the action callback
+      this.pendingArchiveCompletedTasks = completedTasks
+      this.pendingSliceGroups = result.sliceGroups
+      this.pendingStandaloneTasks = result.standaloneTasks
+
+      // Open modal - viewOnly mode allows actions but shows it's from history
+      const modal = new ArchiveCompletedModal(
+        this.app,
+        result.sliceGroups,
+        result.standaloneTasks,
+        this.projectPath,
+        (selections, confirmed) => this.handleArchiveCompletedAction(selections, confirmed)
+      )
+      modal.open()
+    } catch (err) {
+      console.error('Failed to open archive completed modal for history:', err)
+      new Notice(`Failed to open tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Handle actions from the archive completed modal.
+   */
+  private async handleArchiveCompletedAction(
+    selections: ArchiveSelection[],
+    confirmed: boolean
+  ): Promise<void> {
+    if (!confirmed) return
+
+    // Filter to only archive actions
+    const archiveSelections = selections.filter((s) => s.action === 'archive')
+
+    if (archiveSelections.length === 0) {
+      new Notice('No tasks selected for archiving.')
+      return
+    }
+
+    try {
+      // Read current Tasks.md content
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (!tasksFile || !(tasksFile instanceof TFile)) {
+        new Notice('Tasks.md not found')
+        return
+      }
+
+      let tasksContent = await this.app.vault.read(tasksFile)
+
+      // Get all tasks for the removal function
+      const allTasks = getAllTasks(this.pendingSliceGroups, this.pendingStandaloneTasks)
+
+      // Remove archived tasks from Tasks.md
+      tasksContent = applyArchiveRemoval(tasksContent, archiveSelections, allTasks)
+      await this.app.vault.modify(tasksFile, tasksContent)
+
+      // Build and apply archive entries
+      const archivePath = `${this.projectPath}/Archive.md`
+      const archiveFile = this.app.vault.getAbstractFileByPath(archivePath)
+
+      if (archiveFile && archiveFile instanceof TFile) {
+        const archiveContent = await this.app.vault.read(archiveFile)
+        const archiveEntries = buildArchiveCompletedEntries(
+          archiveSelections,
+          this.pendingSliceGroups,
+          this.pendingStandaloneTasks
+        )
+        const newArchiveContent = applyArchiveAdditions(archiveContent, archiveEntries)
+        await this.app.vault.modify(archiveFile, newArchiveContent)
+      }
+
+      new Notice(`Archived ${archiveSelections.length} task${archiveSelections.length === 1 ? '' : 's'}`)
+
+      // Clear pending state and refresh snapshot
+      this.pendingArchiveCompletedTasks = []
+      this.pendingSliceGroups = []
+      this.pendingStandaloneTasks = []
+      await this.callbacks.onSnapshotRefresh()
+    } catch (err) {
+      console.error('Failed to apply archive selections:', err)
+      new Notice(`Failed to archive tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 }
