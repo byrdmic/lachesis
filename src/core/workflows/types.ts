@@ -21,6 +21,7 @@ export const WORKFLOW_NAMES = [
   'harvest-tasks',
   'ideas-groom',
   'sync-commits',
+  'archive-completed',
   // TODO: Re-enable as they're refined
   // 'synthesize',
   // 'triage',

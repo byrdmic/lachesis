@@ -17,7 +17,28 @@ import {
   containsSyncCommitsResponse,
   extractSyncCommitsSummary,
 } from '../../utils/sync-commits-parser'
+import {
+  extractArchiveCompletedSummary,
+} from '../../utils/archive-completed-parser'
 import { DiffViewerModal, type DiffAction } from '../diff-viewer-modal'
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Detect if content looks like an archive-completed workflow response.
+ * Checks for diff blocks targeting Archive.md and Tasks.md with archive-related keywords.
+ */
+function looksLikeArchiveCompletedResponse(content: string): boolean {
+  const lowerContent = content.toLowerCase()
+  const hasArchiveDiff = content.includes('```diff:Archive.md') || content.includes('Archive.md')
+  const hasTasksDiff = content.includes('```diff:Tasks.md') || content.includes('Tasks.md')
+  const hasArchiveKeywords = lowerContent.includes('completed') &&
+    (lowerContent.includes('archive') || lowerContent.includes('## completed work'))
+
+  return hasArchiveDiff && hasTasksDiff && hasArchiveKeywords && containsDiffBlocks(content)
+}
 
 // ============================================================================
 // Types
@@ -32,6 +53,8 @@ export type ChatInterfaceCallbacks = {
   onViewIdeasGroom: (content: string) => void
   /** Called when user clicks "View Matches" for a sync-commits response */
   onViewSyncCommits: (content: string) => void
+  /** Called when user clicks "View Tasks" for an archive-completed response */
+  onViewArchiveCompleted: (content: string) => void
 }
 
 // ============================================================================
@@ -54,6 +77,7 @@ export class ChatInterface {
   private streamingText = ''
   private pendingDiffs: DiffBlock[] = []
   private isProcessing = false
+  private activeWorkflowName: string | null = null
 
   constructor(
     app: App,
@@ -72,6 +96,13 @@ export class ChatInterface {
    */
   setViewingLoadedChat(viewing: boolean): void {
     this.isViewingLoadedChat = viewing
+  }
+
+  /**
+   * Set the active workflow name (used to customize rendering behavior).
+   */
+  setActiveWorkflow(workflowName: string | null): void {
+    this.activeWorkflowName = workflowName
   }
 
   /**
@@ -182,8 +213,12 @@ export class ChatInterface {
       cls: `lachesis-message ${role} ${isStreaming ? 'streaming' : ''}`,
     })
 
-    // For non-streaming messages, check if content contains diff blocks
-    if (!isStreaming && containsDiffBlocks(content)) {
+    // For non-streaming messages, check for special response types
+    // Archive-completed must be checked BEFORE diffs because its response contains diffs we want to skip
+    if (!isStreaming && looksLikeArchiveCompletedResponse(content)) {
+      // Archive completed response - render with a "View Tasks" button (skip diffs)
+      this.renderMessageWithArchiveCompleted(messageEl, content)
+    } else if (!isStreaming && containsDiffBlocks(content)) {
       this.renderMessageWithDiffs(messageEl, content)
     } else if (!isStreaming && containsIdeasGroomResponse(content)) {
       // Ideas groom response - render with a "View Ideas" button
@@ -261,7 +296,13 @@ export class ChatInterface {
       streamingEl.removeClass('streaming')
 
       // Check if content contains special response types
-      if (containsDiffBlocks(this.streamingText)) {
+      // For archive-completed workflow, skip diffs and show button to open modal
+      if (this.activeWorkflowName === 'archive-completed') {
+        // Clear and re-render with archive completed summary (skip diffs entirely)
+        streamingEl.empty()
+        this.renderMessageWithArchiveCompleted(streamingEl, this.streamingText)
+        this.activeWorkflowName = null // Clear after use
+      } else if (containsDiffBlocks(this.streamingText)) {
         // Clear and re-render with diff blocks
         streamingEl.empty()
         this.renderMessageWithDiffs(streamingEl, this.streamingText)
@@ -580,6 +621,48 @@ export class ChatInterface {
     })
     viewBtn.addEventListener('click', () => {
       this.callbacks.onViewSyncCommits(content)
+    })
+  }
+
+  /**
+   * Render a message for archive-completed workflow.
+   * Shows a summary with a "View Tasks" button that opens the modal.
+   * Works with both JSON responses and prose responses with diffs.
+   */
+  private renderMessageWithArchiveCompleted(container: HTMLElement, content: string): void {
+    // Try to extract summary from JSON response
+    const summary = extractArchiveCompletedSummary(content)
+
+    // Render summary message
+    const summaryEl = container.createDiv({ cls: 'lachesis-archive-completed-summary' })
+
+    if (summary && summary.totalCompleted > 0) {
+      let summaryText = `Found ${summary.totalCompleted} completed task${summary.totalCompleted === 1 ? '' : 's'}`
+      if (summary.sliceCount > 0) {
+        summaryText += ` in ${summary.sliceCount} slice${summary.sliceCount === 1 ? '' : 's'}`
+      }
+      if (summary.standaloneCount > 0) {
+        summaryText += ` (${summary.standaloneCount} standalone)`
+      }
+      summaryText += '.'
+      summaryEl.createEl('p', { text: summaryText })
+    } else {
+      // No JSON summary available - show generic message
+      summaryEl.createEl('p', { text: 'Archive completed tasks workflow ready.' })
+      summaryEl.createEl('p', {
+        text: 'Click the button below to review and archive completed tasks.',
+        cls: 'lachesis-archive-completed-note',
+      })
+    }
+
+    // View button
+    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-archive-completed-button-container' })
+    const viewBtn = btnContainer.createEl('button', {
+      text: 'View Completed Tasks',
+      cls: 'lachesis-archive-completed-view-btn',
+    })
+    viewBtn.addEventListener('click', () => {
+      this.callbacks.onViewArchiveCompleted(content)
     })
   }
 }
