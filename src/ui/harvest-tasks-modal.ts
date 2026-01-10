@@ -409,6 +409,26 @@ export class HarvestTasksModal extends Modal {
     this.selections.set(taskId, selection)
   }
 
+  /**
+   * Re-render just a single task item without affecting scroll position.
+   */
+  private rerenderTaskItem(task: HarvestedTask) {
+    const existingItem = this.contentEl.querySelector(`[data-task-id="${task.id}"]`)
+    if (!existingItem || !existingItem.parentElement) return
+
+    const parent = existingItem.parentElement
+
+    // Create a temporary container to render the new item
+    const tempContainer = document.createElement('div')
+    this.renderTaskItem(tempContainer, task)
+
+    // Replace the old item with the new one
+    const newItem = tempContainer.firstElementChild
+    if (newItem) {
+      parent.replaceChild(newItem, existingItem)
+    }
+  }
+
   private renderFooter(container: HTMLElement) {
     const footer = container.createDiv({ cls: 'lachesis-harvest-tasks-footer' })
 
