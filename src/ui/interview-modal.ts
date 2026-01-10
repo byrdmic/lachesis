@@ -16,6 +16,7 @@ import type {
 import { initializeStore, loadFromDisk } from '../core/session/session-store'
 import { isProviderAvailable } from '../ai/providers/factory'
 import { DISCOVERY_TOPICS, type DiscoveryTopic } from '../core/interview/phases'
+import { buildProjectSnapshot } from '../core/project/snapshot-builder'
 
 // ============================================================================
 // Planning Level Options
@@ -359,10 +360,16 @@ export class InterviewModal extends Modal {
 
     const buttonContainer = contentEl.createDiv({ cls: 'lachesis-button-container' })
 
-    // Open project button
-    const openButton = buttonContainer.createEl('button', {
-      text: 'Open Project',
+    // Primary: Continue in Chat (opens existing project modal)
+    const continueButton = buttonContainer.createEl('button', {
+      text: 'Continue in Chat',
       cls: 'mod-cta',
+    })
+    continueButton.addEventListener('click', () => this.transitionToExistingProject())
+
+    // Secondary: Open Files (opens Overview.md in editor)
+    const openButton = buttonContainer.createEl('button', {
+      text: 'Open Files',
     })
     openButton.addEventListener('click', async () => {
       const overviewPath = `${projectPath}/Overview.md`
@@ -376,6 +383,31 @@ export class InterviewModal extends Modal {
     // Close button
     const closeButton = buttonContainer.createEl('button', { text: 'Close' })
     closeButton.addEventListener('click', () => this.close())
+  }
+
+  private async transitionToExistingProject() {
+    if (!this.currentSession?.scaffoldedPath) {
+      new Notice('No project path available')
+      return
+    }
+
+    const projectPath = this.currentSession.scaffoldedPath
+
+    // Show loading state
+    const { contentEl } = this
+    contentEl.empty()
+    contentEl.createEl('h2', { text: 'Loading project...' })
+
+    try {
+      const snapshot = await buildProjectSnapshot(this.app.vault, projectPath)
+      this.close()
+      this.plugin.openExistingProject(projectPath, snapshot)
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Failed to load project'
+      new Notice(`Error: ${error}`)
+      // Re-render complete phase on error
+      this.renderCompletePhase()
+    }
   }
 
   private renderErrorPhase(error: string) {

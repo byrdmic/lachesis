@@ -36,6 +36,7 @@ import type { AIProvider } from '../../ai/providers/types'
 import type { LachesisSettings } from '../../settings'
 import { createFolderName } from '../project/types'
 import { scaffoldProject, type ScaffoldProjectData } from '../../scaffolder/scaffolder'
+import { fetchCommits, formatCommitLog } from '../../github'
 
 // ============================================================================
 // Constants
@@ -71,6 +72,30 @@ function detectTopics(questionText: string, existingTopics: string[]): string[] 
 
 function checkForTransitionPhrase(responseText: string): boolean {
   return responseText.toLowerCase().includes(TRANSITION_PHRASE)
+}
+
+/**
+ * Detect GitHub repository URL in user message.
+ * Matches common formats: https://github.com/user/repo, github.com/user/repo, user/repo
+ */
+function detectGitHubUrl(message: string): string | null {
+  // Match full GitHub URLs
+  const fullUrlPattern = /(?:https?:\/\/)?github\.com\/[\w-]+\/[\w.-]+/i
+  const fullMatch = message.match(fullUrlPattern)
+  if (fullMatch) return fullMatch[0]
+
+  // Match shorthand format (user/repo) - must be 2 parts separated by /
+  const shorthandPattern = /\b([\w-]+\/[\w.-]+)\b/
+  const shortMatch = message.match(shorthandPattern)
+  if (shortMatch) {
+    const candidate = shortMatch[1]
+    // Avoid matching file paths or other patterns - must look like a repo
+    if (!candidate.includes('.') && !candidate.startsWith('/')) {
+      return `github.com/${candidate}`
+    }
+  }
+
+  return null
 }
 
 // ============================================================================
@@ -195,6 +220,14 @@ export function createSessionManager(config: SessionManagerConfig): ISessionMana
 
     addMessage(sessionId, userMessage, onEvent)
 
+    // Detect and fetch GitHub context if URL mentioned
+    const detectedUrl = detectGitHubUrl(message)
+    if (detectedUrl && detectedUrl !== session.githubRepoUrl) {
+      updateSession(sessionId, { githubRepoUrl: detectedUrl })
+      // Fetch commits in background (non-blocking)
+      fetchGitHubContext(sessionId, detectedUrl)
+    }
+
     // Transition to generating question
     transitionTo(sessionId, 'generating_question', {}, onEvent)
 
@@ -204,6 +237,27 @@ export function createSessionManager(config: SessionManagerConfig): ISessionMana
     }
 
     return updatedSession
+  }
+
+  /**
+   * Fetch GitHub commits for a repository and update session state.
+   * Runs in background without blocking the conversation.
+   */
+  async function fetchGitHubContext(sessionId: SessionId, repoUrl: string): Promise<void> {
+    try {
+      const result = await fetchCommits(repoUrl, {
+        token: config.settings.githubToken || undefined,
+        perPage: 10,
+      })
+
+      if (result.success && result.data.length > 0) {
+        const formatted = formatCommitLog(result.data, { includeDate: true })
+        updateSession(sessionId, { githubCommitLog: formatted })
+      }
+    } catch (err) {
+      // Non-critical failure - log and continue
+      console.warn('Failed to fetch GitHub commits:', err)
+    }
   }
 
   async function streamNextQuestion(
@@ -227,6 +281,7 @@ export function createSessionManager(config: SessionManagerConfig): ISessionMana
       coveredTopics: session.coveredTopics,
       currentHour: new Date().getHours(),
       isFirstMessage,
+      recentCommits: session.githubCommitLog,
     })
 
     const context = {
@@ -420,6 +475,11 @@ export function createSessionManager(config: SessionManagerConfig): ISessionMana
         projectSlug,
         oneLiner: session.oneLiner,
         extracted: session.extractedData,
+        interviewTranscript: {
+          messages: session.messages,
+          planningLevel: session.planningLevel,
+          createdAt: session.createdAt,
+        },
       }
 
       const result = await scaffoldProject(

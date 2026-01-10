@@ -1256,7 +1256,12 @@ ${openingInstructions}
 
 CURRENT STATE:
 ${topicsStatus}
-
+${options.recentCommits ? `
+GITHUB CONTEXT:
+The user has mentioned a GitHub repository. Here are recent commits showing existing work:
+${options.recentCommits}
+Use this context to understand what's already built and ask informed questions.
+` : ''}
 YOUR APPROACH:
 1. Ask ONE question at a time—never multiple questions in one message
 2. Keep questions short (1-2 sentences)

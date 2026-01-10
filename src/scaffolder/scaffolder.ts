@@ -3,7 +3,7 @@
 
 import type { Vault } from 'obsidian'
 import { TEMPLATES, type TemplateName } from './templates'
-import type { ExtractedProjectData } from '../ai/client'
+import type { ConversationMessage, ExtractedProjectData } from '../ai/client'
 
 // ============================================================================
 // Types
@@ -13,16 +13,57 @@ export type ScaffoldResult =
   | { success: true; projectPath: string }
   | { success: false; error: string }
 
+export type InterviewTranscript = {
+  messages: ConversationMessage[]
+  planningLevel?: string
+  createdAt: string
+}
+
 export type ScaffoldProjectData = {
   projectName: string
   projectSlug: string
   oneLiner?: string
   extracted?: ExtractedProjectData
+  interviewTranscript?: InterviewTranscript
 }
 
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/**
+ * Serialize interview transcript to markdown format for storage.
+ */
+function serializeTranscript(transcript: InterviewTranscript): string {
+  const { messages, planningLevel, createdAt } = transcript
+
+  // Build frontmatter
+  const frontmatter = [
+    '---',
+    `created: ${createdAt}`,
+    planningLevel ? `planningLevel: "${planningLevel}"` : null,
+    `messageCount: ${messages.length}`,
+    '---',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  // Build message content
+  const messageContent = messages
+    .map((msg) => {
+      const time = msg.timestamp
+        ? new Date(msg.timestamp).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          })
+        : '??:??'
+      return `## ${time} — ${msg.role}\n${msg.content}`
+    })
+    .join('\n\n---\n\n')
+
+  return `${frontmatter}\n\n# Interview Transcript\n\n${messageContent}\n`
+}
 
 function hasMinimalExtractedData(data: ScaffoldProjectData): boolean {
   if (!data.extracted) return true
@@ -309,6 +350,12 @@ export async function scaffoldProject(
         'Add your GitHub repo URL (e.g., "github.com/user/repo") to enable commit analysis for task tracking.'
     }
     await vault.create(`${aiConfigFolder}/config.json`, JSON.stringify(aiConfig, null, 2))
+
+    // Create interview transcript if provided
+    if (data.interviewTranscript && data.interviewTranscript.messages.length > 0) {
+      const transcriptContent = serializeTranscript(data.interviewTranscript)
+      await vault.create(`${aiConfigFolder}/interview-transcript.md`, transcriptContent)
+    }
 
     // Create all template files
     const files: Array<{ path: string; template: TemplateName }> = [

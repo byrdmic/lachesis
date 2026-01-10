@@ -70,6 +70,10 @@ export type SessionState = {
   extractedData?: ExtractedProjectData
   scaffoldedPath?: string
 
+  // GitHub context (for new project interviews)
+  githubRepoUrl?: string
+  githubCommitLog?: string
+
   // Error information
   error?: string
   errorDetails?: string
