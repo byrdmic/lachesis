@@ -160,6 +160,7 @@ export class ExistingProjectModal extends Modal {
         onViewIdeasGroom: (content) => this.workflowExecutor?.openIdeasGroomModalForHistory(content),
         onViewSyncCommits: (content) => this.workflowExecutor?.openSyncCommitsModalForHistory(content),
         onViewArchiveCompleted: (content) => this.workflowExecutor?.openArchiveCompletedModalForHistory(content),
+        onViewHarvestTasks: (content) => this.workflowExecutor?.openHarvestTasksModalForHistory(content),
       },
       this.renderComponent
     )

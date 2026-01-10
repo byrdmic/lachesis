@@ -362,7 +362,7 @@ export class HarvestTasksModal extends Modal {
         destination: newDest,
         sliceLink: this.getDefaultSliceLink(newDest),
       })
-      this.render()
+      this.rerenderTaskItem(task)
     })
   }
 

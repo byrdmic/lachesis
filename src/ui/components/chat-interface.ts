@@ -20,6 +20,10 @@ import {
 import {
   extractArchiveCompletedSummary,
 } from '../../utils/archive-completed-parser'
+import {
+  containsHarvestResponse,
+  extractHarvestTasksSummary,
+} from '../../utils/harvest-tasks-parser'
 import { DiffViewerModal, type DiffAction } from '../diff-viewer-modal'
 
 // ============================================================================
@@ -55,6 +59,8 @@ export type ChatInterfaceCallbacks = {
   onViewSyncCommits: (content: string) => void
   /** Called when user clicks "View Tasks" for an archive-completed response */
   onViewArchiveCompleted: (content: string) => void
+  /** Called when user clicks "View Tasks" for a harvest-tasks response */
+  onViewHarvestTasks: (content: string) => void
 }
 
 // ============================================================================
@@ -226,6 +232,9 @@ export class ChatInterface {
     } else if (!isStreaming && containsSyncCommitsResponse(content)) {
       // Sync commits response - render with a "View Matches" button
       this.renderMessageWithSyncCommits(messageEl, content)
+    } else if (!isStreaming && containsHarvestResponse(content)) {
+      // Harvest tasks response - render with a "View Tasks" button
+      this.renderMessageWithHarvestTasks(messageEl, content)
     } else {
       // Parse hint tags and render them specially
       const hintMatch = content.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
@@ -314,6 +323,10 @@ export class ChatInterface {
         // Clear and re-render with sync commits summary
         streamingEl.empty()
         this.renderMessageWithSyncCommits(streamingEl, this.streamingText)
+      } else if (containsHarvestResponse(this.streamingText)) {
+        // Clear and re-render with harvest tasks summary
+        streamingEl.empty()
+        this.renderMessageWithHarvestTasks(streamingEl, this.streamingText)
       } else {
         // Re-render with markdown + hint styling
         streamingEl.empty()
@@ -621,6 +634,55 @@ export class ChatInterface {
     })
     viewBtn.addEventListener('click', () => {
       this.callbacks.onViewSyncCommits(content)
+    })
+  }
+
+  /**
+   * Render a message that contains harvest-tasks JSON response.
+   * Shows a summary with a "View Tasks" button that opens the modal.
+   */
+  private renderMessageWithHarvestTasks(container: HTMLElement, content: string): void {
+    const summary = extractHarvestTasksSummary(content)
+
+    if (!summary) {
+      // Couldn't parse summary, render as plain text
+      this.renderMarkdown(content, container)
+      return
+    }
+
+    // Render summary message
+    const summaryEl = container.createDiv({ cls: 'lachesis-harvest-tasks-summary' })
+
+    if (summary.totalFound > 0) {
+      let summaryText = `Found ${summary.totalFound} task${summary.totalFound === 1 ? '' : 's'} to harvest`
+      const sources: string[] = []
+      if (summary.fromLog > 0) sources.push(`${summary.fromLog} from Log`)
+      if (summary.fromIdeas > 0) sources.push(`${summary.fromIdeas} from Ideas`)
+      if (summary.fromOther > 0) sources.push(`${summary.fromOther} from other files`)
+      if (sources.length > 0) {
+        summaryText += ` (${sources.join(', ')})`
+      }
+      summaryText += '.'
+      summaryEl.createEl('p', { text: summaryText })
+
+      if (summary.duplicatesSkipped > 0) {
+        summaryEl.createEl('p', {
+          text: `${summary.duplicatesSkipped} duplicate${summary.duplicatesSkipped === 1 ? '' : 's'} skipped.`,
+          cls: 'lachesis-harvest-tasks-note',
+        })
+      }
+    } else {
+      summaryEl.createEl('p', { text: 'No new tasks found to harvest.' })
+    }
+
+    // View button
+    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-harvest-tasks-button-container' })
+    const viewBtn = btnContainer.createEl('button', {
+      text: 'View Tasks',
+      cls: 'lachesis-harvest-tasks-view-btn',
+    })
+    viewBtn.addEventListener('click', () => {
+      this.callbacks.onViewHarvestTasks(content)
     })
   }
 

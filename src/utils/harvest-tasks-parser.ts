@@ -459,6 +459,66 @@ export function applyHarvestSelections(
 }
 
 // ============================================================================
+// Summary Extraction
+// ============================================================================
+
+/**
+ * Summary info extracted from a harvest-tasks response
+ */
+export interface HarvestTasksSummary {
+  totalFound: number
+  fromLog: number
+  fromIdeas: number
+  fromOther: number
+  duplicatesSkipped: number
+}
+
+/**
+ * Extract summary info from a harvest-tasks JSON response
+ */
+export function extractHarvestTasksSummary(content: string): HarvestTasksSummary | null {
+  try {
+    let jsonStr = content.trim()
+
+    // Try to extract JSON from code blocks
+    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1].trim()
+    }
+
+    const parsed = JSON.parse(jsonStr)
+
+    if (parsed.summary) {
+      return {
+        totalFound: parsed.summary.totalFound ?? 0,
+        fromLog: parsed.summary.fromLog ?? 0,
+        fromIdeas: parsed.summary.fromIdeas ?? 0,
+        fromOther: parsed.summary.fromOther ?? 0,
+        duplicatesSkipped: parsed.summary.duplicatesSkipped ?? 0,
+      }
+    }
+
+    // Fallback: count tasks if no summary provided
+    if (parsed.tasks && Array.isArray(parsed.tasks)) {
+      const tasks = parsed.tasks as Array<{ sourceFile?: string }>
+      const fromLog = tasks.filter(t => t.sourceFile?.toLowerCase().includes('log')).length
+      const fromIdeas = tasks.filter(t => t.sourceFile?.toLowerCase().includes('ideas')).length
+      return {
+        totalFound: tasks.length,
+        fromLog,
+        fromIdeas,
+        fromOther: tasks.length - fromLog - fromIdeas,
+        duplicatesSkipped: 0,
+      }
+    }
+
+    return null
+  } catch {
+    return null
+  }
+}
+
+// ============================================================================
 // Utility Functions
 // ============================================================================
 

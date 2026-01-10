@@ -20,6 +20,7 @@ import {
   parseHarvestResponse,
   parseRoadmapSlices,
   applyHarvestSelections,
+  detectMovedHarvestTasks,
   type HarvestedTask,
   type HarvestTaskSelection,
   type RoadmapSlice,
@@ -531,6 +532,59 @@ export class WorkflowExecutor {
     } catch (err) {
       console.error('Failed to apply harvest task selections:', err)
       new Notice(`Failed to add tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Open the harvest tasks modal for viewing history.
+   * Detects which tasks have been moved by checking Tasks.md.
+   * Allows acting on pending tasks that haven't been moved yet.
+   */
+  async openHarvestTasksModalForHistory(content: string): Promise<void> {
+    try {
+      let tasks = parseHarvestResponse(content)
+
+      if (tasks.length === 0) {
+        new Notice('Could not parse tasks from response.')
+        return
+      }
+
+      // Read Tasks.md to detect which tasks have been moved
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (tasksFile && tasksFile instanceof TFile) {
+        const tasksContent = await this.app.vault.read(tasksFile)
+        tasks = detectMovedHarvestTasks(tasks, tasksContent)
+      }
+
+      // Read Roadmap.md for slice information
+      const roadmapPath = `${this.projectPath}/Roadmap.md`
+      const roadmapFile = this.app.vault.getAbstractFileByPath(roadmapPath)
+
+      if (roadmapFile && roadmapFile instanceof TFile) {
+        const roadmapContent = await this.app.vault.read(roadmapFile)
+        this.roadmapSlices = parseRoadmapSlices(roadmapContent)
+      } else {
+        this.roadmapSlices = []
+      }
+
+      // Store tasks for the action callback
+      this.pendingHarvestedTasks = tasks
+
+      // Open modal in view-only mode but with action callback for pending tasks
+      const modal = new HarvestTasksModal(
+        this.app,
+        tasks,
+        this.projectPath,
+        this.roadmapSlices,
+        (selections, confirmed) => this.handleHarvestTasksAction(selections, confirmed),
+        { viewOnly: true }
+      )
+      modal.open()
+    } catch (err) {
+      console.error('Failed to open harvest tasks modal for history:', err)
+      new Notice(`Failed to open tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 
