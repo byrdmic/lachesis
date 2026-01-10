@@ -198,6 +198,21 @@ export function detectMovedHarvestTasks(
     sectionRanges.push({ start: structure.futureTasksLineNumber, end, destination: 'future-tasks' })
   }
 
+  // Find Discarded section
+  const discardedSectionRegex = /^##\s*Discarded(?:\s+Tasks)?/i
+  let discardedStart = -1
+  let discardedEnd = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (discardedSectionRegex.test(lines[i].trim())) {
+      discardedStart = i
+      discardedEnd = i + 1
+      while (discardedEnd < lines.length && !lines[discardedEnd].startsWith('## ')) {
+        discardedEnd++
+      }
+      break
+    }
+  }
+
   // Check each task to see if it was moved
   return tasks.map((task) => {
     // Look for the source comment pattern: <!-- from <sourceFile> --> or <!-- from <sourceFile> <date> -->
@@ -213,6 +228,11 @@ export function detectMovedHarvestTasks(
         const taskWords = task.text.split(/\s+/).slice(0, 4).join(' ').toLowerCase()
         const lineText = line.toLowerCase()
         if (lineText.includes(taskWords.slice(0, 20))) {
+          // Check if this is in the Discarded section (strikethrough format)
+          if (discardedStart !== -1 && i >= discardedStart && i < discardedEnd) {
+            return { ...task, movedTo: 'discard' }
+          }
+
           // Found a match, determine which section it's in
           for (const range of sectionRanges) {
             if (i >= range.start && i < range.end) {
@@ -331,18 +351,22 @@ export function applyHarvestSelections(
   const futureTasksToAdd: Array<{ text: string; task: HarvestedTask; sliceLink: string | null }> = []
   const activeTasksToAdd: Array<{ text: string; task: HarvestedTask; sliceLink: string | null }> = []
   const nextActionsToAdd: Array<{ text: string; task: HarvestedTask; sliceLink: string | null }> = []
+  const discardedTasksToAdd: Array<{ text: string; task: HarvestedTask }> = []
 
   // Build a map of task IDs to tasks
   const taskMap = new Map(tasks.map((t) => [t.id, t]))
 
   for (const selection of selections) {
-    if (selection.destination === 'discard') continue
-
     const task = taskMap.get(selection.taskId)
     if (!task) continue
 
     const finalText = selection.customText || task.text
     const sliceLink = selection.sliceLink
+
+    if (selection.destination === 'discard') {
+      discardedTasksToAdd.push({ text: finalText, task })
+      continue
+    }
 
     switch (selection.destination) {
       case 'future-tasks':
@@ -445,6 +469,45 @@ export function applyHarvestSelections(
     }
 
     if (newLines.length > 0) {
+      insertions.push({ lineNumber: endLine, content: newLines })
+    }
+  }
+
+  // 4. Add discarded tasks to Discarded section (with strikethrough)
+  if (discardedTasksToAdd.length > 0) {
+    // Find existing Discarded section or create at end
+    const discardedSectionRegex = /^##\s*Discarded(?:\s+Tasks)?/i
+    let discardedLineNumber = -1
+    for (let i = 0; i < lines.length; i++) {
+      if (discardedSectionRegex.test(lines[i].trim())) {
+        discardedLineNumber = i
+        break
+      }
+    }
+
+    if (discardedLineNumber === -1) {
+      // Create section at end of file
+      const newLines = ['', '## Discarded']
+      for (const item of discardedTasksToAdd) {
+        const sourceComment = item.task.sourceDate
+          ? ` <!-- from ${item.task.sourceFile} ${item.task.sourceDate} -->`
+          : ` <!-- from ${item.task.sourceFile} -->`
+        newLines.push(`- ~~${item.text}~~${sourceComment}`)
+      }
+      insertions.push({ lineNumber: lines.length, content: newLines })
+    } else {
+      // Find end of Discarded section to insert
+      let endLine = discardedLineNumber + 1
+      while (endLine < lines.length && !lines[endLine].startsWith('## ')) {
+        endLine++
+      }
+      const newLines: string[] = []
+      for (const item of discardedTasksToAdd) {
+        const sourceComment = item.task.sourceDate
+          ? ` <!-- from ${item.task.sourceFile} ${item.task.sourceDate} -->`
+          : ` <!-- from ${item.task.sourceFile} -->`
+        newLines.push(`- ~~${item.text}~~${sourceComment}`)
+      }
       insertions.push({ lineNumber: endLine, content: newLines })
     }
   }

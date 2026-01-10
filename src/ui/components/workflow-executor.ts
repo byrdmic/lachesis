@@ -498,11 +498,12 @@ export class WorkflowExecutor {
   ): Promise<void> {
     if (!confirmed) return
 
-    // Filter out discarded tasks
-    const tasksToApply = selections.filter((s) => s.destination !== 'discard')
+    // Count tasks to add vs discard
+    const tasksToAdd = selections.filter((s) => s.destination !== 'discard')
+    const tasksToDiscard = selections.filter((s) => s.destination === 'discard')
 
-    if (tasksToApply.length === 0) {
-      new Notice('No tasks selected to add.')
+    if (tasksToAdd.length === 0 && tasksToDiscard.length === 0) {
+      new Notice('No tasks to process.')
       return
     }
 
@@ -518,12 +519,20 @@ export class WorkflowExecutor {
 
       const tasksContent = await this.app.vault.read(tasksFile)
 
-      // Apply the selections to Tasks.md
-      const newContent = applyHarvestSelections(tasksContent, tasksToApply, this.pendingHarvestedTasks)
+      // Apply all selections to Tasks.md (including discards which go to Discarded section)
+      const newContent = applyHarvestSelections(tasksContent, selections, this.pendingHarvestedTasks)
 
       await this.app.vault.modify(tasksFile, newContent)
 
-      new Notice(`Added ${tasksToApply.length} task${tasksToApply.length > 1 ? 's' : ''} to Tasks.md`)
+      // Build notice message
+      const parts: string[] = []
+      if (tasksToAdd.length > 0) {
+        parts.push(`${tasksToAdd.length} added`)
+      }
+      if (tasksToDiscard.length > 0) {
+        parts.push(`${tasksToDiscard.length} discarded`)
+      }
+      new Notice(`Tasks: ${parts.join(', ')}`)
 
       // Clear pending state and refresh snapshot
       this.pendingHarvestedTasks = []
