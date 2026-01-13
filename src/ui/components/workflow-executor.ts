@@ -132,6 +132,10 @@ export class WorkflowExecutor {
   private pendingPromoteStatus: PromoteStatus = 'no_tasks'
   private pendingCurrentNowTask: string | null = null
   private pendingPromoteMessage: string | null = null
+  private awaitingPromoteKeyword: boolean = false
+
+  // Keyword for promote-next-task confirmation
+  private static readonly PROMOTE_KEYWORD = 'PROMOTE'
 
   // State for combined workflow execution
   private combinedWorkflowState: CombinedWorkflowState | null = null
@@ -1392,7 +1396,7 @@ export class WorkflowExecutor {
 
   /**
    * Handle the AI response from the promote-next-task workflow.
-   * Parses the JSON response and opens the review modal.
+   * Parses the JSON response and shows selection in chat with keyword prompt.
    */
   async handlePromoteNextResponse(content: string): Promise<void> {
     try {
@@ -1423,8 +1427,8 @@ export class WorkflowExecutor {
         return
       }
 
-      // Open the modal for user confirmation
-      this.openPromoteNextModal()
+      // Show selection in chat and wait for keyword
+      this.showPromoteSelectionInChat()
     } catch (err) {
       console.error('Failed to process promote next response:', err)
       new Notice(`Failed to process response: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -1432,7 +1436,105 @@ export class WorkflowExecutor {
   }
 
   /**
-   * Open the promote next task modal.
+   * Show the promote task selection in chat and wait for keyword confirmation.
+   */
+  private showPromoteSelectionInChat(): void {
+    if (!this.pendingSelectedTask) {
+      this.advanceCombinedWorkflow()
+      return
+    }
+
+    const task = this.pendingSelectedTask
+    const sourceLabel = task.sourceSection === 'next' ? 'Next' : 'Later'
+
+    // Build the message
+    let message = `**Task to Promote**\n\n`
+    message += `- [ ] ${task.text}\n\n`
+    message += `*From ${sourceLabel} section*`
+
+    if (task.sliceLink) {
+      message += ` | ${task.sliceLink}`
+    }
+
+    message += `\n\n`
+
+    if (this.pendingPromoteReasoning) {
+      message += `**Why this task:** ${this.pendingPromoteReasoning}\n\n`
+    }
+
+    // Show candidates if any
+    if (this.pendingPromoteCandidates.length > 0) {
+      message += `<details>\n<summary>Other candidates considered (${this.pendingPromoteCandidates.length})</summary>\n\n`
+      for (const candidate of this.pendingPromoteCandidates) {
+        const candSource = candidate.sourceSection === 'next' ? 'Next' : 'Later'
+        message += `- ${candidate.text} *(${candSource}, score: ${candidate.score}/5)*\n`
+        if (candidate.note) {
+          message += `  - ${candidate.note}\n`
+        }
+      }
+      message += `\n</details>\n\n`
+    }
+
+    message += `---\n\n`
+    message += `Say **${WorkflowExecutor.PROMOTE_KEYWORD}** to move this task to Now, or **SKIP** to continue without promoting.`
+
+    this.callbacks.onAddMessage('assistant', message)
+    this.awaitingPromoteKeyword = true
+  }
+
+  /**
+   * Check if user input contains the promote keyword and handle accordingly.
+   * Returns true if the input was handled (keyword detected), false otherwise.
+   */
+  async checkPromoteKeyword(userInput: string): Promise<boolean> {
+    if (!this.awaitingPromoteKeyword) {
+      return false
+    }
+
+    const input = userInput.trim().toUpperCase()
+
+    if (input === WorkflowExecutor.PROMOTE_KEYWORD || input === 'PROMOTE') {
+      // User confirmed promotion
+      this.awaitingPromoteKeyword = false
+
+      if (this.pendingSelectedTask) {
+        const selection: PromoteSelection = {
+          action: 'promote',
+          selectedTask: this.pendingSelectedTask,
+        }
+        await this.handlePromoteNextAction(selection, true)
+      } else {
+        this.advanceCombinedWorkflow()
+      }
+      return true
+    }
+
+    if (input === 'SKIP' || input === 'NO' || input === 'CANCEL') {
+      // User skipped promotion
+      this.awaitingPromoteKeyword = false
+      this.callbacks.onAddMessage('assistant', 'Skipping task promotion.')
+      this.clearPromoteNextState()
+      this.advanceCombinedWorkflow()
+      return true
+    }
+
+    // Not a recognized keyword - remind user
+    this.callbacks.onAddMessage(
+      'assistant',
+      `Please say **${WorkflowExecutor.PROMOTE_KEYWORD}** to promote the task, or **SKIP** to continue without promoting.`
+    )
+    return true // Still handled - don't send to AI
+  }
+
+  /**
+   * Check if we're awaiting the promote keyword.
+   */
+  isAwaitingPromoteKeyword(): boolean {
+    return this.awaitingPromoteKeyword
+  }
+
+  /**
+   * Open the promote next task modal (for viewing from history).
    */
   private openPromoteNextModal(): void {
     const modal = new PromoteNextModal(

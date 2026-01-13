@@ -509,6 +509,27 @@ export class ExistingProjectModal extends Modal {
     // Once user interacts with the chat, it's no longer view-only
     this.chatInterface.setViewingLoadedChat(false)
 
+    // Check if we're awaiting the promote keyword
+    if (this.workflowExecutor?.isAwaitingPromoteKeyword()) {
+      // Add user message to UI first
+      const userMessage: ConversationMessage = {
+        role: 'user',
+        content: message,
+        timestamp: new Date().toISOString(),
+      }
+      this.messages.push(userMessage)
+      this.chatInterface.addMessageToUI('user', message)
+      await this.chatSidebar?.saveChat(this.messages)
+
+      // Check for keyword and handle
+      const handled = await this.workflowExecutor.checkPromoteKeyword(message)
+      if (handled) {
+        // Save any assistant messages that were added
+        await this.chatSidebar?.saveChat(this.messages)
+        return
+      }
+    }
+
     // Detect workflow request from user input (if not already set by button click)
     if (!this.activeWorkflow) {
       const detectedWorkflow = this.workflowExecutor?.detectWorkflowFromMessage(message)
