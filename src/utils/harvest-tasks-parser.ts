@@ -42,6 +42,7 @@ export interface HarvestedTask {
   sourceFile: string // Origin file (Log.md, Ideas.md, Overview.md, etc.)
   sourceContext: string | null // Brief quote or reference from source
   sourceDate: string | null // Date if from Log.md
+  ideaHeading: string | null // Original ## heading if from Ideas.md (for context)
   suggestedDestination: TaskDestination
   suggestedSliceLink: string | null // AI-suggested slice link (e.g., "[[Roadmap#VS1 — Basic Modal Opens]]")
   reasoning: string | null // Why AI thinks this is actionable
@@ -87,6 +88,7 @@ export interface HarvestTasksAIResponse {
     sourceFile: string
     sourceContext?: string
     sourceDate?: string
+    ideaHeading?: string // Original ## heading if from Ideas.md
     suggestedDestination: TaskDestination
     suggestedSliceLink?: string
     reasoning?: string
@@ -145,6 +147,7 @@ export function parseHarvestResponse(aiResponse: string): HarvestedTask[] {
       sourceFile: task.sourceFile,
       sourceContext: task.sourceContext || null,
       sourceDate: task.sourceDate || null,
+      ideaHeading: task.ideaHeading || null,
       suggestedDestination: task.suggestedDestination || 'future-tasks',
       suggestedSliceLink: task.suggestedSliceLink || null,
       reasoning: task.reasoning || null,

@@ -12,6 +12,11 @@
  * The core workflow names used in UI and conversation.
  */
 export const WORKFLOW_NAMES = [
+  // Combined workflows
+  'log-refine',
+  'tasks-harvest',
+  'tasks-maintenance',
+  // Individual workflows (some hidden from UI)
   'title-entries',
   'generate-tasks',
   'groom-tasks',
@@ -73,6 +78,10 @@ export type WorkflowDefinition = {
   rules: string[]
   /** Whether this workflow uses AI (false = local-only processing) */
   usesAI: boolean
+  /** If true, workflow is hidden from UI buttons but usable via chat */
+  hidden?: boolean
+  /** For combined workflows, the ordered list of sub-workflows to execute */
+  combinedSteps?: WorkflowName[]
 }
 
 /**
@@ -85,4 +94,25 @@ export type ActiveWorkflow = {
   touchedFiles: string[]
   /** Whether we're in preview mode */
   previewMode: boolean
+}
+
+/**
+ * Tracks the status of a single step in a combined workflow.
+ */
+export type CombinedWorkflowStep = {
+  workflowName: WorkflowName
+  status: 'pending' | 'running' | 'completed' | 'skipped'
+  skipReason?: string
+}
+
+/**
+ * Runtime state for tracking progress through a combined workflow.
+ */
+export type CombinedWorkflowState = {
+  /** The combined workflow being executed */
+  combinedName: WorkflowName
+  /** Ordered list of steps with their status */
+  steps: CombinedWorkflowStep[]
+  /** Index of the currently executing step */
+  currentStepIndex: number
 }

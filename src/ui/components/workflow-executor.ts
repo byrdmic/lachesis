@@ -3,7 +3,7 @@
 
 import type { App } from 'obsidian'
 import { Notice, TFile } from 'obsidian'
-import type { WorkflowDefinition, WorkflowName } from '../../core/workflows/types'
+import type { WorkflowDefinition, WorkflowName, CombinedWorkflowState, CombinedWorkflowStep } from '../../core/workflows/types'
 import { getAllWorkflows, getWorkflowDefinition } from '../../core/workflows/definitions'
 import type { ProjectSnapshot, ExpectedCoreFile } from '../../core/project/snapshot'
 import { buildProjectSnapshot } from '../../core/project/snapshot-builder'
@@ -114,6 +114,9 @@ export class WorkflowExecutor {
   private pendingSliceGroups: SliceGroup[] = []
   private pendingStandaloneTasks: CompletedTask[] = []
 
+  // State for combined workflow execution
+  private combinedWorkflowState: CombinedWorkflowState | null = null
+
   constructor(
     app: App,
     projectPath: string,
@@ -162,8 +165,9 @@ export class WorkflowExecutor {
       })
     }
 
-    // Workflow buttons
+    // Workflow buttons (filter out hidden workflows)
     for (const workflow of getAllWorkflows()) {
+      if (workflow.hidden) continue
       const btn = container.createEl('button', {
         text: workflow.displayName,
         cls: 'lachesis-workflow-button',
@@ -275,6 +279,12 @@ export class WorkflowExecutor {
       return
     }
 
+    // Handle combined workflows
+    if (workflow.combinedSteps && workflow.combinedSteps.length > 0) {
+      this.startCombinedWorkflow(workflow)
+      return
+    }
+
     // Special handling for fill-overview: use focusedFile mechanism
     if (workflow.name === 'fill-overview') {
       this.callbacks.onSetFocusedFile(
@@ -333,6 +343,183 @@ export class WorkflowExecutor {
       await this.handleGroomTasksWorkflow()
     }
     // Future non-AI workflows can be added here
+  }
+
+  // ============================================================================
+  // Combined Workflow Execution
+  // ============================================================================
+
+  /**
+   * Start a combined workflow by initializing state and running the first step.
+   */
+  private startCombinedWorkflow(workflow: WorkflowDefinition): void {
+    if (!workflow.combinedSteps || workflow.combinedSteps.length === 0) return
+
+    // Initialize combined workflow state
+    const steps: CombinedWorkflowStep[] = workflow.combinedSteps.map((name) => ({
+      workflowName: name,
+      status: 'pending' as const,
+    }))
+
+    this.combinedWorkflowState = {
+      combinedName: workflow.name,
+      steps,
+      currentStepIndex: 0,
+    }
+
+    // Run the first step
+    this.runCurrentCombinedStep()
+  }
+
+  /**
+   * Run the current step in the combined workflow.
+   */
+  private runCurrentCombinedStep(): void {
+    if (!this.combinedWorkflowState) return
+
+    const { steps, currentStepIndex, combinedName } = this.combinedWorkflowState
+    if (currentStepIndex >= steps.length) {
+      // All steps complete
+      this.completeCombinedWorkflow()
+      return
+    }
+
+    const currentStep = steps[currentStepIndex]
+    const stepWorkflow = getWorkflowDefinition(currentStep.workflowName)
+
+    // Mark as running
+    currentStep.status = 'running'
+
+    // Show step indicator
+    const stepLabel = `Step ${currentStepIndex + 1} of ${steps.length}: ${stepWorkflow.displayName}`
+    this.callbacks.onAddMessage('assistant', `**${stepLabel}**`)
+
+    // Handle different combined workflows
+    if (combinedName === 'log-refine') {
+      this.runLogRefineStep(currentStep, stepWorkflow)
+    } else if (combinedName === 'tasks-harvest') {
+      this.runTasksHarvestStep(currentStep, stepWorkflow)
+    } else if (combinedName === 'tasks-maintenance') {
+      this.runTasksMaintenanceStep(currentStep, stepWorkflow)
+    }
+  }
+
+  /**
+   * Run a step in the log-refine combined workflow.
+   */
+  private runLogRefineStep(step: CombinedWorkflowStep, workflow: WorkflowDefinition): void {
+    if (step.workflowName === 'title-entries' || step.workflowName === 'generate-tasks') {
+      // For log-refine, we run title-entries and generate-tasks as a single AI call
+      // by using the combined log-refine workflow definition
+      if (step.workflowName === 'title-entries') {
+        const combinedWorkflow = getWorkflowDefinition('log-refine')
+        this.callbacks.onTriggerAIWorkflow(combinedWorkflow, 'Refine the log: add titles and extract potential tasks')
+      } else {
+        // generate-tasks step is part of the same AI call, skip it
+        step.status = 'completed'
+        this.advanceCombinedWorkflow()
+      }
+    } else if (step.workflowName === 'groom-tasks') {
+      // Non-AI step - run directly
+      this.handleGroomTasksWorkflow().then(() => {
+        step.status = 'completed'
+        this.advanceCombinedWorkflow()
+      })
+    }
+  }
+
+  /**
+   * Run a step in the tasks-harvest combined workflow.
+   */
+  private runTasksHarvestStep(step: CombinedWorkflowStep, workflow: WorkflowDefinition): void {
+    if (step.workflowName === 'harvest-tasks') {
+      // Run the combined tasks-harvest workflow (which reads all sources including Ideas.md)
+      const combinedWorkflow = getWorkflowDefinition('tasks-harvest')
+      this.callbacks.onTriggerAIWorkflow(combinedWorkflow, 'Harvest actionable tasks from all project files')
+    } else if (step.workflowName === 'ideas-groom') {
+      // ideas-groom is handled as part of the same pass, skip it
+      step.status = 'completed'
+      this.advanceCombinedWorkflow()
+    }
+  }
+
+  /**
+   * Run a step in the tasks-maintenance combined workflow.
+   */
+  private runTasksMaintenanceStep(step: CombinedWorkflowStep, workflow: WorkflowDefinition): void {
+    if (step.workflowName === 'sync-commits') {
+      // Check if GitHub is configured
+      if (!this.snapshot.aiConfig?.github_repo) {
+        step.status = 'skipped'
+        step.skipReason = 'No GitHub repository configured'
+        this.callbacks.onAddMessage('assistant', `*Skipping sync commits: ${step.skipReason}*`)
+        this.advanceCombinedWorkflow()
+        return
+      }
+
+      // Run sync-commits workflow
+      const syncWorkflow = getWorkflowDefinition('sync-commits')
+      this.callbacks.onTriggerAIWorkflow(syncWorkflow, 'Sync recent commits to tasks')
+    } else if (step.workflowName === 'archive-completed') {
+      // Run archive-completed workflow
+      const archiveWorkflow = getWorkflowDefinition('archive-completed')
+      this.callbacks.onTriggerAIWorkflow(archiveWorkflow, 'Archive completed tasks')
+    }
+  }
+
+  /**
+   * Advance to the next step in the combined workflow.
+   */
+  advanceCombinedWorkflow(): void {
+    if (!this.combinedWorkflowState) return
+
+    const { steps, currentStepIndex } = this.combinedWorkflowState
+
+    // Mark current step as completed if still running
+    if (currentStepIndex < steps.length && steps[currentStepIndex].status === 'running') {
+      steps[currentStepIndex].status = 'completed'
+    }
+
+    // Move to next step
+    this.combinedWorkflowState.currentStepIndex++
+
+    // Run the next step
+    this.runCurrentCombinedStep()
+  }
+
+  /**
+   * Complete the combined workflow and clean up state.
+   */
+  private completeCombinedWorkflow(): void {
+    if (!this.combinedWorkflowState) return
+
+    const { combinedName, steps } = this.combinedWorkflowState
+    const completed = steps.filter((s) => s.status === 'completed').length
+    const skipped = steps.filter((s) => s.status === 'skipped').length
+
+    const combinedWorkflow = getWorkflowDefinition(combinedName)
+    const summary = skipped > 0
+      ? `Completed ${combinedWorkflow.displayName}: ${completed} steps completed, ${skipped} skipped`
+      : `Completed ${combinedWorkflow.displayName}`
+
+    this.callbacks.onAddMessage('assistant', `**${summary}**`)
+
+    // Clear state
+    this.combinedWorkflowState = null
+  }
+
+  /**
+   * Check if a combined workflow is currently active.
+   */
+  isCombinedWorkflowActive(): boolean {
+    return this.combinedWorkflowState !== null
+  }
+
+  /**
+   * Get the current combined workflow state.
+   */
+  getCombinedWorkflowState(): CombinedWorkflowState | null {
+    return this.combinedWorkflowState
   }
 
   /**

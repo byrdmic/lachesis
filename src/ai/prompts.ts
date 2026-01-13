@@ -545,8 +545,186 @@ LANGUAGE RULES (STRICT):
   // Build workflow section if a workflow is active
   let workflowSection = ''
   if (activeWorkflow && workflowFileContents) {
+    // Special handling for log-refine combined workflow - outputs titles AND tasks in one diff
+    if (activeWorkflow.name === 'log-refine') {
+      workflowSection = `
+================================================================================
+ACTIVE WORKFLOW: LOG: REFINE (COMBINED)
+================================================================================
+Intent: ${activeWorkflow.intent}
+
+You are refining Log.md in a single pass: adding titles to entries AND extracting potential tasks.
+
+**YOUR GOALS:**
+1. Find entries that lack titles (format: HH:MMam/pm with no " - " title after)
+2. Add short, descriptive titles (1-5 words)
+3. Extract 0-3 actionable tasks from each entry
+4. Output ONE unified diff with all changes
+
+**TITLE RULES:**
+- Only add titles to entries that lack them
+- Format: HH:MMam/pm - <Short Title>
+- Titles should be 1-5 words, descriptive, scannable
+- Use comma-separated titles for multiple topics (e.g., "11:48am - MCP Server, Diff Modal")
+
+**TASK EXTRACTION RULES:**
+- Extract 0-3 clearly actionable tasks from each entry
+- If NO clearly actionable tasks exist, do NOT add a tasks section
+- Tasks must be directly supported by the entry text - do NOT invent tasks
+- Look for: "need to", "should", "TODO", "don't forget", "fix", "add", "refactor"
+
+**IDEMPOTENCE RULES (CRITICAL):**
+- If an entry already has a title (has " - " after time), DO NOT change it
+- If an entry already has a "potential-tasks" section, DO NOT add another one
+
+**POTENTIAL TASKS FORMAT (EXACT):**
+\`\`\`
+<!-- AI: potential-tasks start -->
+#### Potential tasks (AI-generated)
+- [ ] <task 1>
+- [ ] <task 2>
+<!-- AI: potential-tasks end -->
+\`\`\`
+
+**OUTPUT FORMAT:**
+Output a SINGLE unified diff that includes BOTH title additions AND task extractions:
+
+\`\`\`diff
+--- Log.md
++++ Log.md
+@@ -5,8 +5,14 @@
+ ## 2024-01-15
+
+-11:48am
++11:48am - MCP Server Setup
+ I got the mcp server to actually work. Need to add it to the docker compose file
+ and test the new endpoints. Also should document the configuration options.
++
++<!-- AI: potential-tasks start -->
++#### Potential tasks (AI-generated)
++- [ ] Add MCP server to docker compose
++- [ ] Test new endpoints
++- [ ] Document configuration options
++<!-- AI: potential-tasks end -->
+
+ 10:30am - Morning Planning
+\`\`\`
+
+RULES FOR DIFF OUTPUT:
+• Use exact unified diff format with --- and +++ headers
+• Include @@ line number markers
+• CRITICAL: The "-" lines must show the ACTUAL current content
+• Include 1-2 lines of context around each change
+• Process ALL untitled entries in one diff
+• After showing the diff, briefly explain what changes you made
+
+FILE CONTENTS (for workflow execution):
+${workflowFileContents}
+================================================================================
+`
+    // Special handling for tasks-harvest combined workflow - same as harvest-tasks
+    } else if (activeWorkflow.name === 'tasks-harvest') {
+      workflowSection = `
+================================================================================
+ACTIVE WORKFLOW: TASKS: HARVEST (COMBINED)
+================================================================================
+Intent: ${activeWorkflow.intent}
+
+You are scanning ALL project files to find actionable work that should become tasks.
+This includes Ideas.md which should be processed by ## heading sections.
+
+**YOUR GOALS:**
+1. Find implicit TODOs and action items in Log.md and Ideas.md
+2. Identify gaps between Roadmap milestones and current Tasks.md
+3. De-duplicate against existing tasks in Tasks.md
+4. Suggest appropriate destinations for each item
+
+**WHAT TO LOOK FOR:**
+
+In Log.md:
+- Phrases like "need to", "should", "TODO", "don't forget", "fix", "add", "refactor"
+- Blockers mentioned that need resolution
+- Decisions that imply follow-up work
+
+In Ideas.md (IMPORTANT - process by heading):
+- Each ## heading represents a discrete idea
+- Ideas with clear action verbs or specific outcomes are good candidates
+- Include the ideaHeading field for context
+- Skip vague musings, pure questions, or brainstorming notes
+
+In Overview.md / Roadmap.md:
+- Gaps between stated goals and current tasks
+- Success criteria not yet addressed
+- Constraints that need implementation
+
+**WHAT TO SKIP:**
+- Items already in Tasks.md (check task descriptions for matches)
+- Vague musings ("maybe we could...")
+- Questions without clear paths forward
+- Completed work mentioned in Archive.md context
+
+**OUTPUT FORMAT (CRITICAL - OUTPUT ONLY JSON):**
+Return ONLY a JSON object with this exact structure (no markdown, no explanation before or after):
+
+\`\`\`json
+{
+  "tasks": [
+    {
+      "text": "Concise, actionable task description",
+      "sourceFile": "Log.md",
+      "sourceContext": "Brief quote from source (max 100 chars)",
+      "sourceDate": "2024-01-15",
+      "ideaHeading": null,
+      "suggestedDestination": "future-tasks",
+      "suggestedSliceLink": null,
+      "reasoning": "Why this is actionable (1 sentence)",
+      "existingSimilar": null
+    },
+    {
+      "text": "Task extracted from Ideas.md",
+      "sourceFile": "Ideas.md",
+      "sourceContext": "Brief description under the idea heading",
+      "sourceDate": null,
+      "ideaHeading": "## Original Idea Heading",
+      "suggestedDestination": "active-tasks",
+      "suggestedSliceLink": "[[Roadmap#VS1 — Feature Name]]",
+      "reasoning": "Why this idea is now actionable",
+      "existingSimilar": null
+    }
+  ],
+  "summary": {
+    "totalFound": 5,
+    "fromLog": 3,
+    "fromIdeas": 2,
+    "fromOther": 0,
+    "duplicatesSkipped": 2
+  }
+}
+\`\`\`
+
+**DESTINATION OPTIONS:**
+- "discard": Not actually actionable or already done
+- "future-tasks": Actionable but not urgent, add to Future Tasks section
+- "active-tasks": Add to Active Tasks section (with optional slice link)
+- "next-actions": Urgent, small (15-60 min), can start immediately
+
+**FIELD REQUIREMENTS:**
+- text: Required. Concise task description (1-2 sentences max)
+- sourceFile: Required. Which file this came from (Log.md, Ideas.md, Overview.md, Roadmap.md)
+- sourceContext: Required. Brief quote showing where you found this
+- sourceDate: Optional. Date if from Log.md (format: YYYY-MM-DD)
+- ideaHeading: Include when sourceFile is Ideas.md - the ## heading this came from
+- suggestedDestination: Required. One of the destination options above
+- suggestedSliceLink: Optional. If this task relates to a Roadmap slice
+- reasoning: Required. Why this is actionable
+- existingSimilar: Optional. If you found a similar existing task, note it here
+
+FILE CONTENTS (for analysis):
+${workflowFileContents}
+================================================================================
+`
     // Special handling for harvest-tasks workflow - outputs JSON, not diffs
-    if (activeWorkflow.name === 'harvest-tasks') {
+    } else if (activeWorkflow.name === 'harvest-tasks') {
       workflowSection = `
 ================================================================================
 ACTIVE WORKFLOW: TASKS: HARVEST TASKS

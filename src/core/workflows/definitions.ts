@@ -31,6 +31,156 @@ const ALL_CORE_FILES = Object.values(PROJECT_FILES)
 // ============================================================================
 
 export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
+  // ==========================================================================
+  // COMBINED WORKFLOWS
+  // ==========================================================================
+
+  /**
+   * LOG REFINE: Combined workflow for refining log entries.
+   * Titles entries, generates potential tasks, then opens groom modal.
+   */
+  'log-refine': {
+    name: 'log-refine',
+    displayName: 'Log: Refine',
+    description: 'Title entries, generate potential tasks, and review them',
+    intent:
+      'Combined workflow that processes Log.md in sequence: ' +
+      '(1) Add short titles to entries that lack them, ' +
+      '(2) Extract potential tasks from entries, ' +
+      '(3) Open groom modal to review and move tasks to Tasks.md. ' +
+      'This is the recommended way to process log entries.',
+    readFiles: [PROJECT_FILES.log, PROJECT_FILES.tasks],
+    writeFiles: [PROJECT_FILES.log, PROJECT_FILES.tasks],
+    risk: 'low',
+    confirmation: 'preview',
+    allowsDelete: false,
+    allowsCrossFileMove: true,
+    rules: [
+      // Title rules
+      'Only touch entries that lack titles (format: HH:MMam/pm with no " - " title after)',
+      'Generate titles that are 1-5 words, descriptive, scannable',
+      'Format: HH:MMam/pm - <Short Title>',
+      'Use comma-separated titles to capture multiple ideas (e.g., "11:48am - MCP Server, Diff Modal")',
+
+      // Task extraction rules
+      'Extract 0-3 clearly actionable tasks from each log entry',
+      'If NO clearly actionable tasks exist, do NOT add any tasks section',
+      'Tasks must be directly supported by the entry text - do NOT invent tasks',
+      'Use Obsidian task checkboxes: - [ ] <task>',
+      'Use EXACT format:\n<!-- AI: potential-tasks start -->\n#### Potential tasks (AI-generated)\n- [ ] <task>\n<!-- AI: potential-tasks end -->',
+
+      // Idempotence rules
+      'If an entry already has a title, leave it alone',
+      'If an entry already has a potential-tasks section, skip task extraction for that entry',
+
+      // Content rules
+      'Do NOT modify entry body text (except appending task blocks)',
+      'Do NOT add new entries or reorder the log',
+    ],
+    usesAI: true,
+    combinedSteps: ['title-entries', 'generate-tasks', 'groom-tasks'],
+  },
+
+  /**
+   * TASKS HARVEST: Combined workflow for finding actionable items.
+   * Scans all project files including Ideas.md in one pass.
+   */
+  'tasks-harvest': {
+    name: 'tasks-harvest',
+    displayName: 'Tasks: Harvest',
+    description: 'Find actionable items across all project files',
+    intent:
+      'Combined harvest workflow that scans ALL project files (Overview, Roadmap, Tasks, Ideas, Log) ' +
+      'in a single pass to find actionable items, gaps, and implicit TODOs. ' +
+      'Ideas.md sections are processed by heading to preserve context. ' +
+      'De-duplicates against existing tasks and presents suggestions in a review modal.',
+    readFiles: [
+      PROJECT_FILES.overview,
+      PROJECT_FILES.roadmap,
+      PROJECT_FILES.tasks,
+      PROJECT_FILES.ideas,
+      PROJECT_FILES.log,
+    ],
+    writeFiles: [PROJECT_FILES.tasks],
+    risk: 'low',
+    confirmation: 'preview',
+    allowsDelete: false,
+    allowsCrossFileMove: false,
+    rules: [
+      // Analysis rules
+      'Read ALL project files for full context before suggesting tasks',
+      'Read Roadmap.md to understand available vertical slices for task linking',
+      'Extract implicit TODOs from Log.md (keywords: "need to", "should", "TODO", "fix", "add", "refactor")',
+
+      // Ideas.md specific rules
+      'Process Ideas.md by ## section headings - each heading represents an idea',
+      'Include the ideaHeading field when extracting from Ideas.md for context',
+      'Extract actionable ideas, skip vague musings or pure questions',
+
+      // De-duplication rules
+      'Check existing Tasks.md for similar tasks before suggesting',
+      'If a similar task exists, note it in the existingSimilar field',
+      'Skip items that are clearly already in Tasks.md',
+
+      // Output format
+      'Output structured JSON, not diff format',
+      'Each task must have sourceFile, text, and reasoning fields',
+      'For Ideas.md sources, also include ideaHeading field',
+      'Suggest appropriate destination: next-actions, active-tasks, or future-tasks',
+      'Suggest slice link if task relates to a Roadmap slice',
+
+      // Content rules
+      'Tasks should be concrete and actionable (not vague)',
+      'Task descriptions should be concise (1-2 sentences max)',
+    ],
+    usesAI: true,
+    combinedSteps: ['harvest-tasks', 'ideas-groom'],
+  },
+
+  /**
+   * TASKS MAINTENANCE: Combined workflow for task lifecycle management.
+   * Syncs commits (if GitHub configured), then archives completed tasks.
+   */
+  'tasks-maintenance': {
+    name: 'tasks-maintenance',
+    displayName: 'Tasks: Maintenance',
+    description: 'Sync git commits and archive completed tasks',
+    intent:
+      'Combined maintenance workflow that handles task lifecycle: ' +
+      '(1) If GitHub is configured, sync recent commits to mark tasks complete, ' +
+      '(2) Archive all completed tasks to Archive.md organized by vertical slice. ' +
+      'Skips the sync step if no GitHub repo is configured.',
+    readFiles: [PROJECT_FILES.tasks, PROJECT_FILES.archive, PROJECT_FILES.roadmap, PROJECT_FILES.overview],
+    writeFiles: [PROJECT_FILES.tasks, PROJECT_FILES.archive],
+    risk: 'low',
+    confirmation: 'preview',
+    allowsDelete: true,
+    allowsCrossFileMove: true,
+    rules: [
+      // Sync commits rules (when GitHub available)
+      'Match commits to unchecked tasks (- [ ]) based on semantic similarity',
+      'Assign confidence levels: high (direct match), medium (related), low (possible)',
+      'Do NOT match commits to already-completed tasks',
+
+      // Archive rules
+      'Find all completed tasks (- [x]) in Tasks.md',
+      'Group tasks by their vertical slice reference [[Roadmap#VS... — Name]]',
+      'Standalone tasks (no slice ref) go under "Completed Tasks" section',
+      'Preserve sub-items and acceptance criteria when archiving',
+
+      // Output format for sync
+      'For sync: JSON with matches, unmatchedCommits, and summary',
+      // Output format for archive
+      'For archive: JSON with groups, standaloneTasks, and summary',
+    ],
+    usesAI: true,
+    combinedSteps: ['sync-commits', 'archive-completed'],
+  },
+
+  // ==========================================================================
+  // INDIVIDUAL WORKFLOWS (some hidden from UI)
+  // ==========================================================================
+
   /**
    * TITLE ENTRIES: Add short titles to log entries that lack them.
    * Low risk, preview confirmation.
@@ -67,6 +217,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Do NOT add potential tasks sections - that is a separate workflow',
     ],
     usesAI: true,
+    hidden: true,
   },
 
   /**
@@ -114,6 +265,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Do NOT reorder or restructure the log',
     ],
     usesAI: true,
+    hidden: true,
   },
 
   /**
@@ -144,6 +296,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Remove empty potential-tasks blocks after processing',
     ],
     usesAI: false,
+    hidden: true,
   },
 
   /**
@@ -332,6 +485,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Include source context to help user verify',
     ],
     usesAI: true,
+    hidden: true,
   },
 
   /**
@@ -387,6 +541,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Include the original idea heading as context',
     ],
     usesAI: true,
+    hidden: true,
   },
 
   /**
@@ -437,6 +592,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Do NOT invent matches - only match if there is clear evidence',
     ],
     usesAI: true,
+    hidden: true,
   },
 
   /**
@@ -482,6 +638,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Include total counts in summary for UI display',
     ],
     usesAI: true,
+    hidden: true,
   },
 
   /**
