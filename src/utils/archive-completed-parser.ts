@@ -49,11 +49,11 @@ export interface CompletedTask {
  * Task section in Tasks.md
  */
 export type TaskSection =
-  | 'next-actions'
-  | 'active-tasks'
+  | 'now'
+  | 'next'
   | 'blocked'
-  | 'future-tasks'
-  | 'recently-completed'
+  | 'later'
+  | 'done'
   | 'unknown'
 
 /**
@@ -136,13 +136,13 @@ export function extractCompletedTasks(tasksContent: string): CompletedTask[] {
   let currentSection: TaskSection = 'unknown'
   let taskIndex = 0
 
-  // Section detection patterns
+  // Section detection patterns - support both new and legacy section names
   const sectionPatterns: Array<{ pattern: RegExp; section: TaskSection }> = [
-    { pattern: /^##\s*Next\s+1[–-]3\s+Actions/i, section: 'next-actions' },
-    { pattern: /^##\s*Active\s+Tasks/i, section: 'active-tasks' },
+    { pattern: /^##\s*(?:Now|Next\s+1[–-]3\s+Actions)/i, section: 'now' },
+    { pattern: /^##\s*(?:Next|Active\s+Tasks)$/i, section: 'next' },
     { pattern: /^##\s*Blocked/i, section: 'blocked' },
-    { pattern: /^##\s*(?:Future\s+Tasks|Potential\s+Future\s+Tasks)/i, section: 'future-tasks' },
-    { pattern: /^##\s*Recently\s+Completed/i, section: 'recently-completed' },
+    { pattern: /^##\s*(?:Later|Future\s+Tasks|Potential\s+Future\s+Tasks)/i, section: 'later' },
+    { pattern: /^##\s*(?:Done|Recently\s+Completed)/i, section: 'done' },
   ]
 
   for (let i = 0; i < lines.length; i++) {
@@ -557,16 +557,16 @@ export function getDefaultArchiveAction(): ArchiveAction {
  */
 export function getTaskSectionLabel(section: TaskSection): string {
   switch (section) {
-    case 'next-actions':
-      return 'Next 1-3 Actions'
-    case 'active-tasks':
-      return 'Active Tasks'
+    case 'now':
+      return 'Now'
+    case 'next':
+      return 'Next'
     case 'blocked':
-      return 'Blocked / Waiting'
-    case 'future-tasks':
-      return 'Future Tasks'
-    case 'recently-completed':
-      return 'Recently Completed'
+      return 'Blocked'
+    case 'later':
+      return 'Later'
+    case 'done':
+      return 'Done'
     default:
       return 'Tasks'
   }

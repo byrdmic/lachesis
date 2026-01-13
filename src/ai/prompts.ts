@@ -293,17 +293,24 @@ Before starting, identify:
    - "I found these items in Log.md/Ideas.md that might be standalone tasks: [...]"
    - Standalone tasks have no slice link
 
-4. **NEXT 1-3 ACTIONS**
-   - "What are the immediate next steps you can take right now?"
-   - These should be THE smallest concrete actions (15-60 min each)
-   - Pick from Active Tasks—the very first things to do
+4. **NOW (SINGLE FOCUS)**
+   - "What is THE most important thing to work on right now?"
+   - This should be THE single current task
+   - When done, pull the next task from the Next queue
    - Example:
      \`\`\`markdown
-     ## Next 1–3 Actions (always kept fresh)
+     ## Now
      - [ ] Register ribbon icon in main.ts [[Roadmap#VS1 — Basic Modal Opens]]
-     - [ ] Create InterviewModal class [[Roadmap#VS1 — Basic Modal Opens]]
-     - [ ] Fix typo in README (standalone task)
      \`\`\`
+
+5. **ROADMAP SYNCHRONIZATION (CRITICAL)**
+   - When setting or changing the Now task, ALSO update Roadmap.md:
+     1. Check which milestone the Now task's slice belongs to
+     2. Update "## Current Focus" to reference that milestone
+     3. Update the milestone's **Status:** from "planned" to "active"
+   - If the Now task switches to a different milestone, update the old milestone back to "planned"
+   - This keeps Roadmap.md in sync with actual work focus
+   - Propose a diff for Roadmap.md along with the Tasks.md changes
 
 ## WHAT MAKES A GOOD TASK
 
@@ -330,39 +337,31 @@ Standalone tasks (no slice link):
 ## EXAMPLE TASKS.MD STRUCTURE
 
 \`\`\`markdown
-## Next 1–3 Actions (always kept fresh)
+## Now
 - [ ] Register ribbon icon in main.ts [[Roadmap#VS1 — Basic Modal Opens]]
-- [ ] Create InterviewModal class [[Roadmap#VS1 — Basic Modal Opens]]
-- [ ] Update README with installation instructions
 
 ---
 
-## Active Tasks
-- [ ] Register ribbon icon in main.ts [[Roadmap#VS1 — Basic Modal Opens]]
-  - Acceptance: Icon appears in Obsidian ribbon when plugin loads
+## Next
 - [ ] Create InterviewModal class extending Modal [[Roadmap#VS1 — Basic Modal Opens]]
-  - Acceptance: Class compiles, can be instantiated
 - [ ] Wire ribbon click to open modal [[Roadmap#VS1 — Basic Modal Opens]]
-  - Acceptance: Clicking ribbon icon opens the modal
 - [ ] Define interview questions array [[Roadmap#VS2 — Interview Flow]]
-  - Acceptance: Questions array has at least 5 project questions
 - [ ] Update README with installation instructions
-  - Acceptance: README has clear setup steps
 
 ---
 
-## Blocked / Waiting
-- [ ] Deploy to Obsidian community plugins — blocked by review process
+## Blocked
+- [ ] Deploy to Obsidian community plugins — waiting on review process
 
 ---
 
-## Future Tasks (actionable, but not now)
+## Later
 - [ ] Add dark mode support [[Roadmap#VS4 — Polish]]
 - [ ] Write user documentation
 
 ---
 
-## Recently Completed (keep short; archive the rest)
+## Done
 - [x] Set up project structure (details in [[Archive]])
 \`\`\`
 
@@ -372,9 +371,9 @@ Keep diffs focused and incremental:
 
 **Order of operations:**
 1. First, review Roadmap.md slices and propose tasks for the first/active slice
-2. Add tasks to Active Tasks section with slice links
+2. Add tasks to Next section with slice links
 3. Add any standalone tasks from Log.md/Ideas.md
-4. Set Next 1-3 Actions to the immediate first steps
+4. Set Now to the single most important immediate task
 5. Repeat for additional slices as needed
 `
 
@@ -675,7 +674,7 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
       "sourceContext": "Brief quote from source (max 100 chars)",
       "sourceDate": "2024-01-15",
       "ideaHeading": null,
-      "suggestedDestination": "future-tasks",
+      "suggestedDestination": "later",
       "suggestedSliceLink": null,
       "reasoning": "Why this is actionable (1 sentence)",
       "existingSimilar": null
@@ -686,7 +685,7 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
       "sourceContext": "Brief description under the idea heading",
       "sourceDate": null,
       "ideaHeading": "## Original Idea Heading",
-      "suggestedDestination": "active-tasks",
+      "suggestedDestination": "next",
       "suggestedSliceLink": "[[Roadmap#VS1 — Feature Name]]",
       "reasoning": "Why this idea is now actionable",
       "existingSimilar": null
@@ -704,9 +703,17 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 
 **DESTINATION OPTIONS:**
 - "discard": Not actually actionable or already done
-- "future-tasks": Actionable but not urgent, add to Future Tasks section
-- "active-tasks": Add to Active Tasks section (with optional slice link)
-- "next-actions": Urgent, small (15-60 min), can start immediately
+- "later": Actionable but not urgent, add to Later section
+- "next": Add to Next section (with optional slice link)
+- "now": The single most important task to work on immediately
+
+**ROADMAP SYNCHRONIZATION (when destination is "now"):**
+When a task is assigned destination "now", the Roadmap.md must also be updated:
+1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice Name]] → M1)
+2. Update "## Current Focus" section to reference that milestone
+3. Update the milestone's **Status:** from "planned" to "active"
+4. If changing from a different active milestone, set the old one back to "planned"
+Include these Roadmap changes in the modal for user review.
 
 **FIELD REQUIREMENTS:**
 - text: Required. Concise task description (1-2 sentences max)
@@ -772,7 +779,7 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
       "sourceFile": "Log.md",
       "sourceContext": "Brief quote from source (max 100 chars)",
       "sourceDate": "2024-01-15",
-      "suggestedDestination": "future-tasks",
+      "suggestedDestination": "later",
       "suggestedVSName": null,
       "reasoning": "Why this is actionable (1 sentence)",
       "existingSimilar": null
@@ -790,9 +797,17 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 
 **DESTINATION OPTIONS:**
 - "discard": Not actually actionable or already done
-- "future-tasks": Actionable but not urgent, add to Future Tasks section
-- "active-tasks": Add to Active Tasks section (with optional slice link)
-- "next-actions": Urgent, small (15-60 min), can start immediately
+- "later": Actionable but not urgent, add to Later section
+- "next": Add to Next section (with optional slice link)
+- "now": The single most important task to work on immediately
+
+**ROADMAP SYNCHRONIZATION (when destination is "now"):**
+When a task is assigned destination "now", the Roadmap.md must also be updated:
+1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice Name]] → M1)
+2. Update "## Current Focus" section to reference that milestone
+3. Update the milestone's **Status:** from "planned" to "active"
+4. If changing from a different active milestone, set the old one back to "planned"
+Include these Roadmap changes in the modal for user review.
 
 **FIELD REQUIREMENTS:**
 - text: Required. Concise task description (1-2 sentences max)
@@ -848,7 +863,7 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
       "text": "Concise, actionable task description",
       "ideaHeading": "## Original Idea Heading",
       "ideaContext": "Brief description or notes from the idea (max 150 chars)",
-      "suggestedDestination": "future-tasks",
+      "suggestedDestination": "later",
       "suggestedSliceLink": null,
       "reasoning": "Why this idea is now actionable (1 sentence)",
       "existingSimilar": null
@@ -864,9 +879,17 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 
 **DESTINATION OPTIONS:**
 - "discard": Not actually actionable or already done
-- "future-tasks": Actionable but not urgent, add to Future Tasks section
-- "active-tasks": Add to Active Tasks section (with optional slice link)
-- "next-actions": Urgent, small (15-60 min), can start immediately
+- "later": Actionable but not urgent, add to Later section
+- "next": Add to Next section (with optional slice link)
+- "now": The single most important task to work on immediately
+
+**ROADMAP SYNCHRONIZATION (when destination is "now"):**
+When a task is assigned destination "now", the Roadmap.md must also be updated:
+1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice Name]] → M1)
+2. Update "## Current Focus" section to reference that milestone
+3. Update the milestone's **Status:** from "planned" to "active"
+4. If changing from a different active milestone, set the old one back to "planned"
+Include these Roadmap changes in the modal for user review.
 
 **FIELD REQUIREMENTS:**
 - text: Required. Concise task description (1-2 sentences max)
@@ -982,19 +1005,16 @@ Example structure:
 --- Tasks.md
 +++ Tasks.md
 @@ -5,10 +5,20 @@
- ## Next 1–3 Actions (always kept fresh)
+ ## Now
 
 -- [ ] <!-- First small step -->
-+- [ ] [Concrete task] [[Roadmap#VS1 — Slice Name]]
-+- [ ] [Concrete task] [[Roadmap#VS1 — Slice Name]]
++- [ ] [Single most important task] [[Roadmap#VS1 — Slice Name]]
 
- ## Active Tasks
+ ## Next
 
 -- [ ] <!-- Task 1 -->
 +- [ ] [Task from summary] [[Roadmap#VS1 — Slice Name]]
-+  - Acceptance: [Clear criteria]
 +- [ ] [Task from summary] [[Roadmap#VS2 — Slice Name]]
-+  - Acceptance: [Clear criteria]
 \`\`\`
 
 **CONTENT MAPPING RULES**
@@ -1021,7 +1041,7 @@ Tasks.md:
 - Link tasks using [[Roadmap#VS1 — Slice Name]]
 - Tasks should be 15-60 minutes, concrete, with clear acceptance criteria
 - Standalone tasks (no slice link) are valid for misc items
-- Set Next 1-3 Actions to the immediate first steps
+- Set Now to the single most important immediate task
 - Do NOT invent tasks - only extract from the provided summary
 
 **RULES:**
@@ -1058,7 +1078,7 @@ In commit messages:
 - Feature names mentioned in both commit and task
 
 In Tasks.md:
-- Unchecked tasks (- [ ]) in any section (Next Actions, Active Tasks, Future Tasks)
+- Unchecked tasks (- [ ]) in any section (Now, Next, Later)
 - Task descriptions and acceptance criteria
 - Slice links that might relate to commits (e.g., [[Roadmap#VS1 — Feature Name]])
 
@@ -1084,7 +1104,7 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
       "commitSha": "abc1234def5678",
       "commitMessage": "Full commit message including title and body",
       "taskText": "Exact task text from Tasks.md",
-      "taskSection": "active-tasks",
+      "taskSection": "next",
       "confidence": "high",
       "reasoning": "Why this commit matches this task (1-2 sentences)"
     }
@@ -1105,9 +1125,9 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 \`\`\`
 
 **TASK SECTION VALUES:**
-- "next-actions": From "Next 1-3 Actions" section
-- "active-tasks": From "Active Tasks" section
-- "future-tasks": From "Future Tasks" or "Potential Future Tasks" section
+- "now": From "Now" section (single current task)
+- "next": From "Next" section (queued tasks)
+- "later": From "Later" section (backlog)
 
 **FIELD REQUIREMENTS:**
 - commitSha: Required. Full commit SHA
@@ -1288,15 +1308,15 @@ Determine the MODE based on current Tasks.md state:
 - **FIRST STEP**: Review Roadmap.md for existing vertical slices
   - Each slice in Roadmap has format: VS1 — Slice Name with description
   - Create tasks that link to these slices: \`[[Roadmap#VS1 — Slice Name]]\`
-- Populate "Active Tasks" section with tasks linked to Roadmap slices
+- Populate "Next" section with tasks linked to Roadmap slices
 - Standalone tasks (not linked to any slice) are also allowed
-- Populate "Future Tasks" section with any loose items from Log.md or Ideas.md
+- Populate "Later" section with any loose items from Log.md or Ideas.md
 
 **REFINE MODE** (Tasks.md already has real content):
 - User has done work and wants to update/refine the task list
 - Check Log.md and Ideas.md for new items that should become tasks
 - Look for entries with keywords: "need to", "should", "TODO", "don't forget", "fix", "add"
-- Add new items to appropriate section (Active Tasks or Future Tasks)
+- Add new items to appropriate section (Next or Later)
 
 GitHub Repo Check (see AI CONFIG section in snapshot):
 - Look for github_repo in .ai/config.json (shown in snapshot as "AI CONFIG")
@@ -1316,11 +1336,11 @@ Archive.md Check (see RECENTLY COMPLETED in snapshot):
   "I can see from Archive.md that you've completed [items]. Let me focus on what's remaining."
 
 - Ask user what they've completed before marking things done
-- Move completed items to "Recently Completed" section
+- Move completed items to "Done" section
 
 For BOTH modes:
 - Never invent tasks - only extract from existing project content
-- Keep "Next 1-3 Actions" to genuinely small, concrete steps (15-60 min each)
+- Keep exactly ONE task in "Now" section - the single current focus
 - Vertical slices should link back to Roadmap milestones when possible
 - In CREATE MODE: Always start with the slice list, then expand active slice
 
@@ -1496,27 +1516,31 @@ DOCUMENT FORMAT STANDARDS (ALWAYS APPLY):
 - All sections use checkboxes: \`- [ ] Task description\`
 - Tasks linked to Roadmap slices: \`- [ ] Task description [[Roadmap#VS1 — Slice Name]]\`
 - Standalone tasks (not linked to any slice): \`- [ ] Task description\`
-- "Next 1-3 Actions" mirrors tasks from Active Tasks section
+- "Now" has exactly ONE task - the single current focus
 
 Example Tasks.md structure:
 \`\`\`markdown
-## Next 1–3 Actions (always kept fresh)
+## Now
 - [ ] Write elevator pitch [[Roadmap#VS1 — Project Definition]]
-- [ ] Define the problem [[Roadmap#VS1 — Project Definition]]
-- [ ] Fix typo in README
 
-## Active Tasks
-- [ ] Write elevator pitch [[Roadmap#VS1 — Project Definition]]
-  - Acceptance: One clear sentence describing what this is
+## Next
 - [ ] Define the problem [[Roadmap#VS1 — Project Definition]]
-  - Acceptance: Problem statement explains what hurts today
 - [ ] Fix typo in README
-  - Acceptance: No typos in README
 \`\`\`
 
 **Roadmap.md:** Contains milestones AND vertical slices.
 - Milestones: High-level demo-able outcomes (### M1 — Name)
 - Vertical Slices: Features under milestones (### M1 Slices with VS1, VS2, etc.)
+- **Current Focus:** Must always reflect the active milestone
+- **Milestone Status:** planned | active | done | blocked | cut
+
+**ROADMAP SYNCHRONIZATION (CRITICAL):**
+When a task is moved to the "Now" section in Tasks.md:
+1. Identify which milestone the task's slice belongs to (from [[Roadmap#VS... — Name]])
+2. Update "## Current Focus" to reference that milestone
+3. Update the milestone's **Status:** from "planned" to "active"
+4. If switching milestones, set the previous active milestone back to "planned"
+This ensures Roadmap.md always reflects the actual work focus.
 
 **Log.md:** Freeform notes. Items with "need to", "should", "TODO" get extracted to Tasks.md.
 

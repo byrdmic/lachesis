@@ -15,9 +15,9 @@
 /** Emojis to denote where a task was moved */
 export const HARVEST_MOVED_EMOJIS: Record<string, string> = {
   'discard': '🗑️',
-  'future-tasks': '📋',
-  'active-tasks': '✅',
-  'next-actions': '🎯',
+  'later': '📋',
+  'next': '✅',
+  'now': '🎯',
 }
 
 // ============================================================================
@@ -29,9 +29,9 @@ export const HARVEST_MOVED_EMOJIS: Record<string, string> = {
  */
 export type TaskDestination =
   | 'discard'
-  | 'future-tasks'
-  | 'active-tasks'
-  | 'next-actions'
+  | 'later'
+  | 'next'
+  | 'now'
 
 /**
  * A task suggestion from the AI harvest analysis.
@@ -74,9 +74,9 @@ export interface RoadmapSlice {
  * Parsed structure of existing Tasks.md sections
  */
 export interface ParsedTasksStructure {
-  nextActionsLineNumber: number // Where to insert new next actions
-  activeTasksLineNumber: number // Where to insert new active tasks
-  futureTasksLineNumber: number // Where to insert new future tasks
+  nowLineNumber: number // Where to insert the current task
+  nextLineNumber: number // Where to insert queued tasks
+  laterLineNumber: number // Where to insert backlog tasks
 }
 
 /**
@@ -148,7 +148,7 @@ export function parseHarvestResponse(aiResponse: string): HarvestedTask[] {
       sourceContext: task.sourceContext || null,
       sourceDate: task.sourceDate || null,
       ideaHeading: task.ideaHeading || null,
-      suggestedDestination: task.suggestedDestination || 'future-tasks',
+      suggestedDestination: task.suggestedDestination || 'later',
       suggestedSliceLink: task.suggestedSliceLink || null,
       reasoning: task.reasoning || null,
       existingSimilar: task.existingSimilar || null,
@@ -174,31 +174,31 @@ export function detectMovedHarvestTasks(
   // Build a map of section ranges
   const sectionRanges: Array<{ start: number; end: number; destination: TaskDestination }> = []
 
-  // Next Actions section
-  if (structure.nextActionsLineNumber !== -1) {
-    let end = structure.nextActionsLineNumber + 1
+  // Now section
+  if (structure.nowLineNumber !== -1) {
+    let end = structure.nowLineNumber + 1
     while (end < lines.length && !lines[end].startsWith('## ') && !lines[end].startsWith('---')) {
       end++
     }
-    sectionRanges.push({ start: structure.nextActionsLineNumber, end, destination: 'next-actions' })
+    sectionRanges.push({ start: structure.nowLineNumber, end, destination: 'now' })
   }
 
-  // Active Tasks section
-  if (structure.activeTasksLineNumber !== -1) {
-    let end = structure.activeTasksLineNumber + 1
+  // Next section
+  if (structure.nextLineNumber !== -1) {
+    let end = structure.nextLineNumber + 1
     while (end < lines.length && !lines[end].startsWith('## ') && !lines[end].startsWith('---')) {
       end++
     }
-    sectionRanges.push({ start: structure.activeTasksLineNumber, end, destination: 'active-tasks' })
+    sectionRanges.push({ start: structure.nextLineNumber, end, destination: 'next' })
   }
 
-  // Future Tasks section
-  if (structure.futureTasksLineNumber !== -1) {
-    let end = structure.futureTasksLineNumber + 1
+  // Later section
+  if (structure.laterLineNumber !== -1) {
+    let end = structure.laterLineNumber + 1
     while (end < lines.length && !lines[end].startsWith('## ')) {
       end++
     }
-    sectionRanges.push({ start: structure.futureTasksLineNumber, end, destination: 'future-tasks' })
+    sectionRanges.push({ start: structure.laterLineNumber, end, destination: 'later' })
   }
 
   // Find Discarded section
@@ -251,36 +251,41 @@ export function detectMovedHarvestTasks(
 }
 
 /**
- * Parse Tasks.md content to extract structure for destination options
+ * Parse Tasks.md content to extract structure for destination options.
+ * Supports both new section names (Now, Next, Later) and legacy names
+ * (Next 1-3 Actions, Active Tasks, Future Tasks) for backwards compatibility.
  */
 export function parseTasksStructure(content: string): ParsedTasksStructure {
   const lines = content.split('\n')
 
-  let nextActionsLineNumber = -1
-  let activeTasksLineNumber = -1
-  let futureTasksLineNumber = -1
+  let nowLineNumber = -1
+  let nextLineNumber = -1
+  let laterLineNumber = -1
 
-  // Regex patterns
-  const nextActionsRegex = /^##\s*Next\s+1[–-]3\s+Actions/i
-  const activeTasksRegex = /^##\s*Active\s+Tasks/i
-  const futureTasksRegex = /^##\s*(?:Future\s+Tasks|Potential\s+Future\s+Tasks)/i
+  // Regex patterns - support both new and legacy section names
+  // Now: "## Now" or legacy "## Next 1-3 Actions"
+  const nowRegex = /^##\s*(?:Now|Next\s+1[–-]3\s+Actions)/i
+  // Next: "## Next" or legacy "## Active Tasks"
+  const nextRegex = /^##\s*(?:Next|Active\s+Tasks)$/i
+  // Later: "## Later" or legacy "## Future Tasks" or "## Potential Future Tasks"
+  const laterRegex = /^##\s*(?:Later|Future\s+Tasks|Potential\s+Future\s+Tasks)/i
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
 
-    if (nextActionsRegex.test(line)) {
-      nextActionsLineNumber = i
-    } else if (activeTasksRegex.test(line)) {
-      activeTasksLineNumber = i
-    } else if (futureTasksRegex.test(line)) {
-      futureTasksLineNumber = i
+    if (nowRegex.test(line)) {
+      nowLineNumber = i
+    } else if (nextRegex.test(line)) {
+      nextLineNumber = i
+    } else if (laterRegex.test(line)) {
+      laterLineNumber = i
     }
   }
 
   return {
-    nextActionsLineNumber,
-    activeTasksLineNumber,
-    futureTasksLineNumber,
+    nowLineNumber,
+    nextLineNumber,
+    laterLineNumber,
   }
 }
 
@@ -351,9 +356,9 @@ export function applyHarvestSelections(
   const structure = parseTasksStructure(tasksContent)
 
   // Group selections by destination
-  const futureTasksToAdd: Array<{ text: string; task: HarvestedTask; sliceLink: string | null }> = []
-  const activeTasksToAdd: Array<{ text: string; task: HarvestedTask; sliceLink: string | null }> = []
-  const nextActionsToAdd: Array<{ text: string; task: HarvestedTask; sliceLink: string | null }> = []
+  const laterToAdd: Array<{ text: string; task: HarvestedTask; sliceLink: string | null }> = []
+  const nextToAdd: Array<{ text: string; task: HarvestedTask; sliceLink: string | null }> = []
+  const nowToAdd: Array<{ text: string; task: HarvestedTask; sliceLink: string | null }> = []
   const discardedTasksToAdd: Array<{ text: string; task: HarvestedTask }> = []
 
   // Build a map of task IDs to tasks
@@ -372,18 +377,16 @@ export function applyHarvestSelections(
     }
 
     switch (selection.destination) {
-      case 'future-tasks':
-        futureTasksToAdd.push({ text: finalText, task, sliceLink })
+      case 'later':
+        laterToAdd.push({ text: finalText, task, sliceLink })
         break
 
-      case 'active-tasks':
-        activeTasksToAdd.push({ text: finalText, task, sliceLink })
+      case 'next':
+        nextToAdd.push({ text: finalText, task, sliceLink })
         break
 
-      case 'next-actions':
-        nextActionsToAdd.push({ text: finalText, task, sliceLink })
-        // Also add to active tasks since next actions should be in active tasks
-        activeTasksToAdd.push({ text: finalText, task, sliceLink })
+      case 'now':
+        nowToAdd.push({ text: finalText, task, sliceLink })
         break
     }
   }
@@ -391,14 +394,14 @@ export function applyHarvestSelections(
   // Track line insertions (we'll apply them in reverse order to maintain line numbers)
   const insertions: Array<{ lineNumber: number; content: string[] }> = []
 
-  // 1. Add to Future Tasks section
-  if (futureTasksToAdd.length > 0) {
-    let insertLine = structure.futureTasksLineNumber
+  // 1. Add to Later section
+  if (laterToAdd.length > 0) {
+    let insertLine = structure.laterLineNumber
     if (insertLine === -1) {
       // Create section at end
       insertLine = lines.length
-      const newLines = ['', '## Future Tasks']
-      for (const item of futureTasksToAdd) {
+      const newLines = ['', '## Later']
+      for (const item of laterToAdd) {
         const sourceComment = item.task.sourceDate
           ? ` <!-- from ${item.task.sourceFile} ${item.task.sourceDate} -->`
           : ` <!-- from ${item.task.sourceFile} -->`
@@ -413,7 +416,7 @@ export function applyHarvestSelections(
         endLine++
       }
       const newLines: string[] = []
-      for (const item of futureTasksToAdd) {
+      for (const item of laterToAdd) {
         const sourceComment = item.task.sourceDate
           ? ` <!-- from ${item.task.sourceFile} ${item.task.sourceDate} -->`
           : ` <!-- from ${item.task.sourceFile} -->`
@@ -424,14 +427,14 @@ export function applyHarvestSelections(
     }
   }
 
-  // 2. Add to Active Tasks section
-  if (activeTasksToAdd.length > 0) {
-    let insertLine = structure.activeTasksLineNumber
+  // 2. Add to Next section
+  if (nextToAdd.length > 0) {
+    let insertLine = structure.nextLineNumber
     if (insertLine === -1) {
       // Create section (should not happen if Tasks.md is properly structured)
       insertLine = lines.length
-      const newLines = ['', '## Active Tasks']
-      for (const item of activeTasksToAdd) {
+      const newLines = ['', '## Next']
+      for (const item of nextToAdd) {
         const sourceComment = item.task.sourceDate
           ? ` <!-- from ${item.task.sourceFile} ${item.task.sourceDate} -->`
           : ` <!-- from ${item.task.sourceFile} -->`
@@ -446,7 +449,7 @@ export function applyHarvestSelections(
         endLine++
       }
       const newLines: string[] = []
-      for (const item of activeTasksToAdd) {
+      for (const item of nextToAdd) {
         const sourceComment = item.task.sourceDate
           ? ` <!-- from ${item.task.sourceFile} ${item.task.sourceDate} -->`
           : ` <!-- from ${item.task.sourceFile} -->`
@@ -457,16 +460,16 @@ export function applyHarvestSelections(
     }
   }
 
-  // 3. Add to Next 1-3 Actions
-  if (nextActionsToAdd.length > 0 && structure.nextActionsLineNumber !== -1) {
-    // Find end of Next Actions section
-    let endLine = structure.nextActionsLineNumber + 1
+  // 3. Add to Now section
+  if (nowToAdd.length > 0 && structure.nowLineNumber !== -1) {
+    // Find end of Now section
+    let endLine = structure.nowLineNumber + 1
     while (endLine < lines.length && !lines[endLine].startsWith('## ') && !lines[endLine].startsWith('---')) {
       endLine++
     }
 
     const newLines: string[] = []
-    for (const item of nextActionsToAdd) {
+    for (const item of nowToAdd) {
       const linkPart = item.sliceLink ? ` ${item.sliceLink}` : ''
       newLines.push(`- [ ] ${item.text}${linkPart}`)
     }
@@ -595,12 +598,12 @@ export function getDestinationLabel(destination: TaskDestination): string {
   switch (destination) {
     case 'discard':
       return 'Discard'
-    case 'future-tasks':
-      return 'Future Tasks'
-    case 'active-tasks':
-      return 'Active Tasks'
-    case 'next-actions':
-      return 'Next 1-3 Actions'
+    case 'later':
+      return 'Later'
+    case 'next':
+      return 'Next'
+    case 'now':
+      return 'Now'
   }
 }
 
@@ -608,7 +611,7 @@ export function getDestinationLabel(destination: TaskDestination): string {
  * Check if a destination can have a slice link
  */
 export function destinationSupportsSliceLink(destination: TaskDestination): boolean {
-  return destination === 'active-tasks' || destination === 'next-actions' || destination === 'future-tasks'
+  return destination === 'next' || destination === 'now' || destination === 'later'
 }
 
 /**

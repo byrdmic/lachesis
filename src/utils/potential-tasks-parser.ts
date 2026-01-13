@@ -352,8 +352,9 @@ export function updateLogWithTaskActions(
 }
 
 /**
- * Append tasks to the "Potential Future Tasks" section in Tasks.md.
+ * Append tasks to the "Later" section in Tasks.md.
  * Creates the section if it doesn't exist.
+ * For backwards compatibility, also looks for legacy "Potential Future Tasks" or "Future Tasks" sections.
  */
 export function appendToFutureTasksSection(
   tasksContent: string,
@@ -361,13 +362,17 @@ export function appendToFutureTasksSection(
 ): string {
   if (newTasks.length === 0) return tasksContent
 
-  const SECTION_HEADER = '## Potential Future Tasks'
   const lines = tasksContent.split('\n')
 
-  // Find the section or determine where to add it
+  // Find the section - check for new name first, then legacy names
   let sectionStartIndex = -1
+  const sectionPatterns = [
+    /^##\s*Later$/i,
+    /^##\s*Potential\s+Future\s+Tasks$/i,
+    /^##\s*Future\s+Tasks$/i,
+  ]
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim() === SECTION_HEADER) {
+    if (sectionPatterns.some((p) => p.test(lines[i].trim()))) {
       sectionStartIndex = i
       break
     }
@@ -405,7 +410,7 @@ export function appendToFutureTasksSection(
     if (lines[lines.length - 1]?.trim() !== '') {
       lines.push('')
     }
-    lines.push(SECTION_HEADER)
+    lines.push('## Later')
     lines.push(...newTaskLines)
   }
 

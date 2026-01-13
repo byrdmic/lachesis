@@ -42,12 +42,12 @@ ai:
       - "update links"
     avoid_churn:
       - "do not turn into a journal (use Log.md)"
-      - "do not manage Next Actions here (use Roadmap/Tasks)"
+      - "do not manage tasks here (use Tasks.md)"
   extraction_rules: |
     Actionable work -> Tasks.md
     Brainstorm / alternatives -> Ideas.md
     Superseded truth -> Archive.md
-    Current focus + Next actions -> Roadmap.md
+    Current focus -> Roadmap.md
 
 tags: ["project/overview"]
 ---
@@ -127,10 +127,9 @@ ai:
       - "add or refine vertical slices for milestones"
     avoid:
       - "dumping granular tasks here (belongs in Tasks.md)"
-      - "putting Next 1-3 Actions here (belongs in Tasks.md)"
+      - "putting individual tasks here (belongs in Tasks.md)"
   extraction_rules: |
     Individual tasks -> Tasks.md (with [[Roadmap#VS — Slice Name]] link).
-    Next actions -> Tasks.md.
     Current focus should always point to the active milestone.
 
 tags: ["project/roadmap"]
@@ -213,7 +212,7 @@ project:
 
 tasks:
   philosophy: "Atomic work items. Tasks can link to vertical slices (from Roadmap) or stand alone."
-  rule_of_three: "Always maintain Next 1–3 Actions at the top."
+  single_focus: "Keep exactly ONE task in Now. When done, pull from Next."
   grooming_policy: "Speculative -> Ideas.md. Done/superseded -> Archive.md."
   linking: "Use [[Roadmap#VS1 — Slice Name]] to link tasks to slices."
 
@@ -222,13 +221,13 @@ ai:
   update_policy:
     allowed_to_change:
       - "split tasks into smaller steps"
-      - "promote items into Next Actions"
-      - "add acceptance checks"
+      - "promote items from Next to Now"
       - "clarify verbs and outcomes"
       - "add slice links to tasks"
     avoid:
       - "rewriting milestone outcomes here (those belong in Roadmap)"
       - "creating vertical slices here (those belong in Roadmap)"
+      - "putting more than one task in Now section"
   extraction_rules: |
     If Log.md contains "need to / should / todo / don't forget", create a task here.
     If an item is not actionable, move it to Ideas.md.
@@ -240,33 +239,30 @@ tags: ["project/tasks"]
 
 # Tasks — <Project Name>
 
-## Next 1–3 Actions (always kept fresh)
-- [ ] <Smallest concrete step (~15–60 minutes)> [[Roadmap#VS1 — <Slice Name>]]
-- [ ] <Next step> [[Roadmap#VS1 — <Slice Name>]]
-- [ ] <Standalone task with no slice>
+## Now
+- [ ] <The ONE task you're actively working on> [[Roadmap#VS1 — <Slice Name>]]
 
 ---
 
-## Active Tasks
-- [ ] <Task description> [[Roadmap#VS1 — <Slice Name>]]
-  - Acceptance: <How you'll know it's done>
-- [ ] <Task description> [[Roadmap#VS2 — <Slice Name>]]
+## Next
+- [ ] <Task ready to start> [[Roadmap#VS1 — <Slice Name>]]
+- [ ] <Task ready to start> [[Roadmap#VS2 — <Slice Name>]]
 - [ ] <Standalone task>
 
 ---
 
-## Blocked / Waiting
-- [ ] <Thing blocked> — blocked by <dependency> — unblock plan: <...>
+## Blocked
+- [ ] <Thing blocked> — waiting on <dependency> — unblock plan: <...>
 
 ---
 
-## Future Tasks (actionable, but not now)
+## Later
 - [ ] <Task>
 - [ ] <Task>
 
 ---
 
-## Recently Completed (keep short; archive the rest)
+## Done
 - [x] <Item> (details in [[Archive]])
 `,
 

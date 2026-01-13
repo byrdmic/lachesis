@@ -238,27 +238,22 @@ function processTemplate(
     const isMinimal = hasMinimalExtractedData(data)
 
     if (isMinimal) {
-      // Update Next 1-3 Actions with actual task descriptions
+      // Update Now section with actual task
       content = content.replace(
-        /## Next 1–3 Actions \(always kept fresh\)\n- \[ \] <Smallest concrete step.*\n- \[ \] <Next step>.*\n- \[ \] <Standalone task.*\n\n---/,
-        `## Next 1–3 Actions (always kept fresh)
+        /## Now\n- \[ \] <The ONE task.*\n\n---/,
+        `## Now
 - [ ] Write elevator pitch in Overview.md [[Roadmap#VS1 — Project Definition]]
-- [ ] Define the problem being solved [[Roadmap#VS1 — Project Definition]]
-- [ ] Identify target users [[Roadmap#VS1 — Project Definition]]
 
 ---`,
       )
 
-      // Update Active Tasks section
+      // Update Next section
       content = content.replace(
-        /## Active Tasks\n- \[ \] <Task description>.*\n.*Acceptance:.*\n- \[ \] <Task description>.*\n- \[ \] <Standalone task>\n\n---/,
-        `## Active Tasks
+        /## Next\n- \[ \] <Task ready to start>.*\n- \[ \] <Task ready to start>.*\n- \[ \] <Standalone task>\n\n---/,
+        `## Next
+- [ ] Define the problem being solved [[Roadmap#VS1 — Project Definition]]
+- [ ] Identify target users [[Roadmap#VS1 — Project Definition]]
 - [ ] Complete Overview.md sections [[Roadmap#VS1 — Project Definition]]
-  - Acceptance: Elevator pitch, problem statement, and target users filled in
-- [ ] Add first concrete milestone to Roadmap.md [[Roadmap#VS1 — Project Definition]]
-  - Acceptance: M2 has a clear outcome and definition of done
-- [ ] Update vertical slices in Roadmap.md [[Roadmap#VS1 — Project Definition]]
-  - Acceptance: At least 2 slices defined for M1
 
 ---`,
       )

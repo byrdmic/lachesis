@@ -93,7 +93,8 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Combined harvest workflow that scans ALL project files (Overview, Roadmap, Tasks, Ideas, Log) ' +
       'in a single pass to find actionable items, gaps, and implicit TODOs. ' +
       'Ideas.md sections are processed by heading to preserve context. ' +
-      'De-duplicates against existing tasks and presents suggestions in a review modal.',
+      'De-duplicates against existing tasks and presents suggestions in a review modal. ' +
+      'When tasks are moved to Now, also updates Roadmap.md Current Focus and milestone status.',
     readFiles: [
       PROJECT_FILES.overview,
       PROJECT_FILES.roadmap,
@@ -101,7 +102,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       PROJECT_FILES.ideas,
       PROJECT_FILES.log,
     ],
-    writeFiles: [PROJECT_FILES.tasks],
+    writeFiles: [PROJECT_FILES.tasks, PROJECT_FILES.roadmap],
     risk: 'low',
     confirmation: 'preview',
     allowsDelete: false,
@@ -126,12 +127,18 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Output structured JSON, not diff format',
       'Each task must have sourceFile, text, and reasoning fields',
       'For Ideas.md sources, also include ideaHeading field',
-      'Suggest appropriate destination: next-actions, active-tasks, or future-tasks',
+      'Suggest appropriate destination: now, next, or later',
       'Suggest slice link if task relates to a Roadmap slice',
 
       // Content rules
       'Tasks should be concrete and actionable (not vague)',
       'Task descriptions should be concise (1-2 sentences max)',
+
+      // Roadmap synchronization rules
+      'When a task is moved to Now section, also update Roadmap.md',
+      'Update Current Focus section to reference the milestone the task belongs to',
+      'Update the milestone Status from "planned" to "active"',
+      'If switching milestones, set previous active milestone back to "planned"',
     ],
     usesAI: true,
     combinedSteps: ['harvest-tasks', 'ideas-groom'],
@@ -292,7 +299,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Allow user to Keep, Reject, or Move each task',
       'Keep: Leave task in Log.md as-is',
       'Reject: Apply strikethrough to task text in Log.md',
-      'Move to Future: Remove task from Log.md, add to "Potential Future Tasks" section in Tasks.md',
+      'Move to Later: Remove task from Log.md, add to "Later" section in Tasks.md',
       'Remove empty potential-tasks blocks after processing',
     ],
     usesAI: false,
@@ -409,9 +416,10 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Read Roadmap.md to understand available vertical slices, then extract tasks from ' +
       'those slices. Tasks link to Roadmap slices using wiki links [[Roadmap#VS1 — Slice Name]]. ' +
       'Also supports standalone tasks not linked to any slice. ' +
+      'When setting the Now task, also updates Roadmap.md Current Focus and milestone status. ' +
       'Requires Overview.md to have content; works best when Roadmap.md has milestones and slices defined.',
     readFiles: [PROJECT_FILES.overview, PROJECT_FILES.roadmap, PROJECT_FILES.tasks, PROJECT_FILES.log, PROJECT_FILES.ideas],
-    writeFiles: [PROJECT_FILES.tasks],
+    writeFiles: [PROJECT_FILES.tasks, PROJECT_FILES.roadmap],
     risk: 'low',
     confirmation: 'preview',
     allowsDelete: false,
@@ -421,14 +429,20 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Check if Roadmap.md has milestones and slices - redirect to Roadmap: Fill if not',
       'Read Roadmap.md to understand available vertical slices and current focus',
       'Mine Log.md and Ideas.md for actionable items that could become tasks',
-      'Create tasks in the Active Tasks section, linking to Roadmap slices where applicable',
+      'Create tasks in the Next section, linking to Roadmap slices where applicable',
       'Link tasks to slices using wiki links: [[Roadmap#VS1 — Slice Name]]',
       'Standalone tasks (not linked to any slice) are valid for random ideas/one-offs',
       'Tasks should be small (15-60 minutes), concrete, and have clear acceptance criteria',
       'Ask clarifying questions before proposing any changes',
       'Propose small, incremental diffs - a few tasks at a time',
-      'Set up Next 1-3 Actions for the most important immediate tasks',
+      'Set up Now section with the single most important immediate task',
       'Never invent tasks - only extract from existing project content',
+
+      // Roadmap synchronization rules
+      'When setting the Now task, also update Roadmap.md',
+      'Update Current Focus section to reference the milestone the task belongs to',
+      'Update the milestone Status from "planned" to "active"',
+      'Propose Roadmap.md diff along with Tasks.md changes',
     ],
     usesAI: true,
   },
@@ -445,8 +459,9 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Analyze ALL project files (Overview, Roadmap, Tasks, Ideas, Log) for full context. ' +
       'Identify gaps, missing work, implicit TODOs, and ideas that could become tasks. ' +
       'De-duplicate against existing tasks in Tasks.md. Output structured JSON with suggestions ' +
-      'for user to review and place in Tasks.md (Next Actions, Active Tasks, or Future Tasks) ' +
-      'with optional links to Roadmap slices.',
+      'for user to review and place in Tasks.md (Now, Next, or Later) ' +
+      'with optional links to Roadmap slices. ' +
+      'When tasks are moved to Now, also updates Roadmap.md Current Focus and milestone status.',
     readFiles: [
       PROJECT_FILES.overview,
       PROJECT_FILES.roadmap,
@@ -454,7 +469,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       PROJECT_FILES.ideas,
       PROJECT_FILES.log,
     ],
-    writeFiles: [PROJECT_FILES.tasks],
+    writeFiles: [PROJECT_FILES.tasks, PROJECT_FILES.roadmap],
     risk: 'low',
     confirmation: 'preview',
     allowsDelete: false,
@@ -476,13 +491,19 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       // Output format rules
       'Output structured JSON, not diff format',
       'Each task must have sourceFile, text, and reasoning fields',
-      'Suggest appropriate destination: next-actions, active-tasks, or future-tasks',
+      'Suggest appropriate destination: now, next, or later',
       'Suggest slice link if task relates to a Roadmap slice (format: [[Roadmap#VS1 — Slice Name]])',
 
       // Content rules
       'Tasks should be concrete and actionable (not vague)',
       'Task descriptions should be concise (1-2 sentences max)',
       'Include source context to help user verify',
+
+      // Roadmap synchronization rules
+      'When a task is moved to Now section, also update Roadmap.md',
+      'Update Current Focus section to reference the milestone the task belongs to',
+      'Update the milestone Status from "planned" to "active"',
+      'If switching milestones, set previous active milestone back to "planned"',
     ],
     usesAI: true,
     hidden: true,
@@ -500,14 +521,15 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Analyze Ideas.md to find actionable items that should become tasks. ' +
       'Ideas are typically grouped by ## headings with optional descriptions underneath. ' +
       'De-duplicate against existing tasks in Tasks.md. Output structured JSON with suggestions ' +
-      'for user to review and place in Tasks.md (Next Actions, Active Tasks, or Future Tasks) ' +
-      'with optional links to Roadmap slices.',
+      'for user to review and place in Tasks.md (Now, Next, or Later) ' +
+      'with optional links to Roadmap slices. ' +
+      'When tasks are moved to Now, also updates Roadmap.md Current Focus and milestone status.',
     readFiles: [
       PROJECT_FILES.ideas,
       PROJECT_FILES.tasks,
       PROJECT_FILES.roadmap,
     ],
-    writeFiles: [PROJECT_FILES.tasks],
+    writeFiles: [PROJECT_FILES.tasks, PROJECT_FILES.roadmap],
     risk: 'low',
     confirmation: 'preview',
     allowsDelete: false,
@@ -532,13 +554,19 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       // Output format rules
       'Output structured JSON, not diff format',
       'Each task must have ideaHeading, text, and reasoning fields',
-      'Suggest appropriate destination: next-actions, active-tasks, or future-tasks',
+      'Suggest appropriate destination: now, next, or later',
       'Suggest slice link if task relates to a Roadmap slice (format: [[Roadmap#VS1 — Slice Name]])',
 
       // Content rules
       'Tasks should be concrete and actionable (not vague)',
       'Task descriptions should be concise (1-2 sentences max)',
       'Include the original idea heading as context',
+
+      // Roadmap synchronization rules
+      'When a task is moved to Now section, also update Roadmap.md',
+      'Update Current Focus section to reference the milestone the task belongs to',
+      'Update the milestone Status from "planned" to "active"',
+      'If switching milestones, set previous active milestone back to "planned"',
     ],
     usesAI: true,
     hidden: true,
@@ -618,7 +646,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     rules: [
       // Finding completed tasks
       'Find all completed tasks (- [x]) in Tasks.md',
-      'Include tasks from any section: Next Actions, Active Tasks, Future Tasks, Recently Completed',
+      'Include tasks from any section: Now, Next, Later, Done',
       'Preserve any sub-items (indented lines) or acceptance criteria when archiving',
 
       // Grouping by slice
@@ -694,7 +722,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Tasks.md: extract tasks from slices, link using [[Roadmap#VS1 — Slice Name]]',
       'Tasks should be 15-60 minutes, concrete, with clear acceptance criteria',
       'Standalone tasks (no slice link) are valid for misc/one-off items',
-      'Set up Next 1-3 Actions for most important immediate tasks',
+      'Set up Now section with the single most important immediate task',
       'Do NOT invent tasks - only extract from provided summary content',
     ],
     usesAI: true,
@@ -770,7 +798,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
 //     displayName: 'Triage',
 //     description: 'Organize Tasks.md into executable priority order',
 //     intent:
-//       'Review Tasks.md and organize it for execution. Mark "Next 1-3 Actions", ' +
+//       'Review Tasks.md and organize it for execution. Mark "Now" (single task), ' +
 //       'split oversized tasks, flag unclear tasks, group by theme if helpful. ' +
 //       'Does NOT delete tasks or add new content - only reorganizes existing.',
 //     readFiles: [PROJECT_FILES.tasks, PROJECT_FILES.roadmap],

@@ -340,9 +340,9 @@ export class HarvestTasksModal extends Modal {
 
     const destinations: TaskDestination[] = [
       'discard',
-      'future-tasks',
-      'active-tasks',
-      'next-actions',
+      'later',
+      'next',
+      'now',
     ]
 
     for (const dest of destinations) {
