@@ -137,7 +137,7 @@ export class GitLogModal extends Modal {
   private copyToClipboard() {
     if (this.commits.length === 0) return
 
-    const logText = formatCommitLog(this.commits, { includeDate: true })
+    const logText = formatCommitLog(this.commits, { includeDate: true, includeDescription: true })
 
     navigator.clipboard.writeText(logText).then(
       () => {
