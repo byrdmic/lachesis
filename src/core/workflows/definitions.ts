@@ -138,7 +138,9 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'When a task is moved to Now section, also update Roadmap.md',
       'Update Current Focus section to reference the milestone the task belongs to',
       'Update the milestone Status from "planned" to "active"',
-      'If switching milestones, set previous active milestone back to "planned"',
+      'Update "## Milestone Index (fast scan)" entry to show the milestone as active',
+      'If switching milestones, set previous active milestone back to "planned" (unless done)',
+      'Also update Milestone Index entry for the previous milestone',
     ],
     usesAI: true,
     combinedSteps: ['harvest-tasks', 'ideas-groom'],
@@ -147,6 +149,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
   /**
    * TASKS MAINTENANCE: Combined workflow for task lifecycle management.
    * Syncs commits (if GitHub configured), archives completed tasks, then promotes next task.
+   * Also updates Roadmap.md when promoting tasks to keep Current Focus in sync.
    */
   'tasks-maintenance': {
     name: 'tasks-maintenance',
@@ -157,9 +160,10 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       '(1) If GitHub is configured, sync recent commits to mark tasks complete, ' +
       '(2) Archive all completed tasks to Archive.md organized by vertical slice, ' +
       '(3) If Now section is empty, promote the best task from Next/Later to Now. ' +
-      'Skips steps as appropriate (e.g., sync if no GitHub, promote if Now has active task).',
+      'Skips steps as appropriate (e.g., sync if no GitHub, promote if Now has active task). ' +
+      'When promoting a task, also updates Roadmap.md Current Focus and milestone status.',
     readFiles: [PROJECT_FILES.tasks, PROJECT_FILES.archive, PROJECT_FILES.roadmap, PROJECT_FILES.overview],
-    writeFiles: [PROJECT_FILES.tasks, PROJECT_FILES.archive],
+    writeFiles: [PROJECT_FILES.tasks, PROJECT_FILES.archive, PROJECT_FILES.roadmap],
     risk: 'low',
     confirmation: 'preview',
     allowsDelete: true,
@@ -180,12 +184,18 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'If Now section is empty after archiving, promote from Next (or Later as fallback)',
       'AI selects best task based on Roadmap alignment and dependencies',
 
+      // Roadmap synchronization rules (during promote step)
+      'When promoting a task, update Roadmap.md if milestone changes',
+      'Update Current Focus section to reference the promoted task\'s milestone',
+      'Update milestone Status from "planned" to "active"',
+      'Update "## Milestone Index (fast scan)" to reflect the active milestone',
+
       // Output format for sync
       'For sync: JSON with matches, unmatchedCommits, and summary',
       // Output format for archive
       'For archive: JSON with groups, standaloneTasks, and summary',
       // Output format for promote
-      'For promote: JSON with status, selectedTask, reasoning, and candidates',
+      'For promote: JSON with status, selectedTask, reasoning, candidates, and roadmapChanges',
     ],
     usesAI: true,
     combinedSteps: ['sync-commits', 'archive-completed', 'promote-next-task'],
@@ -449,6 +459,9 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'When setting the Now task, also update Roadmap.md',
       'Update Current Focus section to reference the milestone the task belongs to',
       'Update the milestone Status from "planned" to "active"',
+      'Update "## Milestone Index (fast scan)" entry to show the milestone as active',
+      'If switching milestones, set previous milestone back to "planned" (unless done)',
+      'Also update Milestone Index entry for the previous milestone',
       'Propose Roadmap.md diff along with Tasks.md changes',
     ],
     usesAI: true,
@@ -510,7 +523,9 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'When a task is moved to Now section, also update Roadmap.md',
       'Update Current Focus section to reference the milestone the task belongs to',
       'Update the milestone Status from "planned" to "active"',
-      'If switching milestones, set previous active milestone back to "planned"',
+      'Update "## Milestone Index (fast scan)" entry to show the milestone as active',
+      'If switching milestones, set previous active milestone back to "planned" (unless done)',
+      'Also update Milestone Index entry for the previous milestone',
     ],
     usesAI: true,
     hidden: true,
@@ -573,7 +588,9 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'When a task is moved to Now section, also update Roadmap.md',
       'Update Current Focus section to reference the milestone the task belongs to',
       'Update the milestone Status from "planned" to "active"',
-      'If switching milestones, set previous active milestone back to "planned"',
+      'Update "## Milestone Index (fast scan)" entry to show the milestone as active',
+      'If switching milestones, set previous active milestone back to "planned" (unless done)',
+      'Also update Milestone Index entry for the previous milestone',
     ],
     usesAI: true,
     hidden: true,
@@ -679,6 +696,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
   /**
    * PROMOTE NEXT TASK: AI-powered selection of the best task to promote to Now.
    * Part of the tasks-maintenance combined workflow.
+   * Also updates Roadmap.md Current Focus and milestone status when needed.
    */
   'promote-next-task': {
     name: 'promote-next-task',
@@ -689,9 +707,10 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'the best task to promote from Next or Later sections to the Now section. ' +
       'First checks if Now is empty (workflow is a no-op if Now already has an active task). ' +
       'Prioritizes tasks from Next section; falls back to Later if Next is empty. ' +
-      'AI evaluates alignment with current Roadmap focus, dependencies, and strategic value.',
+      'AI evaluates alignment with current Roadmap focus, dependencies, and strategic value. ' +
+      'When promoting a task, also updates Roadmap.md Current Focus and milestone status.',
     readFiles: [PROJECT_FILES.overview, PROJECT_FILES.roadmap, PROJECT_FILES.tasks],
-    writeFiles: [PROJECT_FILES.tasks],
+    writeFiles: [PROJECT_FILES.tasks, PROJECT_FILES.roadmap],
     risk: 'low',
     confirmation: 'preview',
     allowsDelete: false,
@@ -714,10 +733,19 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Consider task dependencies - if Task B depends on Task A, suggest Task A first',
       'Consider strategic value - small unblocking tasks may have high priority',
 
+      // Roadmap synchronization rules
+      'When promoting a task to Now, also update Roadmap.md if the milestone changes',
+      'Check if the promoted task belongs to a different milestone than Current Focus',
+      'If milestone changes: update Current Focus section to reference the new milestone',
+      'Update the new milestone **Status:** from "planned" to "active"',
+      'Update "## Milestone Index (fast scan)" to show the new milestone as active',
+      'If switching milestones, set the previous milestone back to "planned" (unless it was "done")',
+
       // Output format rules
-      'Output structured JSON with status, selectedTask, reasoning, and candidates',
+      'Output structured JSON with status, selectedTask, reasoning, candidates, and roadmapChanges',
       'For each candidate, include text, sourceSection, score (1-5), and brief note',
       'selectedTask must include: text, sourceSection, sliceLink (if present)',
+      'roadmapChanges must include milestone updates if Current Focus is changing',
     ],
     usesAI: true,
     hidden: true,

@@ -308,7 +308,11 @@ Before starting, identify:
      1. Check which milestone the Now task's slice belongs to
      2. Update "## Current Focus" to reference that milestone
      3. Update the milestone's **Status:** from "planned" to "active"
-   - If the Now task switches to a different milestone, update the old milestone back to "planned"
+     4. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
+   - If the Now task switches to a different milestone:
+     - Update the old milestone back to "planned" (unless it was "done")
+     - Update the Milestone Index entry for the old milestone too
+   - Both the Current Focus AND Milestone Index must stay in sync
    - This keeps Roadmap.md in sync with actual work focus
    - Propose a diff for Roadmap.md along with the Tasks.md changes
 
@@ -712,7 +716,11 @@ When a task is assigned destination "now", the Roadmap.md must also be updated:
 1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice Name]] → M1)
 2. Update "## Current Focus" section to reference that milestone
 3. Update the milestone's **Status:** from "planned" to "active"
-4. If changing from a different active milestone, set the old one back to "planned"
+4. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
+5. If changing from a different active milestone:
+   - Set the old milestone back to "planned" (unless it was "done")
+   - Update the Milestone Index entry for the old milestone too
+6. Both the Current Focus AND Milestone Index must stay in sync
 Include these Roadmap changes in the modal for user review.
 
 **FIELD REQUIREMENTS:**
@@ -806,7 +814,11 @@ When a task is assigned destination "now", the Roadmap.md must also be updated:
 1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice Name]] → M1)
 2. Update "## Current Focus" section to reference that milestone
 3. Update the milestone's **Status:** from "planned" to "active"
-4. If changing from a different active milestone, set the old one back to "planned"
+4. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
+5. If changing from a different active milestone:
+   - Set the old milestone back to "planned" (unless it was "done")
+   - Update the Milestone Index entry for the old milestone too
+6. Both the Current Focus AND Milestone Index must stay in sync
 Include these Roadmap changes in the modal for user review.
 
 **FIELD REQUIREMENTS:**
@@ -888,7 +900,11 @@ When a task is assigned destination "now", the Roadmap.md must also be updated:
 1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice Name]] → M1)
 2. Update "## Current Focus" section to reference that milestone
 3. Update the milestone's **Status:** from "planned" to "active"
-4. If changing from a different active milestone, set the old one back to "planned"
+4. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
+5. If changing from a different active milestone:
+   - Set the old milestone back to "planned" (unless it was "done")
+   - Update the Milestone Index entry for the old milestone too
+6. Both the Current Focus AND Milestone Index must stay in sync
 Include these Roadmap changes in the modal for user review.
 
 **FIELD REQUIREMENTS:**
@@ -1217,6 +1233,7 @@ ACTIVE WORKFLOW: TASKS: PROMOTE NEXT
 Intent: ${activeWorkflow.intent}
 
 You are selecting the best task to promote from Next or Later to the Now section.
+When promoting, you also update Roadmap.md if the milestone changes.
 
 **PRE-CHECK (DO THIS FIRST)**
 1. Check if the Now section in Tasks.md already has an unchecked task (- [ ])
@@ -1255,6 +1272,18 @@ For each candidate task in Next (or Later as fallback):
 - Consider if the task description suggests it unblocks other work
 - Score: 1 (low priority) to 5 (high priority)
 
+**ROADMAP SYNCHRONIZATION (when promoting to Now)**
+After selecting the task to promote, check if Roadmap.md needs updating:
+1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice]] → M1)
+2. Compare with current Current Focus milestone in Roadmap.md
+3. If the milestone is DIFFERENT (or Current Focus is empty):
+   - Update "## Current Focus" section to reference the new milestone
+   - Update the new milestone's **Status:** from "planned" to "active"
+   - Update "## Milestone Index (fast scan)" entry for the new milestone: (Status: active)
+   - If switching from a previous milestone that wasn't "done", set it back to "planned"
+   - Update Milestone Index entry for the previous milestone too
+4. Include roadmapChanges in the JSON output when changes are needed
+
 **OUTPUT FORMAT (SUCCESS CASE)**
 \`\`\`json
 {
@@ -1272,15 +1301,25 @@ For each candidate task in Next (or Later as fallback):
       "sliceLink": null,
       "score": 3,
       "note": "Good task but not aligned with current focus"
-    },
-    {
-      "text": "Third task considered",
-      "sourceSection": "later",
-      "sliceLink": "[[Roadmap#VS2 — Feature Name]]",
-      "score": 2,
-      "note": "From Later section, lower priority"
     }
-  ]
+  ],
+  "roadmapChanges": {
+    "needed": true,
+    "newMilestone": "M2",
+    "previousMilestone": "M1",
+    "currentFocusUpdate": {
+      "milestone": "M2 — Feature Name",
+      "intent": "We're trying to implement feature X..."
+    },
+    "milestoneStatusUpdates": [
+      { "milestone": "M1", "from": "active", "to": "planned" },
+      { "milestone": "M2", "from": "planned", "to": "active" }
+    ],
+    "milestoneIndexUpdates": [
+      { "milestone": "M1", "newStatus": "planned" },
+      { "milestone": "M2", "newStatus": "active" }
+    ]
+  }
 }
 \`\`\`
 
@@ -1292,6 +1331,9 @@ For each candidate task in Next (or Later as fallback):
 - reasoning: Required for success. Brief explanation of selection
 - candidates: Required for success. List of other tasks considered (can be empty array)
 - Each candidate needs: text, sourceSection, sliceLink (or null), score (1-5), note
+- roadmapChanges: Required for success. Set needed=false if no milestone change needed
+  - If needed=true: include newMilestone, previousMilestone (if any), currentFocusUpdate,
+    milestoneStatusUpdates (array of changes), milestoneIndexUpdates (array of changes)
 
 FILE CONTENTS (for analysis):
 ${workflowFileContents}
@@ -1688,7 +1730,11 @@ When a task is moved to the "Now" section in Tasks.md:
 1. Identify which milestone the task's slice belongs to (from [[Roadmap#VS... — Name]])
 2. Update "## Current Focus" to reference that milestone
 3. Update the milestone's **Status:** from "planned" to "active"
-4. If switching milestones, set the previous active milestone back to "planned"
+4. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
+5. If switching milestones:
+   - Set the previous active milestone back to "planned" (unless it was "done")
+   - Update the Milestone Index entry for the previous milestone too
+6. Both the Current Focus AND Milestone Index must stay in sync
 This ensures Roadmap.md always reflects the actual work focus.
 
 **Log.md:** Freeform notes. Items with "need to", "should", "TODO" get extracted to Tasks.md.
