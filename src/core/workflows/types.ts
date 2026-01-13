@@ -27,6 +27,7 @@ export const WORKFLOW_NAMES = [
   'ideas-groom',
   'sync-commits',
   'archive-completed',
+  'promote-next-task',
   'init-from-summary',
   // TODO: Re-enable as they're refined
   // 'synthesize',

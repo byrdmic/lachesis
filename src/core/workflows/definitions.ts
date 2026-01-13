@@ -146,17 +146,18 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
 
   /**
    * TASKS MAINTENANCE: Combined workflow for task lifecycle management.
-   * Syncs commits (if GitHub configured), then archives completed tasks.
+   * Syncs commits (if GitHub configured), archives completed tasks, then promotes next task.
    */
   'tasks-maintenance': {
     name: 'tasks-maintenance',
     displayName: 'Tasks: Maintenance',
-    description: 'Sync git commits and archive completed tasks',
+    description: 'Sync git commits, archive completed tasks, and promote next task',
     intent:
       'Combined maintenance workflow that handles task lifecycle: ' +
       '(1) If GitHub is configured, sync recent commits to mark tasks complete, ' +
-      '(2) Archive all completed tasks to Archive.md organized by vertical slice. ' +
-      'Skips the sync step if no GitHub repo is configured.',
+      '(2) Archive all completed tasks to Archive.md organized by vertical slice, ' +
+      '(3) If Now section is empty, promote the best task from Next/Later to Now. ' +
+      'Skips steps as appropriate (e.g., sync if no GitHub, promote if Now has active task).',
     readFiles: [PROJECT_FILES.tasks, PROJECT_FILES.archive, PROJECT_FILES.roadmap, PROJECT_FILES.overview],
     writeFiles: [PROJECT_FILES.tasks, PROJECT_FILES.archive],
     risk: 'low',
@@ -175,13 +176,19 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Standalone tasks (no slice ref) go under "Completed Tasks" section',
       'Preserve sub-items and acceptance criteria when archiving',
 
+      // Promote rules
+      'If Now section is empty after archiving, promote from Next (or Later as fallback)',
+      'AI selects best task based on Roadmap alignment and dependencies',
+
       // Output format for sync
       'For sync: JSON with matches, unmatchedCommits, and summary',
       // Output format for archive
       'For archive: JSON with groups, standaloneTasks, and summary',
+      // Output format for promote
+      'For promote: JSON with status, selectedTask, reasoning, and candidates',
     ],
     usesAI: true,
-    combinedSteps: ['sync-commits', 'archive-completed'],
+    combinedSteps: ['sync-commits', 'archive-completed', 'promote-next-task'],
   },
 
   // ==========================================================================
@@ -664,6 +671,53 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Output structured JSON with groups, standaloneTasks, and summary',
       'Each group should include sliceRef, tasks array, and optional summary',
       'Include total counts in summary for UI display',
+    ],
+    usesAI: true,
+    hidden: true,
+  },
+
+  /**
+   * PROMOTE NEXT TASK: AI-powered selection of the best task to promote to Now.
+   * Part of the tasks-maintenance combined workflow.
+   */
+  'promote-next-task': {
+    name: 'promote-next-task',
+    displayName: 'Tasks: Promote Next',
+    description: 'AI-powered selection of the best task to promote to Now',
+    intent:
+      'Analyze project context (Overview, Roadmap, Tasks) to intelligently select ' +
+      'the best task to promote from Next or Later sections to the Now section. ' +
+      'First checks if Now is empty (workflow is a no-op if Now already has an active task). ' +
+      'Prioritizes tasks from Next section; falls back to Later if Next is empty. ' +
+      'AI evaluates alignment with current Roadmap focus, dependencies, and strategic value.',
+    readFiles: [PROJECT_FILES.overview, PROJECT_FILES.roadmap, PROJECT_FILES.tasks],
+    writeFiles: [PROJECT_FILES.tasks],
+    risk: 'low',
+    confirmation: 'preview',
+    allowsDelete: false,
+    allowsCrossFileMove: false,
+    rules: [
+      // Pre-check rules
+      'First check if the Now section already has an unchecked task (- [ ])',
+      'If Now section has an active task, respond with status "already_active" and do nothing',
+      'If Now section is empty or only has completed tasks, proceed with promotion',
+
+      // Source priority rules
+      'Look for tasks in Next section first (## Next)',
+      'If Next section is empty (no unchecked tasks), fall back to Later section (## Later)',
+      'If both Next and Later are empty, respond with status "no_tasks"',
+
+      // Selection criteria rules
+      'Analyze Roadmap.md to understand the current milestone and active slices',
+      'Prioritize tasks that align with the Current Focus milestone',
+      'Prioritize tasks linked to active slices (e.g., [[Roadmap#VS1 — Slice Name]])',
+      'Consider task dependencies - if Task B depends on Task A, suggest Task A first',
+      'Consider strategic value - small unblocking tasks may have high priority',
+
+      // Output format rules
+      'Output structured JSON with status, selectedTask, reasoning, and candidates',
+      'For each candidate, include text, sourceSection, score (1-5), and brief note',
+      'selectedTask must include: text, sourceSection, sliceLink (if present)',
     ],
     usesAI: true,
     hidden: true,

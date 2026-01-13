@@ -60,6 +60,17 @@ import { HarvestTasksModal } from '../harvest-tasks-modal'
 import { IdeasGroomModal } from '../ideas-groom-modal'
 import { SyncCommitsModal } from '../sync-commits-modal'
 import { ArchiveCompletedModal } from '../archive-completed-modal'
+import { PromoteNextModal } from '../promote-next-modal'
+import {
+  parsePromoteNextResponse,
+  containsPromoteNextResponse,
+  applyTaskPromotion,
+  hasActiveNowTask,
+  type SelectedTask,
+  type CandidateTask,
+  type PromoteSelection,
+  type PromoteStatus,
+} from '../../utils/promote-next-parser'
 import { GitLogModal } from '../git-log-modal'
 import { InitSummaryInputModal } from '../init-summary-modal'
 import { BatchDiffViewerModal, type BatchDiffAction } from '../batch-diff-viewer-modal'
@@ -113,6 +124,14 @@ export class WorkflowExecutor {
   private pendingArchiveCompletedTasks: CompletedTask[] = []
   private pendingSliceGroups: SliceGroup[] = []
   private pendingStandaloneTasks: CompletedTask[] = []
+
+  // State for promote-next-task workflow
+  private pendingSelectedTask: SelectedTask | null = null
+  private pendingPromoteReasoning: string | null = null
+  private pendingPromoteCandidates: CandidateTask[] = []
+  private pendingPromoteStatus: PromoteStatus = 'no_tasks'
+  private pendingCurrentNowTask: string | null = null
+  private pendingPromoteMessage: string | null = null
 
   // State for combined workflow execution
   private combinedWorkflowState: CombinedWorkflowState | null = null
@@ -446,7 +465,7 @@ export class WorkflowExecutor {
   /**
    * Run a step in the tasks-maintenance combined workflow.
    */
-  private runTasksMaintenanceStep(step: CombinedWorkflowStep, workflow: WorkflowDefinition): void {
+  private async runTasksMaintenanceStep(step: CombinedWorkflowStep, workflow: WorkflowDefinition): Promise<void> {
     if (step.workflowName === 'sync-commits') {
       // Check if GitHub is configured
       if (!this.snapshot.aiConfig?.github_repo) {
@@ -464,6 +483,25 @@ export class WorkflowExecutor {
       // Run archive-completed workflow
       const archiveWorkflow = getWorkflowDefinition('archive-completed')
       this.callbacks.onTriggerAIWorkflow(archiveWorkflow, 'Archive completed tasks')
+    } else if (step.workflowName === 'promote-next-task') {
+      // Check if Now section already has a task before calling AI
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (tasksFile && tasksFile instanceof TFile) {
+        const tasksContent = await this.app.vault.read(tasksFile)
+        if (hasActiveNowTask(tasksContent)) {
+          step.status = 'skipped'
+          step.skipReason = 'Now section already has an active task'
+          this.callbacks.onAddMessage('assistant', `*Skipping task promotion: ${step.skipReason}*`)
+          this.advanceCombinedWorkflow()
+          return
+        }
+      }
+
+      // Run promote-next-task workflow
+      const promoteWorkflow = getWorkflowDefinition('promote-next-task')
+      this.callbacks.onTriggerAIWorkflow(promoteWorkflow, 'Select the best task to promote to Now')
     }
   }
 
@@ -1346,6 +1384,184 @@ export class WorkflowExecutor {
       console.error('Failed to apply archive selections:', err)
       new Notice(`Failed to archive tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
+  }
+
+  // ============================================================================
+  // Promote Next Task Workflow
+  // ============================================================================
+
+  /**
+   * Handle the AI response from the promote-next-task workflow.
+   * Parses the JSON response and opens the review modal.
+   */
+  async handlePromoteNextResponse(content: string): Promise<void> {
+    try {
+      const parsed = parsePromoteNextResponse(content)
+
+      this.pendingPromoteStatus = parsed.status
+      this.pendingSelectedTask = parsed.selectedTask ?? null
+      this.pendingPromoteReasoning = parsed.reasoning ?? null
+      this.pendingPromoteCandidates = parsed.candidates ?? []
+      this.pendingCurrentNowTask = parsed.currentNowTask ?? null
+      this.pendingPromoteMessage = parsed.message ?? null
+
+      if (parsed.status === 'already_active') {
+        this.callbacks.onAddMessage(
+          'assistant',
+          'Now section already has an active task. No promotion needed.'
+        )
+        this.advanceCombinedWorkflow()
+        return
+      }
+
+      if (parsed.status === 'no_tasks') {
+        this.callbacks.onAddMessage(
+          'assistant',
+          parsed.message || 'No tasks available to promote. Both Next and Later sections are empty.'
+        )
+        this.advanceCombinedWorkflow()
+        return
+      }
+
+      // Open the modal for user confirmation
+      this.openPromoteNextModal()
+    } catch (err) {
+      console.error('Failed to process promote next response:', err)
+      new Notice(`Failed to process response: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Open the promote next task modal.
+   */
+  private openPromoteNextModal(): void {
+    const modal = new PromoteNextModal(
+      this.app,
+      this.pendingPromoteStatus,
+      this.pendingSelectedTask,
+      this.pendingPromoteReasoning,
+      this.pendingPromoteCandidates,
+      this.pendingCurrentNowTask,
+      this.pendingPromoteMessage,
+      this.projectPath,
+      (selection, confirmed) => this.handlePromoteNextAction(selection, confirmed)
+    )
+    modal.open()
+  }
+
+  /**
+   * Open the promote next modal for viewing from chat history.
+   */
+  async openPromoteNextModalForHistory(content: string): Promise<void> {
+    try {
+      const parsed = parsePromoteNextResponse(content)
+
+      // Store for the action callback
+      this.pendingPromoteStatus = parsed.status
+      this.pendingSelectedTask = parsed.selectedTask ?? null
+      this.pendingPromoteReasoning = parsed.reasoning ?? null
+      this.pendingPromoteCandidates = parsed.candidates ?? []
+      this.pendingCurrentNowTask = parsed.currentNowTask ?? null
+      this.pendingPromoteMessage = parsed.message ?? null
+
+      // If it was a success status, check if the task has already been promoted
+      if (parsed.status === 'success' && parsed.selectedTask) {
+        const tasksPath = `${this.projectPath}/Tasks.md`
+        const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+        if (tasksFile && tasksFile instanceof TFile) {
+          const tasksContent = await this.app.vault.read(tasksFile)
+          // Check if the task is now in the Now section (already promoted)
+          const taskPattern = parsed.selectedTask.text.slice(0, 30).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const nowPattern = /^##\s*Now/im
+          const nextSectionPattern = /^##\s*(?:Next|Later|Blocked)/im
+
+          const nowMatch = tasksContent.match(nowPattern)
+          if (nowMatch) {
+            const nowStart = nowMatch.index!
+            const nextMatch = tasksContent.slice(nowStart).match(nextSectionPattern)
+            const nowEnd = nextMatch ? nowStart + nextMatch.index! : tasksContent.length
+            const nowSection = tasksContent.slice(nowStart, nowEnd)
+
+            if (new RegExp(taskPattern).test(nowSection)) {
+              // Task is already in Now - mark as already promoted
+              this.pendingPromoteMessage = 'Task has already been promoted to Now section.'
+            }
+          }
+        }
+      }
+
+      // Open modal in view-only mode
+      const modal = new PromoteNextModal(
+        this.app,
+        this.pendingPromoteStatus,
+        this.pendingSelectedTask,
+        this.pendingPromoteReasoning,
+        this.pendingPromoteCandidates,
+        this.pendingCurrentNowTask,
+        this.pendingPromoteMessage,
+        this.projectPath,
+        (selection, confirmed) => this.handlePromoteNextAction(selection, confirmed),
+        { viewOnly: true }
+      )
+      modal.open()
+    } catch (err) {
+      console.error('Failed to open promote next modal for history:', err)
+      new Notice(`Failed to open promotion: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Handle actions from the promote next modal.
+   */
+  private async handlePromoteNextAction(
+    selection: PromoteSelection,
+    confirmed: boolean
+  ): Promise<void> {
+    if (!confirmed || selection.action === 'skip' || !selection.selectedTask) {
+      // Clear pending state and advance workflow
+      this.clearPromoteNextState()
+      this.advanceCombinedWorkflow()
+      return
+    }
+
+    try {
+      // Apply task promotion to Tasks.md
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (!tasksFile || !(tasksFile instanceof TFile)) {
+        new Notice('Tasks.md not found')
+        return
+      }
+
+      let tasksContent = await this.app.vault.read(tasksFile)
+      tasksContent = applyTaskPromotion(tasksContent, selection.selectedTask)
+      await this.app.vault.modify(tasksFile, tasksContent)
+
+      new Notice('Task promoted to Now section')
+
+      // Clear pending state and refresh snapshot
+      this.clearPromoteNextState()
+      await this.callbacks.onSnapshotRefresh()
+    } catch (err) {
+      console.error('Failed to promote task:', err)
+      new Notice(`Failed to promote task: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+
+    this.advanceCombinedWorkflow()
+  }
+
+  /**
+   * Clear pending state for promote-next-task workflow.
+   */
+  private clearPromoteNextState(): void {
+    this.pendingSelectedTask = null
+    this.pendingPromoteReasoning = null
+    this.pendingPromoteCandidates = []
+    this.pendingPromoteStatus = 'no_tasks'
+    this.pendingCurrentNowTask = null
+    this.pendingPromoteMessage = null
   }
 
   // ============================================================================

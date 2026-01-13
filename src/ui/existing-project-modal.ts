@@ -710,6 +710,11 @@ export class ExistingProjectModal extends Modal {
           await this.workflowExecutor?.handleArchiveCompletedResponse(result.content)
         }
 
+        // Check if this was a promote-next-task workflow - handle specially
+        if (this.lastUsedWorkflowName === 'promote-next-task') {
+          await this.workflowExecutor?.handlePromoteNextResponse(result.content)
+        }
+
         // Check if this was an init-from-summary workflow - handle specially
         if (this.lastUsedWorkflowName === 'init-from-summary') {
           await this.workflowExecutor?.handleInitFromSummaryResponse(result.content)

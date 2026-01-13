@@ -1148,6 +1148,155 @@ FILE CONTENTS (for analysis):
 ${workflowFileContents}
 ================================================================================
 `
+    } else if (activeWorkflow.name === 'archive-completed') {
+      // Special handling for archive-completed workflow - outputs JSON
+      workflowSection = `
+================================================================================
+ACTIVE WORKFLOW: TASKS: ARCHIVE COMPLETED
+================================================================================
+Intent: ${activeWorkflow.intent}
+
+You are finding completed tasks in Tasks.md and preparing them for archival to Archive.md.
+
+**YOUR GOALS:**
+1. Find all completed tasks (- [x]) in Tasks.md
+2. Group them by their vertical slice reference [[Roadmap#VS... — Name]]
+3. Standalone tasks (no slice ref) go in a separate group
+4. Provide summaries for each group
+
+**OUTPUT FORMAT (CRITICAL - OUTPUT ONLY JSON):**
+Return ONLY a JSON object with this exact structure:
+
+\`\`\`json
+{
+  "groups": [
+    {
+      "sliceRef": "VS1 — Core Interview Flow",
+      "sliceName": "Core Interview Flow",
+      "tasks": [
+        {
+          "text": "Task description without checkbox",
+          "fullLine": "- [x] Task description [[Roadmap#VS1 — Core Interview Flow]]",
+          "lineNumber": 25
+        }
+      ],
+      "summary": "Brief summary of what was completed in this slice"
+    }
+  ],
+  "standaloneTasks": [
+    {
+      "text": "Task description without checkbox",
+      "fullLine": "- [x] Task description",
+      "lineNumber": 40
+    }
+  ],
+  "summary": {
+    "totalCompleted": 5,
+    "sliceCount": 2,
+    "standaloneCount": 1
+  }
+}
+\`\`\`
+
+**RULES:**
+- Find ALL completed tasks (- [x]) across all sections (Now, Next, Later, Done)
+- Group tasks by their [[Roadmap#VS... — Name]] reference
+- Tasks without a slice ref go in standaloneTasks
+- Include line numbers for accurate file modification
+
+FILE CONTENTS (for analysis):
+${workflowFileContents}
+================================================================================
+`
+    } else if (activeWorkflow.name === 'promote-next-task') {
+      // Special handling for promote-next-task workflow - outputs JSON
+      workflowSection = `
+================================================================================
+ACTIVE WORKFLOW: TASKS: PROMOTE NEXT
+================================================================================
+Intent: ${activeWorkflow.intent}
+
+You are selecting the best task to promote from Next or Later to the Now section.
+
+**PRE-CHECK (DO THIS FIRST)**
+1. Check if the Now section in Tasks.md already has an unchecked task (- [ ])
+2. If Now has an active task, output:
+   \`\`\`json
+   {
+     "status": "already_active",
+     "currentNowTask": "The task text currently in Now",
+     "message": "Now section already has an active task. No promotion needed."
+   }
+   \`\`\`
+3. If Now is empty or only has completed tasks (- [x]), proceed with selection
+
+**SOURCE PRIORITY**
+1. First, look for unchecked tasks in the Next section (## Next)
+2. If Next has no unchecked tasks, look in Later section (## Later)
+3. If both are empty, output:
+   \`\`\`json
+   {
+     "status": "no_tasks",
+     "message": "No tasks available to promote. Both Next and Later sections are empty."
+   }
+   \`\`\`
+
+**SELECTION CRITERIA (IN PRIORITY ORDER)**
+1. **Roadmap Alignment**: Tasks linked to the Current Focus milestone score highest
+2. **Slice Linkage**: Tasks with [[Roadmap#VS... — Name]] links that match active slices
+3. **Unblocking Value**: Small tasks that unblock other work (dependencies)
+4. **Standalone Quick Wins**: Small, concrete tasks without dependencies
+5. **Strategic Importance**: Tasks that advance MVP goals
+
+**EVALUATION PROCESS**
+For each candidate task in Next (or Later as fallback):
+- Extract the slice link if present (e.g., [[Roadmap#VS1 — Core Interview Flow]])
+- Check if the slice's milestone matches Current Focus in Roadmap.md
+- Consider if the task description suggests it unblocks other work
+- Score: 1 (low priority) to 5 (high priority)
+
+**OUTPUT FORMAT (SUCCESS CASE)**
+\`\`\`json
+{
+  "status": "success",
+  "selectedTask": {
+    "text": "Exact task text from Tasks.md (without checkbox)",
+    "sourceSection": "next",
+    "sliceLink": "[[Roadmap#VS1 — Core Interview Flow]]"
+  },
+  "reasoning": "1-2 sentences explaining why this task was selected",
+  "candidates": [
+    {
+      "text": "Another task that was considered",
+      "sourceSection": "next",
+      "sliceLink": null,
+      "score": 3,
+      "note": "Good task but not aligned with current focus"
+    },
+    {
+      "text": "Third task considered",
+      "sourceSection": "later",
+      "sliceLink": "[[Roadmap#VS2 — Feature Name]]",
+      "score": 2,
+      "note": "From Later section, lower priority"
+    }
+  ]
+}
+\`\`\`
+
+**FIELD REQUIREMENTS:**
+- status: Required. One of: "success", "already_active", "no_tasks"
+- selectedTask.text: Required for success. The exact task text (without "- [ ]" prefix)
+- selectedTask.sourceSection: Required for success. Either "next" or "later"
+- selectedTask.sliceLink: Optional. The [[Roadmap#...]] link if present
+- reasoning: Required for success. Brief explanation of selection
+- candidates: Required for success. List of other tasks considered (can be empty array)
+- Each candidate needs: text, sourceSection, sliceLink (or null), score (1-5), note
+
+FILE CONTENTS (for analysis):
+${workflowFileContents}
+================================================================================
+`
     } else {
       // Add diff format instructions for workflows that need preview/confirm
       const diffInstructions = activeWorkflow.confirmation !== 'none' ? `
