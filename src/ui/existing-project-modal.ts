@@ -23,6 +23,7 @@ import { ChatSidebar } from './components/chat-sidebar'
 import { IssuesPanel, type ProjectIssue } from './components/issues-panel'
 import { WorkflowExecutor } from './components/workflow-executor'
 import { ChatInterface } from './components/chat-interface'
+import { ConfigEditorModal } from './config-editor-modal'
 
 // ============================================================================
 // Types
@@ -230,8 +231,10 @@ export class ExistingProjectModal extends Modal {
       })
     }
 
-    // Auto-apply toggle button
-    this.renderAutoApplyToggle(header)
+    // Header controls container (toggle + edit config button)
+    const headerControls = header.createDiv({ cls: 'lachesis-header-controls' })
+    this.renderAutoApplyToggle(headerControls)
+    this.renderEditConfigButton(headerControls)
 
     // Workflow buttons bar
     const workflowBar = mainEl.createDiv({ cls: 'lachesis-workflow-bar' })
@@ -263,6 +266,24 @@ export class ExistingProjectModal extends Modal {
     checkbox.addEventListener('change', async () => {
       this.plugin.settings.autoAcceptChanges = checkbox.checked
       await this.plugin.saveSettings()
+    })
+  }
+
+  private renderEditConfigButton(container: HTMLElement): void {
+    const button = container.createEl('button', {
+      text: 'Edit Config',
+      cls: 'lachesis-edit-config-button',
+    })
+
+    button.addEventListener('click', () => {
+      const modal = new ConfigEditorModal(this.app, this.projectPath, async (saved) => {
+        if (saved) {
+          // Refresh snapshot and re-render to reflect config changes
+          this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
+          this.renderChatPhase()
+        }
+      })
+      modal.open()
     })
   }
 
