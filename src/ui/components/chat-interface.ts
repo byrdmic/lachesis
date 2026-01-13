@@ -7,8 +7,10 @@ import type { ConversationMessage } from '../../ai/providers/types'
 import {
   extractDiffBlocks,
   containsDiffBlocks,
+  applyDiffToFile,
   type DiffBlock,
 } from '../../utils/diff'
+import { Notice } from 'obsidian'
 import {
   parseIdeasGroomResponse,
   containsIdeasGroomResponse,
@@ -61,6 +63,8 @@ export type ChatInterfaceCallbacks = {
   onViewArchiveCompleted: (content: string) => void
   /** Called when user clicks "View Tasks" for a harvest-tasks response */
   onViewHarvestTasks: (content: string) => void
+  /** Called to check if auto-accept is enabled */
+  isAutoAcceptEnabled: () => boolean
 }
 
 // ============================================================================
@@ -434,6 +438,7 @@ export class ChatInterface {
   /**
    * Render a message that contains diff blocks.
    * Shows a summary with clickable file links that open the diff viewer modal.
+   * If auto-accept is enabled, applies diffs immediately.
    */
   private renderMessageWithDiffs(container: HTMLElement, content: string): void {
     const diffBlocks = extractDiffBlocks(content)
@@ -443,6 +448,9 @@ export class ChatInterface {
       this.renderMarkdown(content, container)
       return
     }
+
+    // Check if auto-accept is enabled and not viewing a loaded chat
+    const shouldAutoApply = this.callbacks.isAutoAcceptEnabled() && !this.isViewingLoadedChat
 
     // Store pending diffs
     this.pendingDiffs = diffBlocks
@@ -460,7 +468,11 @@ export class ChatInterface {
 
     // Render summary message
     const summaryEl = container.createEl('p', { cls: 'lachesis-diff-summary' })
-    summaryEl.setText('Here are the proposed changes:')
+    if (shouldAutoApply) {
+      summaryEl.setText('Applying changes automatically...')
+    } else {
+      summaryEl.setText('Here are the proposed changes:')
+    }
 
     // Render file links list
     const fileListEl = container.createDiv({ cls: 'lachesis-diff-file-list' })
@@ -479,6 +491,61 @@ export class ChatInterface {
         const textEl = container.createDiv({ cls: 'lachesis-diff-text' })
         this.renderMarkdown(textAfter, textEl)
       }
+    }
+
+    // Auto-apply diffs if enabled
+    if (shouldAutoApply) {
+      this.autoApplyDiffs(diffBlocks, summaryEl)
+    }
+  }
+
+  /**
+   * Auto-apply all diff blocks.
+   */
+  private async autoApplyDiffs(diffBlocks: DiffBlock[], summaryEl: HTMLElement): Promise<void> {
+    let successCount = 0
+    let failCount = 0
+
+    for (const diffBlock of diffBlocks) {
+      const result = await applyDiffToFile(this.app, diffBlock, this.projectPath)
+
+      if (result.success) {
+        successCount++
+        diffBlock.status = 'accepted'
+        // Update UI
+        if (diffBlock.element) {
+          const statusEl = diffBlock.element.querySelector('.lachesis-diff-file-status')
+          if (statusEl) {
+            statusEl.removeClass('pending')
+            statusEl.addClass('accepted')
+            statusEl.setText('accepted')
+          }
+          diffBlock.element.addClass('accepted')
+        }
+        // Notify parent
+        this.callbacks.onDiffAction(diffBlock, 'accepted')
+      } else {
+        failCount++
+        diffBlock.status = 'rejected'
+        // Update UI to show error
+        if (diffBlock.element) {
+          const statusEl = diffBlock.element.querySelector('.lachesis-diff-file-status')
+          if (statusEl) {
+            statusEl.removeClass('pending')
+            statusEl.addClass('rejected')
+            statusEl.setText('failed')
+          }
+          diffBlock.element.addClass('rejected')
+        }
+        new Notice(`Failed to apply ${diffBlock.fileName}: ${result.error}`)
+      }
+    }
+
+    // Update summary text
+    if (failCount === 0) {
+      summaryEl.setText(`Applied ${successCount} change${successCount === 1 ? '' : 's'} automatically.`)
+    } else {
+      summaryEl.setText(`Applied ${successCount}, failed ${failCount} change${failCount === 1 ? '' : 's'}.`)
     }
   }
 

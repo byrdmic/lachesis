@@ -31,6 +31,9 @@ export interface LachesisSettings {
 
   // Project settings
   projectsFolder: string
+
+  // Behavior settings
+  autoAcceptChanges: boolean
 }
 
 export const DEFAULT_SETTINGS: LachesisSettings = {
@@ -41,6 +44,7 @@ export const DEFAULT_SETTINGS: LachesisSettings = {
   openaiModel: 'gpt-5.2',
   githubToken: '',
   projectsFolder: 'Projects',
+  autoAcceptChanges: false,
 }
 
 // ============================================================================
@@ -192,6 +196,9 @@ export class LachesisSettingTab extends PluginSettingTab {
           }
         })
     )
+
+    // Behavior section
+    this.displayBehaviorSettings(containerEl)
 
     // Info section
     containerEl.createEl('h3', { text: 'About' })
@@ -367,6 +374,25 @@ export class LachesisSettingTab extends PluginSettingTab {
           }
         })
     )
+  }
+
+  private displayBehaviorSettings(containerEl: HTMLElement): void {
+    containerEl.createEl('h3', { text: 'Behavior' })
+
+    new Setting(containerEl)
+      .setName('Auto-apply changes')
+      .setDesc(
+        'When enabled, AI-proposed changes are applied immediately without showing a review dialog. ' +
+        'Use with caution — changes will be written to files automatically.'
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.autoAcceptChanges)
+          .onChange(async (value) => {
+            this.plugin.settings.autoAcceptChanges = value
+            await this.plugin.saveSettings()
+          })
+      )
   }
 
   private displayConnectionTest(containerEl: HTMLElement): void {

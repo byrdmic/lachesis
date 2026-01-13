@@ -2,11 +2,9 @@
  * Diff Viewer Modal - Displays a single file diff with accept/reject actions
  */
 
-import * as fs from 'fs'
-import * as path from 'path'
-import { App, Modal, Notice, TFile } from 'obsidian'
-import type { DiffBlock, ParsedDiff } from '../utils/diff'
-import { applyDiff } from '../utils/diff'
+import { App, Modal, Notice } from 'obsidian'
+import type { DiffBlock } from '../utils/diff'
+import { applyDiffToFile } from '../utils/diff'
 
 export type DiffAction = 'accepted' | 'rejected'
 
@@ -176,85 +174,33 @@ export class DiffViewerModal extends Modal {
   }
 
   private async handleAccept() {
-    if (!this.diffBlock.parsed) {
-      new Notice('Cannot apply diff: parsing failed')
-      return
-    }
+    // Get selected hunk indices
+    const selectedIndices = Array.from(this.hunkSelections.entries())
+      .filter(([_, selected]) => selected)
+      .map(([idx]) => idx)
 
-    // Filter to only selected hunks
-    const selectedHunks = this.diffBlock.parsed.hunks.filter(
-      (_, idx) => this.hunkSelections.get(idx)
+    const result = await applyDiffToFile(
+      this.app,
+      this.diffBlock,
+      this.projectPath,
+      selectedIndices,
     )
 
-    if (selectedHunks.length === 0) {
-      new Notice('No changes selected')
+    if (!result.success) {
+      new Notice(`Error: ${result.error}`)
+      console.error('Diff application error:', result.error)
       return
     }
 
-    try {
-      const filePath = `${this.projectPath}/${this.diffBlock.fileName}`
+    // Update status
+    this.diffBlock.status = 'accepted'
+    this.onAction(this.diffBlock, 'accepted')
 
-      // Check if this is a hidden folder file (like .ai/config.json)
-      // Obsidian's vault API doesn't handle hidden folders well
-      const isHiddenPath = this.diffBlock.fileName.startsWith('.')
-
-      let currentContent: string
-
-      if (isHiddenPath) {
-        // Use filesystem directly for hidden paths
-        const basePath = (this.app.vault.adapter as any).getBasePath() as string
-        const absolutePath = path.join(basePath, filePath)
-
-        if (!fs.existsSync(absolutePath)) {
-          new Notice(`File not found: ${this.diffBlock.fileName}`)
-          return
-        }
-
-        currentContent = fs.readFileSync(absolutePath, 'utf-8')
-      } else {
-        // Use Obsidian vault API for normal files
-        const abstractFile = this.app.vault.getAbstractFileByPath(filePath)
-
-        if (!abstractFile || !(abstractFile instanceof TFile)) {
-          new Notice(`File not found: ${this.diffBlock.fileName}`)
-          return
-        }
-
-        currentContent = await this.app.vault.read(abstractFile)
-      }
-
-      // Apply only the selected hunks
-      const filteredDiff: ParsedDiff = {
-        fileName: this.diffBlock.parsed.fileName,
-        hunks: selectedHunks,
-      }
-      const newContent = applyDiff(currentContent, filteredDiff)
-
-      if (isHiddenPath) {
-        // Write using filesystem for hidden paths
-        const basePath = (this.app.vault.adapter as any).getBasePath() as string
-        const absolutePath = path.join(basePath, filePath)
-        fs.writeFileSync(absolutePath, newContent, 'utf-8')
-      } else {
-        // Write using Obsidian vault API for normal files
-        const abstractFile = this.app.vault.getAbstractFileByPath(filePath) as TFile
-        await this.app.vault.modify(abstractFile, newContent)
-      }
-
-      // Update status
-      this.diffBlock.status = 'accepted'
-      this.onAction(this.diffBlock, 'accepted')
-
-      const countMsg = selectedHunks.length < this.diffBlock.parsed.hunks.length
-        ? ` (${selectedHunks.length}/${this.diffBlock.parsed.hunks.length} changes)`
-        : ''
-      new Notice(`Applied changes to ${this.diffBlock.fileName}${countMsg}`)
-      this.close()
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Failed to apply diff'
-      new Notice(`Error: ${error}`)
-      console.error('Diff application error:', err)
-    }
+    const countMsg = result.appliedHunks! < result.totalHunks!
+      ? ` (${result.appliedHunks}/${result.totalHunks} changes)`
+      : ''
+    new Notice(`Applied changes to ${this.diffBlock.fileName}${countMsg}`)
+    this.close()
   }
 
   private handleReject() {

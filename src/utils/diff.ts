@@ -5,6 +5,10 @@
  * parsing into structured data, and applying changes to files.
  */
 
+import * as fs from 'fs'
+import * as path from 'path'
+import { App, TFile } from 'obsidian'
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -551,6 +555,104 @@ function matchesAtPosition(
   }
 
   return true
+}
+
+// ============================================================================
+// File Application
+// ============================================================================
+
+export type ApplyDiffResult = {
+  success: boolean
+  error?: string
+  appliedHunks?: number
+  totalHunks?: number
+}
+
+/**
+ * Apply a diff block to a file on disk.
+ * Handles both normal files (via Obsidian vault API) and hidden folder files (via fs).
+ *
+ * @param app - Obsidian App instance
+ * @param diffBlock - The diff block to apply (must have parsed content)
+ * @param projectPath - Path to the project folder
+ * @param selectedHunkIndices - Optional indices of hunks to apply. If not provided, applies all hunks.
+ */
+export async function applyDiffToFile(
+  app: App,
+  diffBlock: DiffBlock,
+  projectPath: string,
+  selectedHunkIndices?: number[],
+): Promise<ApplyDiffResult> {
+  if (!diffBlock.parsed) {
+    return { success: false, error: 'Cannot apply diff: parsing failed' }
+  }
+
+  // Determine which hunks to apply
+  const hunksToApply = selectedHunkIndices
+    ? diffBlock.parsed.hunks.filter((_, idx) => selectedHunkIndices.includes(idx))
+    : diffBlock.parsed.hunks
+
+  if (hunksToApply.length === 0) {
+    return { success: false, error: 'No changes selected' }
+  }
+
+  try {
+    const filePath = `${projectPath}/${diffBlock.fileName}`
+
+    // Check if this is a hidden folder file (like .ai/config.json)
+    // Obsidian's vault API doesn't handle hidden folders well
+    const isHiddenPath = diffBlock.fileName.startsWith('.')
+
+    let currentContent: string
+
+    if (isHiddenPath) {
+      // Use filesystem directly for hidden paths
+      const basePath = (app.vault.adapter as any).getBasePath() as string
+      const absolutePath = path.join(basePath, filePath)
+
+      if (!fs.existsSync(absolutePath)) {
+        return { success: false, error: `File not found: ${diffBlock.fileName}` }
+      }
+
+      currentContent = fs.readFileSync(absolutePath, 'utf-8')
+    } else {
+      // Use Obsidian vault API for normal files
+      const abstractFile = app.vault.getAbstractFileByPath(filePath)
+
+      if (!abstractFile || !(abstractFile instanceof TFile)) {
+        return { success: false, error: `File not found: ${diffBlock.fileName}` }
+      }
+
+      currentContent = await app.vault.read(abstractFile)
+    }
+
+    // Apply only the selected hunks
+    const filteredDiff: ParsedDiff = {
+      fileName: diffBlock.parsed.fileName,
+      hunks: hunksToApply,
+    }
+    const newContent = applyDiff(currentContent, filteredDiff)
+
+    if (isHiddenPath) {
+      // Write using filesystem for hidden paths
+      const basePath = (app.vault.adapter as any).getBasePath() as string
+      const absolutePath = path.join(basePath, filePath)
+      fs.writeFileSync(absolutePath, newContent, 'utf-8')
+    } else {
+      // Write using Obsidian vault API for normal files
+      const abstractFile = app.vault.getAbstractFileByPath(filePath) as TFile
+      await app.vault.modify(abstractFile, newContent)
+    }
+
+    return {
+      success: true,
+      appliedHunks: hunksToApply.length,
+      totalHunks: diffBlock.parsed.hunks.length,
+    }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : 'Failed to apply diff'
+    return { success: false, error }
+  }
 }
 
 // ============================================================================

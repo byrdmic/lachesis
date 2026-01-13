@@ -12,6 +12,7 @@ import { buildSystemPrompt } from '../ai/prompts'
 import { PROJECT_FILES } from '../core/workflows/definitions'
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 import type { DiffBlock } from '../utils/diff'
+import { applyDiffToFile } from '../utils/diff'
 import { getTrimmedLogContent, getFilteredLogForTitleEntries, type TrimmedLogResult, type FilteredLogResult } from '../utils/log-parser'
 import { loadChatLog, saveChatLog } from '../core/chat'
 import { DiffViewerModal, type DiffAction } from './diff-viewer-modal'
@@ -161,6 +162,7 @@ export class ExistingProjectModal extends Modal {
         onViewSyncCommits: (content) => this.workflowExecutor?.openSyncCommitsModalForHistory(content),
         onViewArchiveCompleted: (content) => this.workflowExecutor?.openArchiveCompletedModalForHistory(content),
         onViewHarvestTasks: (content) => this.workflowExecutor?.openHarvestTasksModalForHistory(content),
+        isAutoAcceptEnabled: () => this.plugin.settings.autoAcceptChanges,
       },
       this.renderComponent
     )
@@ -228,6 +230,9 @@ export class ExistingProjectModal extends Modal {
       })
     }
 
+    // Auto-apply toggle button
+    this.renderAutoApplyToggle(header)
+
     // Workflow buttons bar
     const workflowBar = mainEl.createDiv({ cls: 'lachesis-workflow-bar' })
     this.workflowExecutor?.renderWorkflowButtons(workflowBar, () => {
@@ -238,6 +243,27 @@ export class ExistingProjectModal extends Modal {
 
     // Render chat interface (messages, input, status)
     this.chatInterface?.render(mainEl, this.messages, this.snapshot.projectName, isReady)
+  }
+
+  private renderAutoApplyToggle(container: HTMLElement): void {
+    const toggleContainer = container.createDiv({ cls: 'lachesis-auto-apply-toggle' })
+
+    const label = toggleContainer.createEl('label', { cls: 'lachesis-toggle-label' })
+
+    const checkbox = label.createEl('input', { type: 'checkbox' })
+    checkbox.checked = this.plugin.settings.autoAcceptChanges
+
+    const slider = label.createSpan({ cls: 'lachesis-toggle-slider' })
+
+    const text = label.createSpan({
+      text: 'Auto-apply',
+      cls: 'lachesis-toggle-text',
+    })
+
+    checkbox.addEventListener('change', async () => {
+      this.plugin.settings.autoAcceptChanges = checkbox.checked
+      await this.plugin.saveSettings()
+    })
   }
 
   private applyLoadedChat(filename: string, messages: ConversationMessage[]): void {
