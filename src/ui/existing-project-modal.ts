@@ -689,6 +689,11 @@ export class ExistingProjectModal extends Modal {
           await this.workflowExecutor?.handleArchiveCompletedResponse(result.content)
         }
 
+        // Check if this was an init-from-summary workflow - handle specially
+        if (this.lastUsedWorkflowName === 'init-from-summary') {
+          await this.workflowExecutor?.handleInitFromSummaryResponse(result.content)
+        }
+
         this.messages.push({
           role: 'assistant',
           content: result.content,

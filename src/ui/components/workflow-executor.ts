@@ -61,6 +61,13 @@ import { IdeasGroomModal } from '../ideas-groom-modal'
 import { SyncCommitsModal } from '../sync-commits-modal'
 import { ArchiveCompletedModal } from '../archive-completed-modal'
 import { GitLogModal } from '../git-log-modal'
+import { InitSummaryInputModal } from '../init-summary-modal'
+import { BatchDiffViewerModal, type BatchDiffAction } from '../batch-diff-viewer-modal'
+import {
+  parseBatchDiffResponse,
+  containsBatchDiffResponse,
+  type InitSummaryFile,
+} from '../../utils/init-summary-parser'
 
 // ============================================================================
 // Types
@@ -292,6 +299,24 @@ export class WorkflowExecutor {
         'Tasks.md',
         `Help me fill in Tasks.md. I need to create vertical slices and tasks aligned with my roadmap. Let's work through it step by step.`
       )
+      return
+    }
+
+    // Special handling for init-from-summary: open summary input modal first
+    if (workflow.name === 'init-from-summary') {
+      const inputModal = new InitSummaryInputModal(
+        this.app,
+        (summary, confirmed) => {
+          if (confirmed && summary.trim()) {
+            // Trigger the AI workflow with the summary as the message
+            this.callbacks.onTriggerAIWorkflow(
+              workflow,
+              `Initialize project from this design summary:\n\n${summary}`
+            )
+          }
+        }
+      )
+      inputModal.open()
       return
     }
 
@@ -1134,5 +1159,61 @@ export class WorkflowExecutor {
       console.error('Failed to apply archive selections:', err)
       new Notice(`Failed to archive tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
+  }
+
+  // ============================================================================
+  // Init From Summary Workflow
+  // ============================================================================
+
+  /**
+   * Handle the AI response from the init-from-summary workflow.
+   * Parses the batch diffs and opens the review modal.
+   */
+  async handleInitFromSummaryResponse(content: string): Promise<void> {
+    try {
+      // Check if the response contains batch diffs
+      if (!containsBatchDiffResponse(content)) {
+        // No diffs found - AI is probably asking clarifying questions
+        // Let the conversation continue naturally
+        return
+      }
+
+      const result = parseBatchDiffResponse(content)
+
+      if (result.diffs.size === 0) {
+        new Notice('Could not parse diffs from response.')
+        return
+      }
+
+      // Open the batch diff viewer modal
+      const modal = new BatchDiffViewerModal(
+        this.app,
+        result.diffs,
+        this.projectPath,
+        (results, action) => this.handleInitFromSummaryAction(results, action)
+      )
+      modal.open()
+    } catch (err) {
+      console.error('Failed to process init from summary response:', err)
+      new Notice(`Failed to process response: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Handle actions from the batch diff viewer modal.
+   */
+  private async handleInitFromSummaryAction(
+    results: Map<InitSummaryFile, 'accepted' | 'rejected'>,
+    action: BatchDiffAction
+  ): Promise<void> {
+    const accepted = Array.from(results.values()).filter((s) => s === 'accepted').length
+    const rejected = Array.from(results.values()).filter((s) => s === 'rejected').length
+
+    if (accepted > 0) {
+      new Notice(`Applied ${accepted} file${accepted === 1 ? '' : 's'}`)
+    }
+
+    // Refresh snapshot to reflect changes
+    await this.callbacks.onSnapshotRefresh()
   }
 }
