@@ -10,7 +10,7 @@ if you want to view the source, please visit the github repository of this plugi
 `
 
 const prod = process.argv[2] === 'production'
-const OBSIDIAN_PLUGIN_PATH = 'G:/My Drive/Nexus/.obsidian/plugins/lachesis'
+const OBSIDIAN_PLUGIN_PATH = process.env.OBSIDIAN_PLUGIN_PATH
 
 // Clean and prepare dist folder
 rmSync('dist', { recursive: true, force: true })
@@ -53,13 +53,15 @@ const context = await esbuild.context({
 if (prod) {
   await context.rebuild()
 
-  if (!existsSync(OBSIDIAN_PLUGIN_PATH)) {
-    mkdirSync(OBSIDIAN_PLUGIN_PATH, { recursive: true })
+  if (OBSIDIAN_PLUGIN_PATH) {
+    if (!existsSync(OBSIDIAN_PLUGIN_PATH)) {
+      mkdirSync(OBSIDIAN_PLUGIN_PATH, { recursive: true })
+    }
+    copyFileSync('dist/main.js', `${OBSIDIAN_PLUGIN_PATH}/main.js`)
+    copyFileSync('dist/manifest.json', `${OBSIDIAN_PLUGIN_PATH}/manifest.json`)
+    copyFileSync('dist/styles.css', `${OBSIDIAN_PLUGIN_PATH}/styles.css`)
+    console.log(`\n✓ Deployed to ${OBSIDIAN_PLUGIN_PATH}`)
   }
-  copyFileSync('dist/main.js', `${OBSIDIAN_PLUGIN_PATH}/main.js`)
-  copyFileSync('dist/manifest.json', `${OBSIDIAN_PLUGIN_PATH}/manifest.json`)
-  copyFileSync('dist/styles.css', `${OBSIDIAN_PLUGIN_PATH}/styles.css`)
-  console.log(`\n✓ Deployed to ${OBSIDIAN_PLUGIN_PATH}`)
 
   process.exit(0)
 } else {
