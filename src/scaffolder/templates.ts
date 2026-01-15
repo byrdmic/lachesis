@@ -113,35 +113,25 @@ roadmap:
   ordering: "value-first, unblockers early"
   date_policy: "Dates optional; only use if you mean it."
 
-current_focus:
-  milestone_id: "M1"
-  intent: "What we are trying to accomplish right now in plain English."
-
 ai:
-  primary_job: "Keep a clean milestone sequence, define vertical slices, and maintain current focus."
+  primary_job: "Keep a clean milestone sequence and define vertical slices under each milestone."
   update_policy:
     allowed_to_change:
       - "reorder milestones based on value/constraints"
       - "clarify definitions of done"
-      - "update current_focus"
       - "add or refine vertical slices for milestones"
+      - "update milestone status (planned/active/done)"
     avoid:
       - "dumping granular tasks here (belongs in Tasks.md)"
       - "putting individual tasks here (belongs in Tasks.md)"
   extraction_rules: |
     Individual tasks -> Tasks.md (with [[Roadmap#VS — Slice Name]] link).
-    Current focus should always point to the active milestone.
+    Active milestone indicated by Status: active.
 
 tags: ["project/roadmap"]
 ---
 
 # Roadmap — <Project Name>
-
-## Current Focus
-- **Milestone:** M1 — <Milestone title>
-- **Intent:** <One sentence. "We're trying to…">
-
----
 
 ## Milestone Index (fast scan)
 - M1 — <Milestone title> (Status: planned)
@@ -168,6 +158,10 @@ tags: ["project/roadmap"]
 - Tasks: [[Tasks]]
 - Key log entries: [[Log]]
 
+#### Slices
+- **VS1 — <Slice Name>**: <1-2 sentence description of what it delivers>
+- **VS2 — <Slice Name>**: <1-2 sentence description>
+
 ---
 
 ### M2 — <Milestone Title>
@@ -181,19 +175,7 @@ tags: ["project/roadmap"]
 **Links**
 - Tasks: [[Tasks]]
 
----
-
-## Vertical Slices
-
-Vertical slices are the features/capabilities needed to achieve each milestone.
-Each slice is a demo-able, end-to-end deliverable (typically 1-5 days of work).
-Tasks in [[Tasks]] link back to slices here using \`[[Roadmap#VS1 — Slice Name]]\`.
-
-### M1 Slices
-- **VS1 — <Slice Name>**: <1-2 sentence description of what it delivers>
-- **VS2 — <Slice Name>**: <1-2 sentence description>
-
-### M2 Slices
+#### Slices
 - **VS3 — <Slice Name>**: <1-2 sentence description>
 
 ---

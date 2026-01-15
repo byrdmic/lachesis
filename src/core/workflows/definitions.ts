@@ -793,12 +793,12 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Elevator pitch captures: what + who + why in concise form',
 
       // Content mapping - Roadmap.md
-      'Roadmap.md: milestones (M1 = MVP first), vertical slices under each milestone',
+      'Roadmap.md: milestones (M1 = MVP first), with vertical slices nested under each milestone',
       'Milestones must be vertical (demo-able), not horizontal (layers/components)',
       'Each milestone: status, why it matters, outcome, definition of done',
-      'Vertical slices: 1-5 days work, demo-able, end-to-end capability',
+      'Vertical slices: nested under each milestone as #### Slices section, 1-5 days work, demo-able',
       'Format slices as: **VS1 — Slice Name**: description',
-      'Set Current Focus to the first active milestone',
+      'Set first milestone Status to active to indicate current work',
 
       // Content mapping - Tasks.md
       'Tasks.md: extract tasks from slices, link using [[Roadmap#VS1 — Slice Name]]',

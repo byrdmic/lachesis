@@ -149,24 +149,18 @@ Before starting, identify:
    - "The MVP success criteria mention [...]"
    - "Let me help translate that into concrete milestones and slices."
 
-2. **MVP MILESTONE** (M1 - most important)
+2. **MVP MILESTONE WITH SLICES** (M1 - most important)
    - "What's the smallest version that proves this works?"
    - Help define: name, why it matters, outcome, observable DoD
-   - Propose diff to add M1 to Roadmap.md
+   - Then break it into vertical slices (2-5 slices, 1-5 days each)
+   - Propose diff to add M1 with its slices nested underneath
+   - Set M1 Status to "active" since it's the first milestone
 
-3. **M1 VERTICAL SLICES** (immediately after M1)
-   - "Let's break M1 into vertical slices—demo-able features (1-5 days each)."
-   - Help identify 2-5 slices for M1
-   - Propose diff to add slices under "### M1 Slices"
-
-4. **ADDITIONAL MILESTONES + SLICES** (M2, M3, etc.)
+3. **ADDITIONAL MILESTONES + SLICES** (M2, M3, etc.)
    - "What comes after MVP? What's the next demo-able capability?"
-   - For each milestone: define it, then define its slices
+   - For each milestone: define it, then define its slices (nested under it)
+   - Set additional milestones to Status: "planned"
    - Propose incremental diffs
-
-5. **CURRENT FOCUS** (final step)
-   - "Which milestone should be active right now?"
-   - Propose diff to set Current Focus section
 
 ## WHAT MAKES A GOOD MILESTONE
 
@@ -198,9 +192,11 @@ Bad slice examples:
 
 ## EXAMPLE MILESTONE + SLICES STRUCTURE
 
+Slices are nested UNDER the milestone they belong to (not in a separate section):
+
 \`\`\`markdown
 ### M1 — Create and Preview Projects
-**Status:** planned
+**Status:** active
 **Why it matters:** Users need to see the plugin actually works before trusting it
 **Outcome:** A user can create a project, fill basic info, and see generated files
 
@@ -213,10 +209,8 @@ Bad slice examples:
 **Links**
 - Tasks: [[Tasks]]
 - Key log entries: [[Log]]
-\`\`\`
 
-\`\`\`markdown
-### M1 Slices
+#### Slices
 - **VS1 — Basic Modal Opens**: User can click ribbon icon and see a modal appear.
 - **VS2 — Interview Flow**: Modal guides user through project questions.
 - **VS3 — File Scaffolding**: Generate project files from captured answers.
@@ -226,17 +220,14 @@ Bad slice examples:
 
 After discussing each milestone AND its slices:
 1. Summarize what was decided
-2. Propose a diff for the milestone
-3. Then propose a diff for its slices
-4. Wait for acceptance before moving to the next milestone
+2. Propose a single diff for the milestone WITH its slices included
+3. Wait for acceptance before moving to the next milestone
 
 Keep diffs focused—ONE milestone + its slices at a time.
 
 Order of operations:
-1. Define and propose M1 (MVP milestone)
-2. Define and propose M1 slices (VS1, VS2, etc.)
-3. Define and propose M2, M3, etc. with their slices
-4. Set Current Focus to the active milestone
+1. Define and propose M1 (MVP milestone) with slices nested under it, Status: active
+2. Define and propose M2, M3, etc. with their slices nested under each, Status: planned
 
 After Roadmap is filled, the user can use Tasks: Fill to extract tasks from slices.
 `
@@ -303,18 +294,16 @@ Before starting, identify:
      - [ ] Register ribbon icon in main.ts [[Roadmap#VS1 — Basic Modal Opens]]
      \`\`\`
 
-5. **ROADMAP SYNCHRONIZATION (CRITICAL)**
-   - When setting or changing the Now task, ALSO update Roadmap.md:
+5. **ROADMAP SYNCHRONIZATION**
+   - When setting or changing the Now task, check if Roadmap.md needs updating:
      1. Check which milestone the Now task's slice belongs to
-     2. Update "## Current Focus" to reference that milestone
-     3. Update the milestone's **Status:** from "planned" to "active"
-     4. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
+     2. If that milestone's **Status:** is "planned", update it to "active"
+     3. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
    - If the Now task switches to a different milestone:
-     - Update the old milestone back to "planned" (unless it was "done")
+     - Set the old milestone back to "planned" (unless it was "done")
      - Update the Milestone Index entry for the old milestone too
-   - Both the Current Focus AND Milestone Index must stay in sync
-   - This keeps Roadmap.md in sync with actual work focus
-   - Propose a diff for Roadmap.md along with the Tasks.md changes
+   - This keeps milestone Status in sync with actual work focus
+   - Propose a diff for Roadmap.md along with the Tasks.md changes if needed
 
 ## WHAT MAKES A GOOD TASK
 
@@ -712,15 +701,13 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 - "now": The single most important task to work on immediately
 
 **ROADMAP SYNCHRONIZATION (when destination is "now"):**
-When a task is assigned destination "now", the Roadmap.md must also be updated:
+When a task is assigned destination "now", the Roadmap.md may need updating:
 1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice Name]] → M1)
-2. Update "## Current Focus" section to reference that milestone
-3. Update the milestone's **Status:** from "planned" to "active"
-4. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
-5. If changing from a different active milestone:
+2. Update the milestone's **Status:** from "planned" to "active"
+3. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
+4. If changing from a different active milestone:
    - Set the old milestone back to "planned" (unless it was "done")
    - Update the Milestone Index entry for the old milestone too
-6. Both the Current Focus AND Milestone Index must stay in sync
 Include these Roadmap changes in the modal for user review.
 
 **FIELD REQUIREMENTS:**
@@ -810,15 +797,13 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 - "now": The single most important task to work on immediately
 
 **ROADMAP SYNCHRONIZATION (when destination is "now"):**
-When a task is assigned destination "now", the Roadmap.md must also be updated:
+When a task is assigned destination "now", the Roadmap.md may need updating:
 1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice Name]] → M1)
-2. Update "## Current Focus" section to reference that milestone
-3. Update the milestone's **Status:** from "planned" to "active"
-4. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
-5. If changing from a different active milestone:
+2. Update the milestone's **Status:** from "planned" to "active"
+3. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
+4. If changing from a different active milestone:
    - Set the old milestone back to "planned" (unless it was "done")
    - Update the Milestone Index entry for the old milestone too
-6. Both the Current Focus AND Milestone Index must stay in sync
 Include these Roadmap changes in the modal for user review.
 
 **FIELD REQUIREMENTS:**
@@ -896,15 +881,13 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 - "now": The single most important task to work on immediately
 
 **ROADMAP SYNCHRONIZATION (when destination is "now"):**
-When a task is assigned destination "now", the Roadmap.md must also be updated:
+When a task is assigned destination "now", the Roadmap.md may need updating:
 1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice Name]] → M1)
-2. Update "## Current Focus" section to reference that milestone
-3. Update the milestone's **Status:** from "planned" to "active"
-4. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
-5. If changing from a different active milestone:
+2. Update the milestone's **Status:** from "planned" to "active"
+3. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
+4. If changing from a different active milestone:
    - Set the old milestone back to "planned" (unless it was "done")
    - Update the Milestone Index entry for the old milestone too
-6. Both the Current Focus AND Milestone Index must stay in sync
 Include these Roadmap changes in the modal for user review.
 
 **FIELD REQUIREMENTS:**
@@ -998,12 +981,12 @@ Example structure:
 \`\`\`diff
 --- Roadmap.md
 +++ Roadmap.md
-@@ -10,15 +10,30 @@
+@@ -10,15 +10,35 @@
  ## Milestones
 
 -### M1 — [First Milestone Name]
 +### M1 — [MVP Milestone Name]
-+**Status:** planned
++**Status:** active
 +**Why it matters:** [Why this is the MVP]
 +**Outcome:** [What users can do after this milestone]
 
@@ -1011,8 +994,11 @@ Example structure:
 +**Definition of Done (observable)**
 +- [Observable criteria 1]
 +- [Observable criteria 2]
-
-+### M1 Slices
++
++**Links**
++- Tasks: [[Tasks]]
++
++#### Slices
 +- **VS1 — [Slice Name]**: [1-2 sentence description]
 +- **VS2 — [Slice Name]**: [1-2 sentence description]
 \`\`\`
@@ -1103,10 +1089,10 @@ Roadmap.md:
 - M1 is always MVP - the smallest version that proves this works
 - Each milestone needs: status, why it matters, outcome, observable Definition of Done
 - Milestones must be vertical (demo-able), not horizontal (layers/components)
-- Vertical slices under each milestone: VS1, VS2, etc.
+- Vertical slices nested under each milestone as #### Slices section
 - Slices are 1-5 days of work, demo-able, end-to-end
 - Format slices as: **VS1 — Slice Name**: 1-2 sentence description
-- Set Current Focus to the first active milestone (M1 initially)
+- Set M1 Status to "active" to indicate current work, other milestones to "planned"
 
 Tasks.md:
 - Extract tasks from the summary that map to slices
@@ -1322,7 +1308,7 @@ When promoting, you also update Roadmap.md if the milestone changes.
    \`\`\`
 
 **SELECTION CRITERIA (IN PRIORITY ORDER)**
-1. **Roadmap Alignment**: Tasks linked to the Current Focus milestone score highest
+1. **Roadmap Alignment**: Tasks linked to the active milestone (Status: active) score highest
 2. **Slice Linkage**: Tasks with [[Roadmap#VS... — Name]] links that match active slices
 3. **Unblocking Value**: Small tasks that unblock other work (dependencies)
 4. **Standalone Quick Wins**: Small, concrete tasks without dependencies
@@ -1331,16 +1317,15 @@ When promoting, you also update Roadmap.md if the milestone changes.
 **EVALUATION PROCESS**
 For each candidate task in Next (or Later as fallback):
 - Extract the slice link if present (e.g., [[Roadmap#VS1 — Core Interview Flow]])
-- Check if the slice's milestone matches Current Focus in Roadmap.md
+- Check if the slice's milestone has Status: active in Roadmap.md
 - Consider if the task description suggests it unblocks other work
 - Score: 1 (low priority) to 5 (high priority)
 
 **ROADMAP SYNCHRONIZATION (when promoting to Now)**
 After selecting the task to promote, check if Roadmap.md needs updating:
 1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice]] → M1)
-2. Compare with current Current Focus milestone in Roadmap.md
-3. If the milestone is DIFFERENT (or Current Focus is empty):
-   - Update "## Current Focus" section to reference the new milestone
+2. Compare with the currently active milestone (Status: active) in Roadmap.md
+3. If the milestone is DIFFERENT (or no milestone is active):
    - Update the new milestone's **Status:** from "planned" to "active"
    - Update "## Milestone Index (fast scan)" entry for the new milestone: (Status: active)
    - If switching from a previous milestone that wasn't "done", set it back to "planned"
@@ -1363,17 +1348,13 @@ After selecting the task to promote, check if Roadmap.md needs updating:
       "sourceSection": "next",
       "sliceLink": null,
       "score": 3,
-      "note": "Good task but not aligned with current focus"
+      "note": "Good task but not aligned with active milestone"
     }
   ],
   "roadmapChanges": {
     "needed": true,
     "newMilestone": "M2",
     "previousMilestone": "M1",
-    "currentFocusUpdate": {
-      "milestone": "M2 — Feature Name",
-      "intent": "We're trying to implement feature X..."
-    },
     "milestoneStatusUpdates": [
       { "milestone": "M1", "from": "active", "to": "planned" },
       { "milestone": "M2", "from": "planned", "to": "active" }
@@ -1395,7 +1376,7 @@ After selecting the task to promote, check if Roadmap.md needs updating:
 - candidates: Required for success. List of other tasks considered (can be empty array)
 - Each candidate needs: text, sourceSection, sliceLink (or null), score (1-5), note
 - roadmapChanges: Required for success. Set needed=false if no milestone change needed
-  - If needed=true: include newMilestone, previousMilestone (if any), currentFocusUpdate,
+  - If needed=true: include newMilestone, previousMilestone (if any),
     milestoneStatusUpdates (array of changes), milestoneIndexUpdates (array of changes)
 
 FILE CONTENTS (for analysis):
@@ -1618,10 +1599,9 @@ Determine the MODE based on current Roadmap.md state:
 - CRITICAL: Check Overview.md first - you need the project context
 - If Overview.md lacks an elevator pitch, REDIRECT to fill Overview.md first
 - Follow this order:
-  1. Define MVP milestone (M1) - the smallest version that proves this works
-  2. Define vertical slices for M1 (2-5 slices, each 1-5 days of work)
-  3. Define additional milestones (M2, M3, etc.) with their slices
-  4. Set Current Focus to the active milestone
+  1. Define MVP milestone (M1) with Status: active - the smallest version that proves this works
+  2. Define vertical slices for M1 nested under it (2-5 slices, each 1-5 days of work)
+  3. Define additional milestones (M2, M3, etc.) with Status: planned and their slices
 - Work through ONE milestone + its slices at a time, proposing diffs after each
 - After Roadmap is filled, user can use Tasks: Fill to extract tasks from slices
 
@@ -1784,21 +1764,18 @@ Example Tasks.md structure:
 
 **Roadmap.md:** Contains milestones AND vertical slices.
 - Milestones: High-level demo-able outcomes (### M1 — Name)
-- Vertical Slices: Features under milestones (### M1 Slices with VS1, VS2, etc.)
-- **Current Focus:** Must always reflect the active milestone
-- **Milestone Status:** planned | active | done | blocked | cut
+- Vertical Slices: Features nested under milestones (#### Slices with VS1, VS2, etc.)
+- **Milestone Status:** planned | active | done | blocked | cut (active indicates current work)
 
-**ROADMAP SYNCHRONIZATION (CRITICAL):**
+**ROADMAP SYNCHRONIZATION:**
 When a task is moved to the "Now" section in Tasks.md:
 1. Identify which milestone the task's slice belongs to (from [[Roadmap#VS... — Name]])
-2. Update "## Current Focus" to reference that milestone
-3. Update the milestone's **Status:** from "planned" to "active"
-4. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
-5. If switching milestones:
+2. Update the milestone's **Status:** from "planned" to "active"
+3. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
+4. If switching milestones:
    - Set the previous active milestone back to "planned" (unless it was "done")
    - Update the Milestone Index entry for the previous milestone too
-6. Both the Current Focus AND Milestone Index must stay in sync
-This ensures Roadmap.md always reflects the actual work focus.
+This ensures milestone Status always reflects the actual work focus.
 
 **Log.md:** Freeform notes. Items with "need to", "should", "TODO" get extracted to Tasks.md.
 
@@ -1918,7 +1895,7 @@ The ENTIRE PURPOSE of this conversation is to gather information to populate
 these project documentation files in the user's Obsidian vault:
 
 1. **Overview.md** - The project's north star (elevator pitch, problem, users, scope)
-2. **Roadmap.md** - Milestones and current focus
+2. **Roadmap.md** - Milestones with vertical slices
 3. **Tasks.md** - Actionable work items
 4. **Log.md** - Progress notes and thinking
 5. **Ideas.md** - Scratch ideas and open questions
