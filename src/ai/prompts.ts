@@ -1020,18 +1020,38 @@ Example structure:
 \`\`\`diff
 --- Tasks.md
 +++ Tasks.md
-@@ -5,10 +5,20 @@
+@@ -5,18 +5,18 @@
  ## Now
-
--- [ ] <!-- First small step -->
+-- [ ] <The ONE task you're actively working on> [[Roadmap#VS1 — <Slice Name>]]
 +- [ ] [Single most important task] [[Roadmap#VS1 — Slice Name]]
 
- ## Next
+ ---
 
--- [ ] <!-- Task 1 -->
+ ## Next
+-- [ ] <Task ready to start> [[Roadmap#VS1 — <Slice Name>]]
+-- [ ] <Task ready to start> [[Roadmap#VS2 — <Slice Name>]]
+-- [ ] <Standalone task>
 +- [ ] [Task from summary] [[Roadmap#VS1 — Slice Name]]
 +- [ ] [Task from summary] [[Roadmap#VS2 — Slice Name]]
+
+ ---
+
+ ## Blocked
+ - [ ] <Thing blocked> — waiting on <dependency> — unblock plan: <...>
+
+ ---
+
+ ## Later
+ - [ ] <Task>
+ - [ ] <Task>
+
+ ---
+
+ ## Done
+ - [x] <Item> (details in [[Archive]])
 \`\`\`
+
+Note: The diff shows that only Now and Next sections get real tasks. Blocked, Later, and Done sections remain as template placeholders. The file ends with Done - nothing follows it.
 
 **FRONTMATTER STRUCTURE (CRITICAL - READ CAREFULLY)**
 
@@ -1095,6 +1115,13 @@ Tasks.md:
 - Standalone tasks (no slice link) are valid for misc items
 - Set Now to the single most important immediate task
 - Do NOT invent tasks - only extract from the provided summary
+- **CRITICAL - No duplication:**
+  - Each task appears EXACTLY ONCE in the file
+  - Only modify Now and Next sections with extracted tasks
+  - Blocked, Later, and Done sections should keep their template placeholders
+  - Done section should remain as: \`- [x] <Item> (details in [[Archive]])\`
+  - The file ends with the Done section - no content should follow it
+  - NEVER repeat tasks after the Done heading
 
 **RULES:**
 - Generate all three diffs in a single response when possible
