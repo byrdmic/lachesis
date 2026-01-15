@@ -79,6 +79,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     ],
     usesAI: true,
     combinedSteps: ['title-entries', 'generate-tasks', 'groom-tasks'],
+    autoApplyable: true,
   },
 
   /**
@@ -227,6 +228,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     ],
     usesAI: true,
     hidden: true,
+    autoApplyable: true,
   },
 
   /**
@@ -275,6 +277,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
     ],
     usesAI: true,
     hidden: true,
+    autoApplyable: true,
   },
 
   /**

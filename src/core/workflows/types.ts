@@ -83,6 +83,8 @@ export type WorkflowDefinition = {
   hidden?: boolean
   /** For combined workflows, the ordered list of sub-workflows to execute */
   combinedSteps?: WorkflowName[]
+  /** Whether this workflow can have auto-apply enabled (only for low-risk, reversible workflows) */
+  autoApplyable?: boolean
 }
 
 /**

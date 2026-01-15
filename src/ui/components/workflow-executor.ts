@@ -65,11 +65,13 @@ import {
   parsePromoteNextResponse,
   containsPromoteNextResponse,
   applyTaskPromotion,
+  applyRoadmapChanges,
   hasTasksInCurrent,
   type SelectedTask,
   type CandidateTask,
   type PromoteSelection,
   type PromoteStatus,
+  type RoadmapChanges,
 } from '../../utils/promote-next-parser'
 import { GitLogModal } from '../git-log-modal'
 import { InitSummaryInputModal } from '../init-summary-modal'
@@ -132,6 +134,7 @@ export class WorkflowExecutor {
   private pendingPromoteStatus: PromoteStatus = 'no_tasks'
   private pendingExistingCurrentTask: string | null = null
   private pendingPromoteMessage: string | null = null
+  private pendingRoadmapChanges: RoadmapChanges | null = null
   private awaitingPromoteKeyword: boolean = false
 
   // Keyword for promote-next-task confirmation
@@ -1410,6 +1413,7 @@ export class WorkflowExecutor {
       this.pendingPromoteCandidates = parsed.candidates ?? []
       this.pendingExistingCurrentTask = parsed.existingCurrentTask ?? null
       this.pendingPromoteMessage = parsed.message ?? null
+      this.pendingRoadmapChanges = parsed.roadmapChanges ?? null
 
       if (parsed.status === 'already_active') {
         this.callbacks.onAddMessage(
@@ -1494,7 +1498,7 @@ export class WorkflowExecutor {
 
     const input = userInput.trim().toUpperCase()
 
-    if (input === WorkflowExecutor.PROMOTE_KEYWORD || input === 'PROMOTE') {
+    if (input === WorkflowExecutor.PROMOTE_KEYWORD || input === 'PROMOTE' || input === 'YES' || input === 'CONFIRM' || input === 'Y') {
       // User confirmed promotion
       this.awaitingPromoteKeyword = false
 
@@ -1522,7 +1526,7 @@ export class WorkflowExecutor {
     // Not a recognized keyword - remind user
     this.callbacks.onAddMessage(
       'assistant',
-      `Please say **${WorkflowExecutor.PROMOTE_KEYWORD}** to promote the task, or **SKIP** to continue without promoting.`
+      `Please say **${WorkflowExecutor.PROMOTE_KEYWORD}**, **YES**, or **CONFIRM** to promote the task, or **SKIP** to continue without promoting.`
     )
     return true // Still handled - don't send to AI
   }
@@ -1642,7 +1646,25 @@ export class WorkflowExecutor {
       tasksContent = applyTaskPromotion(tasksContent, selection.selectedTask)
       await this.app.vault.modify(tasksFile, tasksContent)
 
-      new Notice('Task promoted to Current section')
+      // Apply roadmap changes if present (update Current Focus and milestone status)
+      let roadmapUpdated = false
+      if (this.pendingRoadmapChanges && this.pendingRoadmapChanges.shouldUpdateCurrentFocus) {
+        const roadmapPath = `${this.projectPath}/Roadmap.md`
+        const roadmapFile = this.app.vault.getAbstractFileByPath(roadmapPath)
+
+        if (roadmapFile && roadmapFile instanceof TFile) {
+          let roadmapContent = await this.app.vault.read(roadmapFile)
+          roadmapContent = applyRoadmapChanges(roadmapContent, this.pendingRoadmapChanges)
+          await this.app.vault.modify(roadmapFile, roadmapContent)
+          roadmapUpdated = true
+        }
+      }
+
+      if (roadmapUpdated) {
+        new Notice('Task promoted to Current. Roadmap focus updated.')
+      } else {
+        new Notice('Task promoted to Current section')
+      }
 
       // Clear pending state and refresh snapshot
       this.clearPromoteNextState()
@@ -1665,6 +1687,7 @@ export class WorkflowExecutor {
     this.pendingPromoteStatus = 'no_tasks'
     this.pendingExistingCurrentTask = null
     this.pendingPromoteMessage = null
+    this.pendingRoadmapChanges = null
   }
 
   // ============================================================================

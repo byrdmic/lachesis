@@ -50,9 +50,29 @@ For each candidate task in Later:
       "score": 3,
       "note": "Good task but not aligned with active milestone"
     }
-  ]
+  ],
+  "roadmapChanges": {
+    "shouldUpdateCurrentFocus": true,
+    "newFocusMilestone": "M2 — Enhanced Features",
+    "milestoneStatusChange": {
+      "milestone": "M2",
+      "from": "planned",
+      "to": "active"
+    }
+  }
 }
 \`\`\`
+
+**ROADMAP CHANGES (include when needed):**
+Include "roadmapChanges" if the promoted task's milestone is different from the current Roadmap focus:
+1. Extract the task's slice link: [[Roadmap#VS# — Name]]
+2. Find which milestone contains that slice in Roadmap.md
+3. Check Roadmap.md "Current Focus" section for the current milestone
+4. If the task's milestone differs from Current Focus AND Status is "planned":
+   - Set shouldUpdateCurrentFocus: true
+   - Set newFocusMilestone to the task's milestone (e.g., "M2 — Enhanced Features")
+   - Set milestoneStatusChange to change from "planned" to "active"
+5. If already on the active milestone or no slice link, omit "roadmapChanges" entirely
 
 **FIELD REQUIREMENTS:**
 - status: Required. One of: "success", "no_tasks"
@@ -61,6 +81,7 @@ For each candidate task in Later:
 - reasoning: Required for success. Brief explanation of selection
 - candidates: Required for success. List of other tasks considered (can be empty array)
 - Each candidate needs: text, sliceLink (or null), score (1-5), note
+- roadmapChanges: Optional. Include only when promoting changes the active milestone
 
 FILE CONTENTS (for analysis):
 ${workflowFileContents}

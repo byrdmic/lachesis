@@ -9,6 +9,7 @@ import {
 import type LachesisPlugin from './main'
 import type { ProviderType } from './ai/providers/types'
 import { getAvailableProviders, getModelsForProvider, getDefaultModel, getProvider } from './ai/providers/factory'
+import { getAllWorkflows } from './core/workflows/definitions'
 
 // ============================================================================
 // Settings Types
@@ -34,6 +35,8 @@ export interface LachesisSettings {
 
   // Behavior settings
   autoAcceptChanges: boolean
+  // Per-workflow auto-apply settings (workflow name -> enabled)
+  workflowAutoApply: Record<string, boolean>
 }
 
 export const DEFAULT_SETTINGS: LachesisSettings = {
@@ -45,6 +48,7 @@ export const DEFAULT_SETTINGS: LachesisSettings = {
   githubToken: '',
   projectsFolder: 'Projects',
   autoAcceptChanges: false,
+  workflowAutoApply: {},
 }
 
 // ============================================================================
@@ -393,6 +397,37 @@ export class LachesisSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings()
           })
       )
+
+    // Per-workflow auto-apply section
+    const autoApplyableWorkflows = getAllWorkflows().filter(w => w.autoApplyable)
+
+    if (autoApplyableWorkflows.length > 0) {
+      const workflowSection = containerEl.createEl('details', { cls: 'lachesis-workflow-settings' })
+      workflowSection.createEl('summary', { text: 'Per-workflow auto-apply settings' })
+
+      const workflowDesc = workflowSection.createEl('p')
+      workflowDesc.style.color = 'var(--text-muted)'
+      workflowDesc.style.fontSize = '0.9em'
+      workflowDesc.style.marginBottom = '1em'
+      workflowDesc.setText(
+        'Control which workflows can auto-apply when the global toggle is enabled. ' +
+        'Only low-risk workflows are eligible for auto-apply.'
+      )
+
+      for (const workflow of autoApplyableWorkflows) {
+        new Setting(workflowSection)
+          .setName(workflow.displayName)
+          .setDesc(workflow.description)
+          .addToggle((toggle) =>
+            toggle
+              .setValue(this.plugin.settings.workflowAutoApply[workflow.name] ?? false)
+              .onChange(async (value) => {
+                this.plugin.settings.workflowAutoApply[workflow.name] = value
+                await this.plugin.saveSettings()
+              })
+          )
+      }
+    }
   }
 
   private displayConnectionTest(containerEl: HTMLElement): void {

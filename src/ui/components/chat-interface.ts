@@ -65,6 +65,8 @@ export type ChatInterfaceCallbacks = {
   onViewHarvestTasks: (content: string) => void
   /** Called to check if auto-accept is enabled */
   isAutoAcceptEnabled: () => boolean
+  /** Called to check if a specific workflow has auto-apply enabled */
+  getWorkflowAutoApply?: (workflowName: string) => boolean
 }
 
 // ============================================================================
@@ -450,7 +452,12 @@ export class ChatInterface {
     }
 
     // Check if auto-accept is enabled and not viewing a loaded chat
-    const shouldAutoApply = this.callbacks.isAutoAcceptEnabled() && !this.isViewingLoadedChat
+    // For auto-apply, both global auto-accept AND workflow-specific auto-apply must be enabled
+    const globalAutoApply = this.callbacks.isAutoAcceptEnabled()
+    const workflowAutoApply = this.activeWorkflowName && this.callbacks.getWorkflowAutoApply
+      ? this.callbacks.getWorkflowAutoApply(this.activeWorkflowName)
+      : true // If no workflow-specific callback, fall back to global setting
+    const shouldAutoApply = globalAutoApply && workflowAutoApply && !this.isViewingLoadedChat
 
     // Store pending diffs
     this.pendingDiffs = diffBlocks

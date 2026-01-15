@@ -9,7 +9,7 @@ import { getProvider } from '../ai/providers/factory'
 import { isProviderAvailable } from '../ai/providers/factory'
 import type { AIProvider, ConversationMessage } from '../ai/providers/types'
 import { buildSystemPrompt } from '../ai/prompts'
-import { PROJECT_FILES } from '../core/workflows/definitions'
+import { PROJECT_FILES, getWorkflowDefinition } from '../core/workflows/definitions'
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 import type { DiffBlock } from '../utils/diff'
 import { applyDiffToFile } from '../utils/diff'
@@ -164,6 +164,12 @@ export class ExistingProjectModal extends Modal {
         onViewArchiveCompleted: (content) => this.workflowExecutor?.openArchiveCompletedModalForHistory(content),
         onViewHarvestTasks: (content) => this.workflowExecutor?.openHarvestTasksModalForHistory(content),
         isAutoAcceptEnabled: () => this.plugin.settings.autoAcceptChanges,
+        getWorkflowAutoApply: (name) => {
+          // Check if workflow is auto-applyable and user has enabled it
+          const workflow = getWorkflowDefinition(name as WorkflowName)
+          if (!workflow?.autoApplyable) return false
+          return this.plugin.settings.workflowAutoApply[name] ?? false
+        },
       },
       this.renderComponent
     )

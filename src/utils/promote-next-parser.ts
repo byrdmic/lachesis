@@ -62,6 +62,24 @@ export interface SelectedTask {
 }
 
 /**
+ * Roadmap changes to apply when promoting a task.
+ * Updates Current Focus and milestone status when the promoted task
+ * is linked to a different milestone than the current focus.
+ */
+export interface RoadmapChanges {
+  /** Whether to update the Current Focus section */
+  shouldUpdateCurrentFocus: boolean
+  /** The new milestone to set as current focus (e.g., "M1 — MVP") */
+  newFocusMilestone: string | null
+  /** Milestone status change (planned -> active) */
+  milestoneStatusChange?: {
+    milestone: string // e.g., "M1"
+    from: 'planned' | 'active'
+    to: 'planned' | 'active' | 'done'
+  }
+}
+
+/**
  * AI response format for promote-next-task workflow
  */
 export interface PromoteNextAIResponse {
@@ -71,6 +89,7 @@ export interface PromoteNextAIResponse {
   candidates?: CandidateTask[]
   existingCurrentTask?: string // For already_active status
   message?: string // For error/skip cases
+  roadmapChanges?: RoadmapChanges // Roadmap updates when promoting to a new milestone
 }
 
 /**
@@ -274,6 +293,53 @@ export function applyTaskPromotion(tasksContent: string, selectedTask: SelectedT
   lines.splice(insertIndex, 0, ...insertLines)
 
   return lines.join('\n')
+}
+
+/**
+ * Apply roadmap changes when promoting a task.
+ * Updates Current Focus section and milestone status.
+ */
+export function applyRoadmapChanges(
+  roadmapContent: string,
+  changes: RoadmapChanges
+): string {
+  if (!changes.shouldUpdateCurrentFocus && !changes.milestoneStatusChange) {
+    return roadmapContent
+  }
+
+  let content = roadmapContent
+
+  // Update milestone status (planned -> active) in both places
+  if (changes.milestoneStatusChange) {
+    const { milestone, from, to } = changes.milestoneStatusChange
+
+    // Update in the milestone section (### M1 — Name ... **Status:** planned)
+    // Pattern matches the milestone heading line through the Status line
+    const milestoneStatusPattern = new RegExp(
+      `(###\\s*${milestone}\\s*[—–-][^\\n]*[\\s\\S]*?\\*\\*Status:\\*\\*\\s*)${from}`,
+      'i'
+    )
+    content = content.replace(milestoneStatusPattern, `$1${to}`)
+
+    // Update in the Milestone Index (- M1 — Name (Status: planned))
+    const indexStatusPattern = new RegExp(
+      `(-\\s*${milestone}\\s*[—–-][^(]*\\(Status:\\s*)${from}(\\))`,
+      'gi'
+    )
+    content = content.replace(indexStatusPattern, `$1${to}$2`)
+  }
+
+  // Update Current Focus section
+  if (changes.shouldUpdateCurrentFocus && changes.newFocusMilestone) {
+    // Pattern to find the Current Focus milestone line
+    // Matches: - **Milestone:** M1 — Whatever
+    const currentFocusPattern = /(-\s*\*\*Milestone:\*\*\s*)([^\n]+)/i
+    if (currentFocusPattern.test(content)) {
+      content = content.replace(currentFocusPattern, `$1${changes.newFocusMilestone}`)
+    }
+  }
+
+  return content
 }
 
 // ============================================================================
