@@ -1,8 +1,8 @@
-// Chat Interface Component
+// Chat Interface View Component
 // Handles message rendering, input, streaming, and diff display
 
 import type { App, Component } from 'obsidian'
-import { MarkdownRenderer } from 'obsidian'
+import { MarkdownRenderer, Notice } from 'obsidian'
 import type { ConversationMessage } from '../../ai/providers/types'
 import {
   extractDiffBlocks,
@@ -10,7 +10,6 @@ import {
   applyDiffToFile,
   type DiffBlock,
 } from '../../utils/diff'
-import { Notice } from 'obsidian'
 import {
   parseIdeasGroomResponse,
   containsIdeasGroomResponse,
@@ -27,50 +26,17 @@ import {
   extractHarvestTasksSummary,
 } from '../../utils/harvest-tasks-parser'
 import { DiffViewerModal, type DiffAction } from '../diff-viewer-modal'
+import {
+  ChatState,
+  looksLikeArchiveCompletedResponse,
+  type ChatInterfaceCallbacks,
+} from './chat-state'
+
+// Re-export types for consumers
+export type { ChatInterfaceCallbacks } from './chat-state'
 
 // ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Detect if content looks like an archive-completed workflow response.
- * Checks for diff blocks targeting Archive.md and Tasks.md with archive-related keywords.
- */
-function looksLikeArchiveCompletedResponse(content: string): boolean {
-  const lowerContent = content.toLowerCase()
-  const hasArchiveDiff = content.includes('```diff:Archive.md') || content.includes('Archive.md')
-  const hasTasksDiff = content.includes('```diff:Tasks.md') || content.includes('Tasks.md')
-  const hasArchiveKeywords = lowerContent.includes('completed') &&
-    (lowerContent.includes('archive') || lowerContent.includes('## completed work'))
-
-  return hasArchiveDiff && hasTasksDiff && hasArchiveKeywords && containsDiffBlocks(content)
-}
-
-// ============================================================================
-// Types
-// ============================================================================
-
-export type ChatInterfaceCallbacks = {
-  /** Called when user submits input */
-  onSubmit: (message: string) => void
-  /** Called when a diff is accepted or rejected */
-  onDiffAction: (diffBlock: DiffBlock, action: DiffAction) => void
-  /** Called when user clicks "View Ideas" for an ideas groom response */
-  onViewIdeasGroom: (content: string) => void
-  /** Called when user clicks "View Matches" for a sync-commits response */
-  onViewSyncCommits: (content: string) => void
-  /** Called when user clicks "View Tasks" for an archive-completed response */
-  onViewArchiveCompleted: (content: string) => void
-  /** Called when user clicks "View Tasks" for a harvest-tasks response */
-  onViewHarvestTasks: (content: string) => void
-  /** Called to check if auto-accept is enabled */
-  isAutoAcceptEnabled: () => boolean
-  /** Called to check if a specific workflow has auto-apply enabled */
-  getWorkflowAutoApply?: (workflowName: string) => boolean
-}
-
-// ============================================================================
-// Chat Interface Component
+// Chat Interface View Component
 // ============================================================================
 
 export class ChatInterface {
@@ -78,18 +44,12 @@ export class ChatInterface {
   private projectPath: string
   private callbacks: ChatInterfaceCallbacks
   private renderComponent: Component
-  private isViewingLoadedChat = false
+  private state: ChatState
 
   // DOM Elements
   private messagesContainer: HTMLElement | null = null
   private inputEl: HTMLInputElement | null = null
   private statusEl: HTMLElement | null = null
-
-  // State
-  private streamingText = ''
-  private pendingDiffs: DiffBlock[] = []
-  private isProcessing = false
-  private activeWorkflowName: string | null = null
 
   constructor(
     app: App,
@@ -101,27 +61,28 @@ export class ChatInterface {
     this.projectPath = projectPath
     this.callbacks = callbacks
     this.renderComponent = renderComponent
+    this.state = new ChatState()
   }
 
   /**
    * Set whether we're viewing a loaded chat (affects diff view-only mode).
    */
   setViewingLoadedChat(viewing: boolean): void {
-    this.isViewingLoadedChat = viewing
+    this.state.setViewingLoadedChat(viewing)
   }
 
   /**
    * Set the active workflow name (used to customize rendering behavior).
    */
   setActiveWorkflow(workflowName: string | null): void {
-    this.activeWorkflowName = workflowName
+    this.state.setActiveWorkflow(workflowName)
   }
 
   /**
    * Get whether we're viewing a loaded chat.
    */
   isViewingLoaded(): boolean {
-    return this.isViewingLoadedChat
+    return this.state.isViewingLoadedChat
   }
 
   /**
@@ -155,7 +116,7 @@ export class ChatInterface {
     })
 
     this.inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey && !this.isProcessing) {
+      if (e.key === 'Enter' && !e.shiftKey && !this.state.isProcessing) {
         e.preventDefault()
         this.handleUserInput()
       }
@@ -166,7 +127,7 @@ export class ChatInterface {
       cls: 'lachesis-send-button',
     })
     sendButton.addEventListener('click', () => {
-      if (!this.isProcessing) {
+      if (!this.state.isProcessing) {
         this.handleUserInput()
       }
     })
@@ -275,7 +236,7 @@ export class ChatInterface {
   updateStreamingMessage(content: string): void {
     if (!this.messagesContainer) return
 
-    this.streamingText = content
+    this.state.setStreamingText(content)
     const streamingEl = this.messagesContainer.querySelector('.lachesis-message.streaming')
     if (streamingEl) {
       // Parse hint tags for display (only if fully present)
@@ -310,35 +271,38 @@ export class ChatInterface {
     if (streamingEl) {
       streamingEl.removeClass('streaming')
 
+      const streamingText = this.state.streamingText
+      const activeWorkflow = this.state.activeWorkflowName
+
       // Check if content contains special response types
       // For archive-completed workflow, skip diffs and show button to open modal
-      if (this.activeWorkflowName === 'archive-completed') {
+      if (activeWorkflow === 'archive-completed') {
         // Clear and re-render with archive completed summary (skip diffs entirely)
         streamingEl.empty()
-        this.renderMessageWithArchiveCompleted(streamingEl, this.streamingText)
-        this.activeWorkflowName = null // Clear after use
-      } else if (containsDiffBlocks(this.streamingText)) {
+        this.renderMessageWithArchiveCompleted(streamingEl, streamingText)
+        this.state.setActiveWorkflow(null) // Clear after use
+      } else if (containsDiffBlocks(streamingText)) {
         // Clear and re-render with diff blocks
         streamingEl.empty()
-        this.renderMessageWithDiffs(streamingEl, this.streamingText)
-      } else if (containsIdeasGroomResponse(this.streamingText)) {
+        this.renderMessageWithDiffs(streamingEl, streamingText)
+      } else if (containsIdeasGroomResponse(streamingText)) {
         // Clear and re-render with ideas groom summary
         streamingEl.empty()
-        this.renderMessageWithIdeasGroom(streamingEl, this.streamingText)
-      } else if (containsSyncCommitsResponse(this.streamingText)) {
+        this.renderMessageWithIdeasGroom(streamingEl, streamingText)
+      } else if (containsSyncCommitsResponse(streamingText)) {
         // Clear and re-render with sync commits summary
         streamingEl.empty()
-        this.renderMessageWithSyncCommits(streamingEl, this.streamingText)
-      } else if (containsHarvestResponse(this.streamingText)) {
+        this.renderMessageWithSyncCommits(streamingEl, streamingText)
+      } else if (containsHarvestResponse(streamingText)) {
         // Clear and re-render with harvest tasks summary
         streamingEl.empty()
-        this.renderMessageWithHarvestTasks(streamingEl, this.streamingText)
+        this.renderMessageWithHarvestTasks(streamingEl, streamingText)
       } else {
         // Re-render with markdown + hint styling
         streamingEl.empty()
-        const hintMatch = this.streamingText.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
+        const hintMatch = streamingText.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
         if (hintMatch) {
-          const mainContent = this.streamingText.replace(/\{\{hint\}\}[\s\S]*?\{\{\/hint\}\}/, '').trim()
+          const mainContent = streamingText.replace(/\{\{hint\}\}[\s\S]*?\{\{\/hint\}\}/, '').trim()
           if (mainContent) {
             this.renderMarkdown(mainContent, streamingEl)
           }
@@ -348,13 +312,13 @@ export class ChatInterface {
           if (hintContent) {
             this.renderMarkdown(hintContent, hintEl)
           }
-        } else if (this.streamingText) {
-          this.renderMarkdown(this.streamingText, streamingEl)
+        } else if (streamingText) {
+          this.renderMarkdown(streamingText, streamingEl)
         }
       }
     }
 
-    this.streamingText = ''
+    this.state.clearStreamingText()
   }
 
   /**
@@ -373,7 +337,7 @@ export class ChatInterface {
     if (this.inputEl) {
       this.inputEl.disabled = !enabled
     }
-    this.isProcessing = !enabled
+    this.state.setProcessing(!enabled)
   }
 
   /**
@@ -387,14 +351,21 @@ export class ChatInterface {
    * Get the current streaming text.
    */
   getStreamingText(): string {
-    return this.streamingText
+    return this.state.streamingText
   }
 
   /**
    * Get pending diffs.
    */
   getPendingDiffs(): DiffBlock[] {
-    return this.pendingDiffs
+    return this.state.pendingDiffs
+  }
+
+  /**
+   * Get the underlying state object (for advanced use cases).
+   */
+  getState(): ChatState {
+    return this.state
   }
 
   // ============================================================================
@@ -451,16 +422,11 @@ export class ChatInterface {
       return
     }
 
-    // Check if auto-accept is enabled and not viewing a loaded chat
-    // For auto-apply, both global auto-accept AND workflow-specific auto-apply must be enabled
-    const globalAutoApply = this.callbacks.isAutoAcceptEnabled()
-    const workflowAutoApply = this.activeWorkflowName && this.callbacks.getWorkflowAutoApply
-      ? this.callbacks.getWorkflowAutoApply(this.activeWorkflowName)
-      : true // If no workflow-specific callback, fall back to global setting
-    const shouldAutoApply = globalAutoApply && workflowAutoApply && !this.isViewingLoadedChat
+    // Check if auto-apply should be enabled
+    const shouldAutoApply = this.state.shouldAutoApply(this.callbacks)
 
     // Store pending diffs
-    this.pendingDiffs = diffBlocks
+    this.state.setPendingDiffs(diffBlocks)
 
     // Extract text before first diff block
     const firstDiffMarker = '```diff\n' + diffBlocks[0].rawDiff + '\n```'
@@ -565,7 +531,7 @@ export class ChatInterface {
 
     // File icon
     const iconEl = linkEl.createSpan({ cls: 'lachesis-diff-file-icon' })
-    iconEl.setText('\uD83D\uDCC4') // 📄
+    iconEl.setText('\uD83D\uDCC4') // file emoji
 
     // File name (clickable)
     const nameEl = linkEl.createEl('a', {
@@ -605,7 +571,7 @@ export class ChatInterface {
       diffBlock,
       this.projectPath,
       (updatedDiff, action) => this.handleDiffAction(updatedDiff, action),
-      { viewOnly: this.isViewingLoadedChat }
+      { viewOnly: this.state.isViewingLoadedChat }
     )
     modal.open()
   }
