@@ -1,0 +1,80 @@
+/* Lachesis Plugin - Header Styles */
+
+/* Header in conversation phase */
+.lachesis-header,
+.lachesis-diff-modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 0;
+  background: rgba(var(--background-secondary-rgb), 0.6);
+  backdrop-filter: blur(8px);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lachesis-header h2,
+.lachesis-diff-modal-header h2 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-normal);
+  text-transform: uppercase;
+  font-size: 1.1em;
+}
+
+.lachesis-diff-modal-filename {
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+  color: var(--text-accent);
+  opacity: 0.9;
+}
+
+/* Status Badge (in header) */
+.lachesis-status-badge {
+  font-size: 0.65em;
+  padding: 4px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-left: 12px;
+  vertical-align: middle;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.lachesis-status-badge.ready {
+  background: var(--background-modifier-success);
+  color: var(--text-on-accent);
+}
+
+.lachesis-status-badge.needs-work {
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
+
+/* Make the badge clickable when there are issues */
+.lachesis-status-badge.clickable {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lachesis-status-badge.clickable:hover {
+  filter: brightness(1.1);
+  transform: scale(1.02);
+}
+
+/* Header controls */
+.lachesis-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lachesis-header-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}

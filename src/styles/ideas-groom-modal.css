@@ -1,0 +1,66 @@
+/* Lachesis Plugin - Ideas Groom Modal */
+
+/* Modal root (reuses harvest-tasks-modal structure) */
+.modal.lachesis-ideas-groom-modal-root {
+  /* Inherits all harvest-tasks-modal-root styles */
+}
+
+.lachesis-ideas-groom-modal {
+  /* Inherits all harvest-tasks-modal styles */
+}
+
+/* Moved task styling */
+.lachesis-ideas-task-moved {
+  opacity: 0.85;
+}
+
+.lachesis-harvest-task-checkbox.moved {
+  font-size: 1.1em;
+}
+
+/* Moved badge */
+.lachesis-ideas-moved-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 0.75em;
+  font-weight: 500;
+  border-radius: 10px;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+/* Ideas groom summary in chat */
+.lachesis-ideas-groom-summary {
+  padding: 12px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+  margin: 8px 0;
+}
+
+.lachesis-ideas-groom-summary p {
+  margin: 0 0 12px 0;
+  color: var(--text-normal);
+}
+
+.lachesis-ideas-groom-button-container {
+  display: flex;
+  gap: 8px;
+}
+
+.lachesis-ideas-groom-view-btn {
+  padding: 6px 16px;
+  font-size: 0.9em;
+  font-weight: 500;
+  border-radius: 6px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lachesis-ideas-groom-view-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}

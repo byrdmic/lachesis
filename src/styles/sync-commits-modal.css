@@ -1,0 +1,496 @@
+/* Lachesis Plugin - Sync Commits Modal */
+
+/* Modal Container */
+.modal.lachesis-sync-commits-modal-root {
+  --modal-width: 800px;
+  --modal-max-width: 90vw;
+  width: 800px !important;
+  max-width: 90vw !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.modal.lachesis-sync-commits-modal-root .modal-close-button {
+  z-index: 10;
+  color: var(--text-muted);
+  top: 28px;
+  right: 18px;
+}
+
+.lachesis-sync-commits-modal {
+  display: flex;
+  flex-direction: column;
+  height: 75vh;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(var(--interactive-accent-rgb), 0.15) 0%, transparent 60%),
+    radial-gradient(circle at 100% 0%, rgba(var(--interactive-accent-rgb), 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(var(--interactive-accent-rgb), 0.05) 0%, transparent 50%),
+    linear-gradient(145deg, var(--background-primary) 0%, var(--background-secondary) 100%);
+  background-color: var(--background-primary);
+  border-radius: var(--radius-l);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px var(--background-modifier-border);
+  overflow: hidden;
+  font-family: var(--lachesis-font-ui);
+  position: relative;
+  border: 1px solid var(--background-modifier-border);
+}
+
+/* Header */
+.lachesis-sync-commits-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: rgba(var(--background-secondary-rgb), 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.lachesis-sync-commits-header h2 {
+  margin: 0 0 4px 0;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-normal);
+  text-transform: uppercase;
+  font-size: 1.1em;
+}
+
+.lachesis-sync-commits-subtitle {
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.lachesis-sync-commits-note {
+  margin: 4px 0 0 0;
+  font-size: 0.8em;
+  color: var(--text-faint);
+}
+
+/* Confidence Legend */
+.lachesis-sync-commits-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.lachesis-legend-label {
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+/* Content (Scrollable) */
+.lachesis-sync-commits-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.lachesis-sync-commits-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lachesis-sync-commits-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lachesis-sync-commits-content::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 3px;
+}
+
+.lachesis-no-matches-message {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px;
+  font-size: 0.95em;
+}
+
+/* Matches Section */
+.lachesis-sync-commits-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Individual Match Item */
+.lachesis-sync-commit-item {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 16px;
+  transition: background 0.15s ease;
+}
+
+.lachesis-sync-commit-item:hover {
+  background: var(--background-secondary);
+}
+
+/* Commit Row */
+.lachesis-sync-commit-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lachesis-sync-commit-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.lachesis-sync-commit-sha {
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+  color: var(--interactive-accent);
+  background: var(--background-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-decoration: none;
+}
+
+.lachesis-sync-commit-sha:hover {
+  text-decoration: underline;
+}
+
+.lachesis-sync-commit-date {
+  font-size: 0.8em;
+  color: var(--text-faint);
+}
+
+.lachesis-sync-commit-title {
+  flex: 1;
+  font-size: 0.9em;
+  color: var(--text-normal);
+  font-weight: 500;
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* Confidence Badge */
+.lachesis-confidence-badge {
+  padding: 3px 10px;
+  font-size: 0.7em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: 12px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.lachesis-confidence-high {
+  background: var(--background-modifier-success);
+  color: var(--text-on-accent);
+}
+
+.lachesis-confidence-medium {
+  background: var(--color-orange);
+  color: var(--text-on-accent);
+}
+
+.lachesis-confidence-low {
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
+
+/* Task Match Row */
+.lachesis-sync-task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-sync-matches-label {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.lachesis-sync-task-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.lachesis-sync-task-text {
+  font-size: 0.9em;
+  color: var(--text-normal);
+  line-height: 1.4;
+}
+
+.lachesis-sync-task-section {
+  font-size: 0.75em;
+  color: var(--text-faint);
+}
+
+/* AI Reasoning Row */
+.lachesis-sync-reasoning-row {
+  margin-top: 8px;
+}
+
+.lachesis-sync-reasoning {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  font-style: italic;
+  background: var(--background-secondary-alt);
+  padding: 6px 10px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+/* Controls Row */
+.lachesis-sync-controls {
+  margin-top: 12px;
+}
+
+.lachesis-sync-dropdown-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lachesis-sync-label {
+  font-size: 0.75em;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.lachesis-sync-dropdown {
+  padding: 6px 10px;
+  font-size: 0.85em;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  color: var(--text-normal);
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.lachesis-sync-dropdown:hover {
+  border-color: var(--interactive-accent);
+}
+
+.lachesis-sync-dropdown:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+/* Unmatched Section */
+.lachesis-sync-unmatched-section {
+  margin-top: 24px;
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 16px;
+}
+
+.lachesis-sync-unmatched-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 0;
+  user-select: none;
+}
+
+.lachesis-sync-unmatched-header:hover {
+  color: var(--text-normal);
+}
+
+.lachesis-sync-toggle-icon {
+  color: var(--text-muted);
+  font-size: 0.8em;
+}
+
+.lachesis-sync-unmatched-title {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.lachesis-sync-unmatched-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.lachesis-sync-unmatched-item {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  opacity: 0.7;
+}
+
+.lachesis-sync-unmatched-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.lachesis-sync-unmatched-reason {
+  font-size: 0.8em;
+  color: var(--text-faint);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+/* Footer */
+.lachesis-sync-commits-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.lachesis-sync-footer-summary {
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.lachesis-sync-footer-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.lachesis-sync-cancel-btn {
+  padding: 8px 20px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.lachesis-sync-cancel-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.lachesis-sync-confirm-btn {
+  padding: 8px 20px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: all 0.15s ease;
+}
+
+.lachesis-sync-confirm-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.lachesis-sync-confirm-btn:disabled,
+.lachesis-btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.lachesis-sync-confirm-btn:disabled:hover,
+.lachesis-btn-disabled:hover {
+  filter: none;
+  transform: none;
+}
+
+/* Sync Commits Summary in Chat (history view) */
+.lachesis-sync-commits-summary {
+  padding: 12px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+  margin: 8px 0;
+}
+
+.lachesis-sync-commits-summary p {
+  margin: 0 0 12px 0;
+  color: var(--text-normal);
+}
+
+.lachesis-sync-commits-button-container {
+  display: flex;
+  gap: 8px;
+}
+
+.lachesis-sync-commits-view-btn {
+  padding: 6px 16px;
+  font-size: 0.9em;
+  font-weight: 500;
+  border-radius: 6px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lachesis-sync-commits-view-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+/* Completed task styling in sync-commits modal */
+.lachesis-sync-commit-item.lachesis-sync-completed {
+  opacity: 0.7;
+  border-color: var(--background-modifier-border);
+}
+
+.lachesis-sync-completed-badge {
+  padding: 3px 10px;
+  font-size: 0.7em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: 12px;
+  background: var(--text-faint);
+  color: var(--background-primary);
+  flex-shrink: 0;
+}
+
+.lachesis-sync-task-text.lachesis-sync-task-done {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+/* Group headers for view-only mode */
+.lachesis-sync-group {
+  margin-bottom: 24px;
+}
+
+.lachesis-sync-group:last-child {
+  margin-bottom: 0;
+}
+
+.lachesis-sync-group-header {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--text-normal);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-sync-group-header.lachesis-sync-group-completed {
+  color: var(--text-muted);
+}

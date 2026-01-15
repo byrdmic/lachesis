@@ -1,0 +1,82 @@
+/* Lachesis Plugin - Diff Preview Blocks (in chat) */
+
+/* Diff Preview Blocks */
+.lachesis-diff-block {
+  margin: 16px 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--background-primary);
+}
+
+.lachesis-diff-header {
+  padding: 10px 16px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+.lachesis-diff-content {
+  background: transparent;
+  color: var(--text-normal);
+}
+
+.lachesis-diff-hunk-header {
+  background: var(--background-secondary-alt);
+  color: var(--text-muted);
+}
+
+.lachesis-diff-add {
+  background: rgba(46, 160, 67, 0.15); /* Keep standard diff colors as they are semantic */
+  color: var(--text-success);
+}
+
+.lachesis-diff-remove {
+  background: rgba(248, 81, 73, 0.15); /* Keep standard diff colors as they are semantic */
+  color: var(--text-error);
+}
+
+/* Diff File Links */
+.lachesis-diff-summary {
+  margin: 14px 0 10px 0; /* extra breathing room above the list */
+}
+
+.lachesis-diff-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* space between pending diffs */
+  margin: 12px 0 16px 0; /* space around the list */
+}
+
+.lachesis-diff-file-link {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.lachesis-diff-file-link:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+.lachesis-diff-file-name {
+  color: var(--text-accent);
+  padding: 0 10px;
+}
+
+.lachesis-diff-file-status {
+  padding: 0 10px;
+}
+
+.lachesis-diff-file-status.accepted {
+  background: var(--background-modifier-success);
+  color: var(--text-on-accent);
+}
+
+/* Diff line styling */
+.lachesis-diff-line {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}

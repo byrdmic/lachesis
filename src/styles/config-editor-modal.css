@@ -1,0 +1,128 @@
+/* Lachesis Plugin - Config Editor Modal */
+
+/* Edit Config Button */
+.lachesis-edit-config-button {
+  padding: 6px 14px;
+  font-size: 0.75em;
+  font-weight: 500;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 16px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.lachesis-edit-config-button:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+}
+
+/* Modal root sizing */
+.modal.lachesis-config-editor-modal-root {
+  --modal-width: 600px;
+  --modal-max-width: 90vw;
+  --modal-height: 60vh;
+  --modal-max-height: 80vh;
+}
+
+.lachesis-config-editor-modal {
+  display: flex;
+  flex-direction: column;
+  height: calc(var(--modal-height) - 40px);
+  max-height: calc(var(--modal-max-height) - 40px);
+  padding: 24px;
+}
+
+.lachesis-config-editor-modal h2 {
+  margin: 0 0 8px 0;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-normal);
+}
+
+.lachesis-config-editor-subtitle {
+  margin: 0 0 20px 0;
+  font-size: 0.9em;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.lachesis-config-editor-textarea-wrapper {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  margin-bottom: 20px;
+}
+
+.lachesis-config-editor-textarea {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  padding: 16px;
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+  line-height: 1.5;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  color: var(--text-normal);
+}
+
+.lachesis-config-editor-textarea:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.lachesis-config-editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.lachesis-config-editor-error {
+  margin: 0;
+  padding: 8px 12px;
+  background: rgba(255, 100, 100, 0.15);
+  border: 1px solid rgba(255, 100, 100, 0.3);
+  border-radius: 6px;
+  color: var(--text-error);
+  font-size: 0.85em;
+  flex: 1;
+}
+
+.lachesis-config-editor-cancel-btn {
+  padding: 10px 20px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-normal);
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+
+.lachesis-config-editor-cancel-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.lachesis-config-editor-save-btn {
+  padding: 10px 24px;
+  background: var(--interactive-accent);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+
+.lachesis-config-editor-save-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}

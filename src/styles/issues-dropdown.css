@@ -1,0 +1,149 @@
+/* Lachesis Plugin - Issues Dropdown */
+
+/* Issues Dropdown */
+.lachesis-issues-dropdown {
+  position: fixed;
+  z-index: 1000;
+  min-width: 320px;
+  max-width: 400px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.lachesis-issues-header {
+  padding: 12px 16px;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.lachesis-issues-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.lachesis-issue-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  transition: background 0.15s ease;
+}
+
+.lachesis-issue-item:last-child {
+  border-bottom: none;
+}
+
+.lachesis-issue-item:hover {
+  background: var(--background-secondary);
+}
+
+.lachesis-issue-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9em;
+  flex-shrink: 0;
+}
+
+.lachesis-issue-missing .lachesis-issue-icon {
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
+
+.lachesis-issue-template_only .lachesis-issue-icon {
+  background: var(--color-orange);
+  color: var(--text-on-accent);
+}
+
+.lachesis-issue-thin .lachesis-issue-icon {
+  background: var(--color-yellow);
+  color: var(--background-primary);
+}
+
+.lachesis-issue-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.lachesis-issue-file {
+  font-weight: 600;
+  font-size: 0.9em;
+  color: var(--text-normal);
+}
+
+.lachesis-issue-message {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.lachesis-issue-fix-btn {
+  padding: 6px 12px;
+  font-size: 0.8em;
+  font-weight: 500;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.lachesis-issue-fix-btn:hover {
+  filter: brightness(1.1);
+}
+
+.lachesis-issue-fix-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lachesis-issue-details {
+  font-size: 0.75em;
+  color: var(--text-faint);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.lachesis-issue-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.lachesis-issue-fix-btn-secondary {
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.lachesis-issue-fix-btn-secondary:hover {
+  background: var(--background-modifier-border-hover);
+  color: var(--text-normal);
+}

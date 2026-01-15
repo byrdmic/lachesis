@@ -1,0 +1,138 @@
+/* Lachesis Plugin - Diff Viewer Modal */
+
+/* Diff Viewer Modal Specifics */
+.lachesis-diff-modal-content {
+  flex: 1;
+  overflow: auto;
+  margin: 12px 24px;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+.lachesis-diff-modal-pre {
+  margin: 0;
+  padding: 16px;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+  line-height: 1.5;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  color: var(--text-normal);
+  overflow-x: auto;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+.lachesis-diff-modal-pre *,
+.lachesis-diff-line {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+.lachesis-diff-modal-footer {
+  display: flex;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  z-index: 2;
+}
+
+.lachesis-diff-modal-back-btn {
+  padding: 8px 20px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.lachesis-diff-modal-back-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.lachesis-diff-modal-accept-btn {
+  padding: 8px 20px;
+  background: var(--interactive-success);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.lachesis-diff-modal-accept-btn:hover {
+  filter: brightness(1.1);
+}
+
+.lachesis-diff-modal-reject-btn {
+  padding: 8px 20px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.lachesis-diff-modal-reject-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.lachesis-diff-modal-accept-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Per-Hunk Selection */
+.lachesis-diff-hunk-container {
+  margin-bottom: 16px;
+}
+
+.lachesis-diff-hunk-container:last-child {
+  margin-bottom: 0;
+}
+
+.lachesis-diff-hunk-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--background-secondary-alt);
+  border: 1px solid var(--background-modifier-border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+}
+
+.lachesis-diff-hunk-checkbox-row + .lachesis-diff-modal-pre {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.lachesis-diff-hunk-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--interactive-accent);
+}
+
+.lachesis-diff-hunk-checkbox-row .lachesis-diff-hunk-header {
+  background: transparent;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+}
+
+.lachesis-diff-hunk-deselected {
+  opacity: 0.4;
+}
+
+.lachesis-diff-hunk-deselected .lachesis-diff-hunk-checkbox-row {
+  background: var(--background-secondary);
+}

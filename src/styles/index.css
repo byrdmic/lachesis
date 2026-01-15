@@ -1,0 +1,42 @@
+/* Lachesis Plugin - Main Stylesheet Entry Point */
+/* This file imports all component-specific CSS files */
+
+/* Core */
+@import './variables.css';
+@import './modal-base.css';
+@import './scrollbar.css';
+@import './utilities.css';
+
+/* Layout & Navigation */
+@import './header.css';
+@import './sidebar.css';
+@import './workflow-bar.css';
+
+/* Chat Interface */
+@import './messages.css';
+@import './input-area.css';
+
+/* Diff Components */
+@import './diff-blocks.css';
+@import './diff-viewer-modal.css';
+
+/* Project Components */
+@import './project-picker.css';
+@import './issues-dropdown.css';
+
+/* Workflow Modals */
+@import './potential-tasks-modal.css';
+@import './harvest-tasks-modal.css';
+@import './ideas-groom-modal.css';
+@import './sync-commits-modal.css';
+@import './archive-completed-modal.css';
+
+/* Other Modals */
+@import './git-log-modal.css';
+@import './init-summary-modal.css';
+@import './batch-diff-modal.css';
+@import './config-editor-modal.css';
+
+/* UI Enhancements */
+@import './workflow-tooltips.css';
+@import './setup-phase.css';

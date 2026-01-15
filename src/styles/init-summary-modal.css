@@ -1,0 +1,110 @@
+/* Lachesis Plugin - Init from Summary Modal */
+
+/* Modal root sizing */
+.modal.lachesis-init-summary-modal-root {
+  --modal-width: 700px;
+  --modal-max-width: 90vw;
+  --modal-height: 80vh;
+  --modal-max-height: 90vh;
+}
+
+.lachesis-init-summary-modal {
+  display: flex;
+  flex-direction: column;
+  height: calc(var(--modal-height) - 40px);
+  max-height: calc(var(--modal-max-height) - 40px);
+  padding: 24px;
+}
+
+.lachesis-init-summary-modal h2 {
+  margin: 0 0 8px 0;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-normal);
+}
+
+.lachesis-init-summary-subtitle {
+  margin: 0 0 20px 0;
+  font-size: 0.9em;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.lachesis-init-summary-textarea-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.lachesis-init-summary-textarea {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  padding: 16px;
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+  line-height: 1.6;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  color: var(--text-normal);
+}
+
+.lachesis-init-summary-textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.lachesis-init-summary-textarea:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.lachesis-init-summary-word-count {
+  margin: 8px 0 0 0;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.lachesis-init-summary-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-init-summary-cancel-btn {
+  padding: 10px 20px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-normal);
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+
+.lachesis-init-summary-cancel-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.lachesis-init-summary-analyze-btn {
+  padding: 10px 24px;
+  background: var(--interactive-accent);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+
+.lachesis-init-summary-analyze-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}

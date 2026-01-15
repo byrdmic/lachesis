@@ -1,0 +1,13 @@
+/* Lachesis Plugin - Project Picker */
+
+/* Project Picker */
+.lachesis-project-item {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-project-item:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 15px rgba(var(--interactive-accent-rgb), 0.1);
+}

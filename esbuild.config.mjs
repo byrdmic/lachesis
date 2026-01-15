@@ -18,7 +18,14 @@ mkdirSync('dist', { recursive: true })
 
 // Copy static assets to dist
 copyFileSync('manifest.json', 'dist/manifest.json')
-copyFileSync('styles.css', 'dist/styles.css')
+
+// Bundle CSS from modular source files
+await esbuild.build({
+  entryPoints: ['src/styles/index.css'],
+  bundle: true,
+  outfile: 'dist/styles.css',
+  logLevel: 'info',
+})
 
 const context = await esbuild.context({
   banner: {

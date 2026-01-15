@@ -1,0 +1,21 @@
+/* Lachesis Plugin - CSS Variables */
+
+:root {
+  /* Inherit from Obsidian's theme variables */
+  --lachesis-bg-dark: var(--background-primary);
+  --lachesis-bg-surface: var(--background-secondary);
+  --lachesis-accent-primary: var(--interactive-accent);
+  --lachesis-accent-secondary: var(--interactive-accent-hover);
+
+  /* Create gradients/glows based on the theme accent */
+  --lachesis-accent-gradient: linear-gradient(135deg, var(--lachesis-accent-secondary), var(--lachesis-accent-primary));
+  --lachesis-text-glow: 0 0 10px var(--interactive-accent);
+  --lachesis-border-glow: 0 0 8px var(--interactive-accent);
+
+  /* Glass effect using theme background with opacity */
+  --lachesis-glass-bg: var(--background-secondary);
+  --lachesis-glass-border: 1px solid var(--background-modifier-border);
+
+  /* Use Obsidian's standard font */
+  --lachesis-font-ui: var(--font-ui);
+}

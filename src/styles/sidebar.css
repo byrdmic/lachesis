@@ -1,0 +1,112 @@
+/* Lachesis Plugin - Sidebar & Two-Column Layout */
+
+/* Two-Column Layout with Sidebar */
+.lachesis-modal-layout {
+  display: flex;
+  height: 100%;
+}
+
+.lachesis-sidebar {
+  width: 220px;
+  min-width: 220px;
+  border-right: 1px solid var(--background-modifier-border);
+  display: flex;
+  flex-direction: column;
+  background: rgba(var(--background-primary-rgb), 0.5);
+  backdrop-filter: blur(5px);
+}
+
+.lachesis-sidebar-header {
+  padding: 16px;
+  font-weight: 600;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-new-chat-button {
+  margin: 12px;
+  padding: 8px 16px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9em;
+  transition: all 0.2s ease;
+}
+
+.lachesis-new-chat-button:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.lachesis-chat-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.lachesis-chat-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.lachesis-chat-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lachesis-chat-list::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 2px;
+}
+
+.lachesis-chat-item {
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  transition: background 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lachesis-chat-item:hover {
+  background: var(--background-modifier-hover);
+}
+
+.lachesis-chat-item.active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.lachesis-chat-date {
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+.lachesis-chat-preview {
+  font-size: 0.75em;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lachesis-chat-empty {
+  padding: 20px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+.lachesis-main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* Prevents flex overflow */
+}

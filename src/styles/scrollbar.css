@@ -1,0 +1,24 @@
+/* Lachesis Plugin - Scrollbar Styles */
+
+/* Scrollbar styling */
+.lachesis-messages::-webkit-scrollbar,
+.lachesis-diff-modal-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.lachesis-messages::-webkit-scrollbar-track,
+.lachesis-diff-modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lachesis-messages::-webkit-scrollbar-thumb,
+.lachesis-diff-modal-content::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 3px;
+}
+
+.lachesis-messages::-webkit-scrollbar-thumb:hover,
+.lachesis-diff-modal-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
