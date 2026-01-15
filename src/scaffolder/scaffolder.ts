@@ -209,15 +209,21 @@ function processTemplate(
 
       // Add initial VS1 slice for minimal projects
       content = content.replace(
-        /### M1 Slices\n- \*\*VS1 — <Slice Name>\*\*:.*\n- \*\*VS2 — <Slice Name>\*\*:.*/,
-        `### M1 Slices
-- **VS1 — Project Definition**: Complete Overview.md, Roadmap.md, and Tasks.md with enough content for the AI to assist.`,
+        /#### Slices\n\n##### VS1 — <Slice Name>\n[\s\S]*?##### VS2 — <Slice Name>\n[\s\S]*?(?=\n---)/,
+        `#### Slices
+
+##### VS1 — Project Definition
+Complete Overview.md, Roadmap.md, and Tasks.md with enough content for the AI to assist.
+`,
       )
 
       content = content.replace(
-        /### M2 Slices\n- \*\*VS3 — <Slice Name>\*\*:.*/,
-        `### M2 Slices
-- **VS2 — Initial Setup**: Set up the development environment and basic project structure.`,
+        /#### Slices\n\n##### VS3 — <Slice Name>\n[\s\S]*?(?=\n---)/,
+        `#### Slices
+
+##### VS2 — Initial Setup
+Set up the development environment and basic project structure.
+`,
       )
     } else {
       content = content.replace(/M1 — <Milestone title>/g, 'M1 — Initial Setup')

@@ -189,7 +189,7 @@ Each slice should include:
 
 Good slice example:
 \`\`\`
-**VS1 — Basic Modal Opens**
+##### VS1 — Basic Modal Opens
 - **Purpose:** Users need a way to initiate the project creation flow from within Obsidian
 - **Delivers:** Clicking the ribbon icon opens a modal dialog ready for input
 - **Solves:** Without this, users have no entry point to start creating a project
@@ -222,17 +222,17 @@ Slices are nested UNDER the milestone they belong to (not in a separate section)
 
 #### Slices
 
-**VS1 — Basic Modal Opens**
+##### VS1 — Basic Modal Opens
 - **Purpose:** Users need a way to initiate the project creation flow from within Obsidian
 - **Delivers:** Clicking the ribbon icon opens a modal dialog ready for input
 - **Solves:** Without this, users have no entry point to start creating a project
 
-**VS2 — Interview Flow**
+##### VS2 — Interview Flow
 - **Purpose:** Users need guidance to articulate their project idea clearly
 - **Delivers:** Modal presents questions one at a time and captures responses
 - **Solves:** Blank page paralysis — users don't know what info to provide without prompts
 
-**VS3 — File Scaffolding**
+##### VS3 — File Scaffolding
 - **Purpose:** Users need their captured ideas persisted in a usable format
 - **Delivers:** Project folder with Overview, Roadmap, Tasks, Log, Ideas, Archive files
 - **Solves:** Manual file creation is tedious and users forget what structure to use
@@ -1022,12 +1022,12 @@ Example structure:
 +
 +#### Slices
 +
-+**VS1 — [Slice Name]**
++##### VS1 — [Slice Name]
 +- **Purpose:** [Why this slice exists — the user need or gap it addresses]
 +- **Delivers:** [What capability or feature the user gets when this is done]
 +- **Solves:** [What problem or friction this removes]
 +
-+**VS2 — [Slice Name]**
++##### VS2 — [Slice Name]
 +- **Purpose:** [Why this slice exists]
 +- **Delivers:** [What it provides]
 +- **Solves:** [What problem it addresses]

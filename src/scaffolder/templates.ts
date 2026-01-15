@@ -160,12 +160,12 @@ tags: ["project/roadmap"]
 
 #### Slices
 
-**VS1 — <Slice Name>**
+##### VS1 — <Slice Name>
 - **Purpose:** <Why this slice exists — the user need or gap it addresses>
 - **Delivers:** <What capability or feature the user gets when this is done>
 - **Solves:** <What problem or friction this removes>
 
-**VS2 — <Slice Name>**
+##### VS2 — <Slice Name>
 - **Purpose:** <Why this slice exists>
 - **Delivers:** <What it provides>
 - **Solves:** <What problem it addresses>
@@ -185,7 +185,7 @@ tags: ["project/roadmap"]
 
 #### Slices
 
-**VS3 — <Slice Name>**
+##### VS3 — <Slice Name>
 - **Purpose:** <Why this slice exists>
 - **Delivers:** <What it provides>
 - **Solves:** <What problem it addresses>

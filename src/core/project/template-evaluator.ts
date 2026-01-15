@@ -603,11 +603,17 @@ Each slice is a demo-able, end-to-end deliverable (typically 1-5 days of work).
 Tasks in [[Tasks]] link back to slices here using \`[[Roadmap#VS1 — Slice Name]]\`.
 
 ### M1 Slices
-- **VS1 — <Slice Name>**: <1-2 sentence description of what it delivers>
-- **VS2 — <Slice Name>**: <1-2 sentence description>
+
+#### VS1 — <Slice Name>
+<1-2 sentence description of what it delivers>
+
+#### VS2 — <Slice Name>
+<1-2 sentence description>
 
 ### M2 Slices
-- **VS3 — <Slice Name>**: <1-2 sentence description>`)
+
+#### VS3 — <Slice Name>
+<1-2 sentence description>`)
       } else {
         fixedSections.push(`\n${heading}\n${placeholder}`)
       }

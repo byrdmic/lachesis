@@ -412,7 +412,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Each milestone needs: why it matters, outcome, and observable Definition of Done',
       'After defining each milestone, define 2-5 vertical slices for it',
       'Vertical slices are demo-able, end-to-end capabilities (typically 1-5 days of work)',
-      'Format slices as: **VS1 — Slice Name**: 1-2 sentence description',
+      'Format slices as headings: ##### VS1 — Slice Name (enables [[Roadmap#VS1 — Slice Name]] links)',
       'Propose small, incremental diffs after each milestone is discussed',
       'Set Current Focus to the active milestone at the end',
       'Work through ONE milestone at a time - do not dump entire roadmap at once',
