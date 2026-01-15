@@ -12,7 +12,7 @@
 
 /** Action labels for display */
 export const PROMOTE_ACTION_LABELS: Record<PromoteAction, string> = {
-  promote: 'Promote to Now',
+  promote: 'Promote to Current',
   skip: 'Skip',
 }
 
@@ -39,7 +39,7 @@ export type PromoteStatus = 'success' | 'already_active' | 'no_tasks'
 /**
  * Source section for the task being promoted
  */
-export type TaskSourceSection = 'next' | 'later'
+export type TaskSourceSection = 'later'
 
 /**
  * A candidate task that was considered for promotion
@@ -69,7 +69,7 @@ export interface PromoteNextAIResponse {
   selectedTask?: SelectedTask
   reasoning?: string
   candidates?: CandidateTask[]
-  currentNowTask?: string // For already_active status
+  existingCurrentTask?: string // For already_active status
   message?: string // For error/skip cases
 }
 
@@ -159,31 +159,28 @@ export function parsePromoteNextResponse(aiResponse: string): PromoteNextAIRespo
 
 /**
  * Apply task promotion to Tasks.md content.
- * Moves the selected task from Next/Later to Now section.
+ * Moves the selected task from Later to Current section.
  */
 export function applyTaskPromotion(tasksContent: string, selectedTask: SelectedTask): string {
   const lines = tasksContent.split('\n')
 
-  // Section detection patterns
-  const nowPattern = /^##\s*Now/i
-  const nextPattern = /^##\s*Next/i
-  const laterPattern = /^##\s*Later/i
+  // Section detection patterns - support both new and legacy section names
+  // Current: "## Current" or legacy "## Now" or "## Next" or "## Next 1-3 Actions" or "## Active Tasks"
+  const currentPattern = /^##\s*(?:Current|Now|Next(?:\s+1[–-]3\s+Actions)?|Active\s+Tasks)$/i
+  // Later: "## Later" or legacy "## Future Tasks" or "## Potential Future Tasks"
+  const laterPattern = /^##\s*(?:Later|Future\s+Tasks|Potential\s+Future\s+Tasks)/i
   const blockedPattern = /^##\s*Blocked/i
 
-  // Find the task in the source section
+  // Find the task in the source section (Later)
   let taskLineIndex = -1
-  let inSourceSection = false
-  const targetSection = selectedTask.sourceSection
 
   // First, find which section headers exist and where they are
   const sectionBoundaries: Array<{ type: string; index: number }> = []
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    if (nowPattern.test(line)) {
-      sectionBoundaries.push({ type: 'now', index: i })
-    } else if (nextPattern.test(line)) {
-      sectionBoundaries.push({ type: 'next', index: i })
+    if (currentPattern.test(line)) {
+      sectionBoundaries.push({ type: 'current', index: i })
     } else if (laterPattern.test(line)) {
       sectionBoundaries.push({ type: 'later', index: i })
     } else if (blockedPattern.test(line)) {
@@ -193,12 +190,12 @@ export function applyTaskPromotion(tasksContent: string, selectedTask: SelectedT
     }
   }
 
-  // Find the source section range
+  // Find the Later section range (source is always Later now)
   let sourceSectionStart = -1
   let sourceSectionEnd = lines.length
 
   for (let i = 0; i < sectionBoundaries.length; i++) {
-    if (sectionBoundaries[i].type === targetSection) {
+    if (sectionBoundaries[i].type === 'later') {
       sourceSectionStart = sectionBoundaries[i].index
       // Find the next section
       if (i + 1 < sectionBoundaries.length) {
@@ -209,7 +206,7 @@ export function applyTaskPromotion(tasksContent: string, selectedTask: SelectedT
   }
 
   if (sourceSectionStart === -1) {
-    console.warn(`Could not find ${targetSection} section`)
+    console.warn('Could not find Later section')
     return tasksContent
   }
 
@@ -250,29 +247,29 @@ export function applyTaskPromotion(tasksContent: string, selectedTask: SelectedT
   // Remove task and sub-items from source
   lines.splice(taskLineIndex, 1 + subItems.length)
 
-  // Re-find the Now section (indices may have shifted)
-  let nowIndex = -1
+  // Re-find the Current section (indices may have shifted)
+  let currentIndex = -1
   for (let i = 0; i < lines.length; i++) {
-    if (nowPattern.test(lines[i])) {
-      nowIndex = i
+    if (currentPattern.test(lines[i])) {
+      currentIndex = i
       break
     }
   }
 
-  if (nowIndex === -1) {
-    console.warn('Could not find Now section')
+  if (currentIndex === -1) {
+    console.warn('Could not find Current section')
     return lines.join('\n')
   }
 
-  // Find where to insert in Now section (after heading, after any blank lines)
-  let insertIndex = nowIndex + 1
+  // Find where to insert in Current section (after heading, after any blank lines)
+  let insertIndex = currentIndex + 1
 
   // Skip blank lines after heading
   while (insertIndex < lines.length && lines[insertIndex].trim() === '') {
     insertIndex++
   }
 
-  // Insert the task at the beginning of Now section (after blanks)
+  // Insert the task at the beginning of Current section (after blanks)
   const insertLines = [taskLine, ...subItems]
   lines.splice(insertIndex, 0, ...insertLines)
 
@@ -284,21 +281,24 @@ export function applyTaskPromotion(tasksContent: string, selectedTask: SelectedT
 // ============================================================================
 
 /**
- * Check if Now section has an active (unchecked) task
+ * Check if Current section has tasks (unchecked)
+ * Note: With the Current section model, this is less critical since
+ * Current can have multiple tasks, but it's useful to know if there's work queued.
  */
-export function hasActiveNowTask(tasksContent: string): boolean {
+export function hasTasksInCurrent(tasksContent: string): boolean {
   const lines = tasksContent.split('\n')
-  const nowPattern = /^##\s*Now/i
-  let inNowSection = false
+  // Support both new and legacy section names
+  const currentPattern = /^##\s*(?:Current|Now|Next(?:\s+1[–-]3\s+Actions)?|Active\s+Tasks)$/i
+  let inCurrentSection = false
 
   for (const line of lines) {
-    if (nowPattern.test(line)) {
-      inNowSection = true
+    if (currentPattern.test(line)) {
+      inCurrentSection = true
       continue
     }
 
-    if (inNowSection) {
-      // Check if we've left Now section
+    if (inCurrentSection) {
+      // Check if we've left Current section
       if (/^##\s+/.test(line)) {
         break
       }
@@ -314,50 +314,36 @@ export function hasActiveNowTask(tasksContent: string): boolean {
 }
 
 /**
- * Extract unchecked tasks from a specific section
+ * Extract unchecked tasks from the Later section
+ * (Source for promotion to Current)
  */
-export function extractTasksFromSection(
+export function extractTasksFromLater(
   tasksContent: string,
-  section: TaskSourceSection,
 ): Array<{ text: string; sliceLink: string | null }> {
   const lines = tasksContent.split('\n')
   const tasks: Array<{ text: string; sliceLink: string | null }> = []
 
-  // Section patterns
-  const nowPattern = /^##\s*Now/i
-  const nextPattern = /^##\s*Next/i
-  const laterPattern = /^##\s*Later/i
-  const blockedPattern = /^##\s*Blocked/i
+  // Section patterns - support both new and legacy
+  const laterPattern = /^##\s*(?:Later|Future\s+Tasks|Potential\s+Future\s+Tasks)/i
 
-  let inTargetSection = false
+  let inLaterSection = false
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
 
-    // Check section boundaries
-    if (section === 'next' && nextPattern.test(line)) {
-      inTargetSection = true
-      continue
-    }
-    if (section === 'later' && laterPattern.test(line)) {
-      inTargetSection = true
+    // Check if we're entering Later section
+    if (laterPattern.test(line)) {
+      inLaterSection = true
       continue
     }
 
-    // Check if we've left the target section
-    if (
-      inTargetSection &&
-      (nowPattern.test(line) ||
-        (section === 'next' && laterPattern.test(line)) ||
-        (section === 'later' && nextPattern.test(line)) ||
-        blockedPattern.test(line) ||
-        /^##\s+/.test(line))
-    ) {
+    // Check if we've left the Later section (hit another ## heading)
+    if (inLaterSection && /^##\s+/.test(line)) {
       break
     }
 
     // Check for unchecked task
-    if (inTargetSection) {
+    if (inLaterSection) {
       const taskMatch = line.match(UNCHECKED_TASK_PATTERN)
       if (taskMatch) {
         const text = taskMatch[1].trim()
@@ -386,12 +372,6 @@ export function getDefaultPromoteAction(): PromoteAction {
  * Get a human-readable label for a source section
  */
 export function getSourceSectionLabel(section: TaskSourceSection): string {
-  switch (section) {
-    case 'next':
-      return 'Next'
-    case 'later':
-      return 'Later'
-    default:
-      return section
-  }
+  // Source is always Later now
+  return 'Later'
 }

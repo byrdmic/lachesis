@@ -244,22 +244,13 @@ Set up the development environment and basic project structure.
     const isMinimal = hasMinimalExtractedData(data)
 
     if (isMinimal) {
-      // Update Now section with actual task
+      // Update Current section with actual tasks
       content = content.replace(
-        /## Now\n- \[ \] <The ONE task.*\n\n---/,
-        `## Now
+        /## Current\n- \[ \] <Task you're actively working on>.*\n- \[ \] <Task ready to start>.*\n- \[ \] <Standalone task>\n\n---/,
+        `## Current
 - [ ] Write elevator pitch in Overview.md [[Roadmap#VS1 — Project Definition]]
-
----`,
-      )
-
-      // Update Next section
-      content = content.replace(
-        /## Next\n- \[ \] <Task ready to start>.*\n- \[ \] <Task ready to start>.*\n- \[ \] <Standalone task>\n\n---/,
-        `## Next
 - [ ] Define the problem being solved [[Roadmap#VS1 — Project Definition]]
 - [ ] Identify target users [[Roadmap#VS1 — Project Definition]]
-- [ ] Complete Overview.md sections [[Roadmap#VS1 — Project Definition]]
 
 ---`,
       )

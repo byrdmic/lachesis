@@ -34,8 +34,7 @@ export {
 export const MOVED_EMOJIS: Record<TaskDestination, string> = {
   'discard': '🗑️',
   'later': '📋',
-  'next': '✅',
-  'now': '🎯',
+  'current': '✅',
 }
 
 // ============================================================================
@@ -155,22 +154,13 @@ export function detectMovedIdeas(
   // Build a map of section ranges
   const sectionRanges: Array<{ start: number; end: number; destination: TaskDestination }> = []
 
-  // Now section
-  if (structure.nowLineNumber !== -1) {
-    let end = structure.nowLineNumber + 1
+  // Current section
+  if (structure.currentLineNumber !== -1) {
+    let end = structure.currentLineNumber + 1
     while (end < lines.length && !lines[end].startsWith('## ') && !lines[end].startsWith('---')) {
       end++
     }
-    sectionRanges.push({ start: structure.nowLineNumber, end, destination: 'now' })
-  }
-
-  // Next section
-  if (structure.nextLineNumber !== -1) {
-    let end = structure.nextLineNumber + 1
-    while (end < lines.length && !lines[end].startsWith('## ') && !lines[end].startsWith('---')) {
-      end++
-    }
-    sectionRanges.push({ start: structure.nextLineNumber, end, destination: 'next' })
+    sectionRanges.push({ start: structure.currentLineNumber, end, destination: 'current' })
   }
 
   // Later section
@@ -220,8 +210,7 @@ export function applyIdeasGroomSelections(
 
   // Group selections by destination
   const laterToAdd: Array<{ text: string; task: GroomedIdeaTask; sliceLink: string | null }> = []
-  const nextToAdd: Array<{ text: string; task: GroomedIdeaTask; sliceLink: string | null }> = []
-  const nowToAdd: Array<{ text: string; task: GroomedIdeaTask; sliceLink: string | null }> = []
+  const currentToAdd: Array<{ text: string; task: GroomedIdeaTask; sliceLink: string | null }> = []
 
   // Build a map of task IDs to tasks
   const taskMap = new Map(tasks.map((t) => [t.id, t]))
@@ -240,12 +229,8 @@ export function applyIdeasGroomSelections(
         laterToAdd.push({ text: finalText, task, sliceLink })
         break
 
-      case 'next':
-        nextToAdd.push({ text: finalText, task, sliceLink })
-        break
-
-      case 'now':
-        nowToAdd.push({ text: finalText, task, sliceLink })
+      case 'current':
+        currentToAdd.push({ text: finalText, task, sliceLink })
         break
     }
   }
@@ -282,14 +267,14 @@ export function applyIdeasGroomSelections(
     }
   }
 
-  // 2. Add to Next section
-  if (nextToAdd.length > 0) {
-    let insertLine = structure.nextLineNumber
+  // 2. Add to Current section
+  if (currentToAdd.length > 0) {
+    let insertLine = structure.currentLineNumber
     if (insertLine === -1) {
       // Create section (should not happen if Tasks.md is properly structured)
       insertLine = lines.length
-      const newLines = ['', '## Next']
-      for (const item of nextToAdd) {
+      const newLines = ['', '## Current']
+      for (const item of currentToAdd) {
         const sourceComment = ` <!-- from Ideas.md: ${cleanHeading(item.task.ideaHeading)} -->`
         const linkPart = item.sliceLink ? ` ${item.sliceLink}` : ''
         newLines.push(`- [ ] ${item.text}${linkPart}${sourceComment}`)
@@ -302,30 +287,11 @@ export function applyIdeasGroomSelections(
         endLine++
       }
       const newLines: string[] = []
-      for (const item of nextToAdd) {
+      for (const item of currentToAdd) {
         const sourceComment = ` <!-- from Ideas.md: ${cleanHeading(item.task.ideaHeading)} -->`
         const linkPart = item.sliceLink ? ` ${item.sliceLink}` : ''
         newLines.push(`- [ ] ${item.text}${linkPart}${sourceComment}`)
       }
-      insertions.push({ lineNumber: endLine, content: newLines })
-    }
-  }
-
-  // 3. Add to Now section
-  if (nowToAdd.length > 0 && structure.nowLineNumber !== -1) {
-    // Find end of Now section
-    let endLine = structure.nowLineNumber + 1
-    while (endLine < lines.length && !lines[endLine].startsWith('## ') && !lines[endLine].startsWith('---')) {
-      endLine++
-    }
-
-    const newLines: string[] = []
-    for (const item of nowToAdd) {
-      const linkPart = item.sliceLink ? ` ${item.sliceLink}` : ''
-      newLines.push(`- [ ] ${item.text}${linkPart}`)
-    }
-
-    if (newLines.length > 0) {
       insertions.push({ lineNumber: endLine, content: newLines })
     }
   }

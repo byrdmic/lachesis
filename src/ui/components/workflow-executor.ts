@@ -65,7 +65,7 @@ import {
   parsePromoteNextResponse,
   containsPromoteNextResponse,
   applyTaskPromotion,
-  hasActiveNowTask,
+  hasTasksInCurrent,
   type SelectedTask,
   type CandidateTask,
   type PromoteSelection,
@@ -130,7 +130,7 @@ export class WorkflowExecutor {
   private pendingPromoteReasoning: string | null = null
   private pendingPromoteCandidates: CandidateTask[] = []
   private pendingPromoteStatus: PromoteStatus = 'no_tasks'
-  private pendingCurrentNowTask: string | null = null
+  private pendingExistingCurrentTask: string | null = null
   private pendingPromoteMessage: string | null = null
   private awaitingPromoteKeyword: boolean = false
 
@@ -488,15 +488,17 @@ export class WorkflowExecutor {
       const archiveWorkflow = getWorkflowDefinition('archive-completed')
       this.callbacks.onTriggerAIWorkflow(archiveWorkflow, 'Archive completed tasks')
     } else if (step.workflowName === 'promote-next-task') {
-      // Check if Now section already has a task before calling AI
+      // Check if Current section already has tasks - still run but with different messaging
       const tasksPath = `${this.projectPath}/Tasks.md`
       const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
 
       if (tasksFile && tasksFile instanceof TFile) {
         const tasksContent = await this.app.vault.read(tasksFile)
-        if (hasActiveNowTask(tasksContent)) {
+        if (hasTasksInCurrent(tasksContent)) {
+          // Current has tasks, but we can still offer to promote more from Later
+          // For now, skip the step if Current is not empty
           step.status = 'skipped'
-          step.skipReason = 'Now section already has an active task'
+          step.skipReason = 'Current section already has tasks'
           this.callbacks.onAddMessage('assistant', `*Skipping task promotion: ${step.skipReason}*`)
           this.advanceCombinedWorkflow()
           return
@@ -505,7 +507,7 @@ export class WorkflowExecutor {
 
       // Run promote-next-task workflow
       const promoteWorkflow = getWorkflowDefinition('promote-next-task')
-      this.callbacks.onTriggerAIWorkflow(promoteWorkflow, 'Select the best task to promote to Now')
+      this.callbacks.onTriggerAIWorkflow(promoteWorkflow, 'Select the best task to promote to Current')
     }
   }
 
@@ -1406,13 +1408,13 @@ export class WorkflowExecutor {
       this.pendingSelectedTask = parsed.selectedTask ?? null
       this.pendingPromoteReasoning = parsed.reasoning ?? null
       this.pendingPromoteCandidates = parsed.candidates ?? []
-      this.pendingCurrentNowTask = parsed.currentNowTask ?? null
+      this.pendingExistingCurrentTask = parsed.existingCurrentTask ?? null
       this.pendingPromoteMessage = parsed.message ?? null
 
       if (parsed.status === 'already_active') {
         this.callbacks.onAddMessage(
           'assistant',
-          'Now section already has an active task. No promotion needed.'
+          'Current section already has tasks. No promotion needed.'
         )
         this.advanceCombinedWorkflow()
         return
@@ -1421,7 +1423,7 @@ export class WorkflowExecutor {
       if (parsed.status === 'no_tasks') {
         this.callbacks.onAddMessage(
           'assistant',
-          parsed.message || 'No tasks available to promote. Both Next and Later sections are empty.'
+          parsed.message || 'No tasks available to promote. Later section is empty.'
         )
         this.advanceCombinedWorkflow()
         return
@@ -1445,7 +1447,7 @@ export class WorkflowExecutor {
     }
 
     const task = this.pendingSelectedTask
-    const sourceLabel = task.sourceSection === 'next' ? 'Next' : 'Later'
+    const sourceLabel = 'Later' // Tasks are now only promoted from Later section
 
     // Build the message
     let message = `**Task to Promote**\n\n`
@@ -1466,8 +1468,7 @@ export class WorkflowExecutor {
     if (this.pendingPromoteCandidates.length > 0) {
       message += `<details>\n<summary>Other candidates considered (${this.pendingPromoteCandidates.length})</summary>\n\n`
       for (const candidate of this.pendingPromoteCandidates) {
-        const candSource = candidate.sourceSection === 'next' ? 'Next' : 'Later'
-        message += `- ${candidate.text} *(${candSource}, score: ${candidate.score}/5)*\n`
+        message += `- ${candidate.text} *(Later, score: ${candidate.score}/5)*\n`
         if (candidate.note) {
           message += `  - ${candidate.note}\n`
         }
@@ -1476,7 +1477,7 @@ export class WorkflowExecutor {
     }
 
     message += `---\n\n`
-    message += `Say **${WorkflowExecutor.PROMOTE_KEYWORD}** to move this task to Now, or **SKIP** to continue without promoting.`
+    message += `Say **${WorkflowExecutor.PROMOTE_KEYWORD}** to move this task to Current, or **SKIP** to continue without promoting.`
 
     this.callbacks.onAddMessage('assistant', message)
     this.awaitingPromoteKeyword = true
@@ -1543,7 +1544,7 @@ export class WorkflowExecutor {
       this.pendingSelectedTask,
       this.pendingPromoteReasoning,
       this.pendingPromoteCandidates,
-      this.pendingCurrentNowTask,
+      this.pendingExistingCurrentTask,
       this.pendingPromoteMessage,
       this.projectPath,
       (selection, confirmed) => this.handlePromoteNextAction(selection, confirmed)
@@ -1563,7 +1564,7 @@ export class WorkflowExecutor {
       this.pendingSelectedTask = parsed.selectedTask ?? null
       this.pendingPromoteReasoning = parsed.reasoning ?? null
       this.pendingPromoteCandidates = parsed.candidates ?? []
-      this.pendingCurrentNowTask = parsed.currentNowTask ?? null
+      this.pendingExistingCurrentTask = parsed.existingCurrentTask ?? null
       this.pendingPromoteMessage = parsed.message ?? null
 
       // If it was a success status, check if the task has already been promoted
@@ -1573,21 +1574,21 @@ export class WorkflowExecutor {
 
         if (tasksFile && tasksFile instanceof TFile) {
           const tasksContent = await this.app.vault.read(tasksFile)
-          // Check if the task is now in the Now section (already promoted)
+          // Check if the task is already in the Current section (already promoted)
           const taskPattern = parsed.selectedTask.text.slice(0, 30).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          const nowPattern = /^##\s*Now/im
-          const nextSectionPattern = /^##\s*(?:Next|Later|Blocked)/im
+          const currentPattern = /^##\s*(?:Current|Now)/im
+          const nextSectionPattern = /^##\s*(?:Later|Blocked)/im
 
-          const nowMatch = tasksContent.match(nowPattern)
-          if (nowMatch) {
-            const nowStart = nowMatch.index!
-            const nextMatch = tasksContent.slice(nowStart).match(nextSectionPattern)
-            const nowEnd = nextMatch ? nowStart + nextMatch.index! : tasksContent.length
-            const nowSection = tasksContent.slice(nowStart, nowEnd)
+          const currentMatch = tasksContent.match(currentPattern)
+          if (currentMatch) {
+            const currentStart = currentMatch.index!
+            const nextMatch = tasksContent.slice(currentStart).match(nextSectionPattern)
+            const currentEnd = nextMatch ? currentStart + nextMatch.index! : tasksContent.length
+            const currentSection = tasksContent.slice(currentStart, currentEnd)
 
-            if (new RegExp(taskPattern).test(nowSection)) {
-              // Task is already in Now - mark as already promoted
-              this.pendingPromoteMessage = 'Task has already been promoted to Now section.'
+            if (new RegExp(taskPattern).test(currentSection)) {
+              // Task is already in Current - mark as already promoted
+              this.pendingPromoteMessage = 'Task has already been promoted to Current section.'
             }
           }
         }
@@ -1600,7 +1601,7 @@ export class WorkflowExecutor {
         this.pendingSelectedTask,
         this.pendingPromoteReasoning,
         this.pendingPromoteCandidates,
-        this.pendingCurrentNowTask,
+        this.pendingExistingCurrentTask,
         this.pendingPromoteMessage,
         this.projectPath,
         (selection, confirmed) => this.handlePromoteNextAction(selection, confirmed),
@@ -1641,7 +1642,7 @@ export class WorkflowExecutor {
       tasksContent = applyTaskPromotion(tasksContent, selection.selectedTask)
       await this.app.vault.modify(tasksFile, tasksContent)
 
-      new Notice('Task promoted to Now section')
+      new Notice('Task promoted to Current section')
 
       // Clear pending state and refresh snapshot
       this.clearPromoteNextState()
@@ -1662,7 +1663,7 @@ export class WorkflowExecutor {
     this.pendingPromoteReasoning = null
     this.pendingPromoteCandidates = []
     this.pendingPromoteStatus = 'no_tasks'
-    this.pendingCurrentNowTask = null
+    this.pendingExistingCurrentTask = null
     this.pendingPromoteMessage = null
   }
 

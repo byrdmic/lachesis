@@ -206,7 +206,6 @@ project:
 
 tasks:
   philosophy: "Atomic work items. Tasks can link to vertical slices (from Roadmap) or stand alone."
-  single_focus: "Keep exactly ONE task in Now. When done, pull from Next."
   grooming_policy: "Speculative -> Ideas.md. Done/superseded -> Archive.md."
   linking: "Use [[Roadmap#VS1 — Slice Name]] to link tasks to slices."
 
@@ -215,13 +214,12 @@ ai:
   update_policy:
     allowed_to_change:
       - "split tasks into smaller steps"
-      - "promote items from Next to Now"
+      - "promote items from Later to Current"
       - "clarify verbs and outcomes"
       - "add slice links to tasks"
     avoid:
       - "rewriting milestone outcomes here (those belong in Roadmap)"
       - "creating vertical slices here (those belong in Roadmap)"
-      - "putting more than one task in Now section"
   extraction_rules: |
     If Log.md contains "need to / should / todo / don't forget", create a task here.
     If an item is not actionable, move it to Ideas.md.
@@ -233,14 +231,9 @@ tags: ["project/tasks"]
 
 # Tasks — <Project Name>
 
-## Now
-- [ ] <The ONE task you're actively working on> [[Roadmap#VS1 — <Slice Name>]]
-
----
-
-## Next
+## Current
+- [ ] <Task you're actively working on> [[Roadmap#VS1 — <Slice Name>]]
 - [ ] <Task ready to start> [[Roadmap#VS1 — <Slice Name>]]
-- [ ] <Task ready to start> [[Roadmap#VS2 — <Slice Name>]]
 - [ ] <Standalone task>
 
 ---

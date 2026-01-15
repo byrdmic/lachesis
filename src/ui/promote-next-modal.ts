@@ -109,13 +109,13 @@ export class PromoteNextModal extends Modal {
 
   private renderHeader(container: HTMLElement) {
     const header = container.createDiv({ cls: 'lachesis-promote-next-header' })
-    header.createEl('h2', { text: 'Promote Task to Now' })
+    header.createEl('h2', { text: 'Promote Task to Current' })
 
     let subtitle = ''
     if (this.status === 'success' && this.selectedTask) {
-      subtitle = `AI selected a task from ${getSourceSectionLabel(this.selectedTask.sourceSection)}`
+      subtitle = 'AI selected a task from Later'
     } else if (this.status === 'already_active') {
-      subtitle = 'Now section already has an active task'
+      subtitle = 'Current section already has tasks'
     } else {
       subtitle = 'No tasks available to promote'
     }
@@ -131,7 +131,7 @@ export class PromoteNextModal extends Modal {
 
     const textEl = messageEl.createDiv({ cls: 'lachesis-promote-next-message-text' })
     textEl.createEl('p', {
-      text: 'The Now section already has an active task. Complete or archive it before promoting another task.',
+      text: 'The Current section already has tasks. Complete or archive them before promoting more.',
     })
 
     if (this.currentNowTask) {
@@ -149,7 +149,7 @@ export class PromoteNextModal extends Modal {
 
     const textEl = messageEl.createDiv({ cls: 'lachesis-promote-next-message-text' })
     textEl.createEl('p', {
-      text: this.message || 'Both Next and Later sections are empty. Add tasks to have something to promote.',
+      text: this.message || 'Later section is empty. Add tasks to have something to promote.',
     })
   }
 
@@ -175,7 +175,7 @@ export class PromoteNextModal extends Modal {
 
     // Source badge
     taskRow.createSpan({
-      text: `From ${getSourceSectionLabel(this.selectedTask.sourceSection)}`,
+      text: 'From Later',
       cls: 'lachesis-promote-next-source-badge',
     })
 

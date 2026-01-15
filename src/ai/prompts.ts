@@ -306,26 +306,15 @@ Before starting, identify:
    - "I found these items in Log.md/Ideas.md that might be standalone tasks: [...]"
    - Standalone tasks have no slice link
 
-4. **NOW (SINGLE FOCUS)**
-   - "What is THE most important thing to work on right now?"
-   - This should be THE single current task
-   - When done, pull the next task from the Next queue
+4. **CURRENT TASKS**
+   - "What tasks should be in your current working set?"
+   - These are tasks you're actively working on or could start immediately
    - Example:
      \`\`\`markdown
-     ## Now
+     ## Current
      - [ ] Register ribbon icon in main.ts [[Roadmap#VS1 — Basic Modal Opens]]
+     - [ ] Create InterviewModal class extending Modal [[Roadmap#VS1 — Basic Modal Opens]]
      \`\`\`
-
-5. **ROADMAP SYNCHRONIZATION**
-   - When setting or changing the Now task, check if Roadmap.md needs updating:
-     1. Check which milestone the Now task's slice belongs to
-     2. If that milestone's **Status:** is "planned", update it to "active"
-     3. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
-   - If the Now task switches to a different milestone:
-     - Set the old milestone back to "planned" (unless it was "done")
-     - Update the Milestone Index entry for the old milestone too
-   - This keeps milestone Status in sync with actual work focus
-   - Propose a diff for Roadmap.md along with the Tasks.md changes if needed
 
 ## WHAT MAKES A GOOD TASK
 
@@ -352,15 +341,10 @@ Standalone tasks (no slice link):
 ## EXAMPLE TASKS.MD STRUCTURE
 
 \`\`\`markdown
-## Now
+## Current
 - [ ] Register ribbon icon in main.ts [[Roadmap#VS1 — Basic Modal Opens]]
-
----
-
-## Next
 - [ ] Create InterviewModal class extending Modal [[Roadmap#VS1 — Basic Modal Opens]]
 - [ ] Wire ribbon click to open modal [[Roadmap#VS1 — Basic Modal Opens]]
-- [ ] Define interview questions array [[Roadmap#VS2 — Interview Flow]]
 - [ ] Update README with installation instructions
 
 ---
@@ -373,6 +357,7 @@ Standalone tasks (no slice link):
 ## Later
 - [ ] Add dark mode support [[Roadmap#VS4 — Polish]]
 - [ ] Write user documentation
+- [ ] Define interview questions array [[Roadmap#VS2 — Interview Flow]]
 
 ---
 
@@ -386,10 +371,9 @@ Keep diffs focused and incremental:
 
 **Order of operations:**
 1. First, review Roadmap.md slices and propose tasks for the first/active slice
-2. Add tasks to Next section with slice links
+2. Add tasks to Current section with slice links
 3. Add any standalone tasks from Log.md/Ideas.md
-4. Set Now to the single most important immediate task
-5. Repeat for additional slices as needed
+4. Repeat for additional slices as needed
 `
 
 // ============================================================================
@@ -719,18 +703,7 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 **DESTINATION OPTIONS:**
 - "discard": Not actually actionable or already done
 - "later": Actionable but not urgent, add to Later section
-- "next": Add to Next section (with optional slice link)
-- "now": The single most important task to work on immediately
-
-**ROADMAP SYNCHRONIZATION (when destination is "now"):**
-When a task is assigned destination "now", the Roadmap.md may need updating:
-1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice Name]] → M1)
-2. Update the milestone's **Status:** from "planned" to "active"
-3. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
-4. If changing from a different active milestone:
-   - Set the old milestone back to "planned" (unless it was "done")
-   - Update the Milestone Index entry for the old milestone too
-Include these Roadmap changes in the modal for user review.
+- "current": Add to Current section (with optional slice link)
 
 **FIELD REQUIREMENTS:**
 - text: Required. Concise task description (1-2 sentences max)
@@ -815,18 +788,7 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 **DESTINATION OPTIONS:**
 - "discard": Not actually actionable or already done
 - "later": Actionable but not urgent, add to Later section
-- "next": Add to Next section (with optional slice link)
-- "now": The single most important task to work on immediately
-
-**ROADMAP SYNCHRONIZATION (when destination is "now"):**
-When a task is assigned destination "now", the Roadmap.md may need updating:
-1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice Name]] → M1)
-2. Update the milestone's **Status:** from "planned" to "active"
-3. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
-4. If changing from a different active milestone:
-   - Set the old milestone back to "planned" (unless it was "done")
-   - Update the Milestone Index entry for the old milestone too
-Include these Roadmap changes in the modal for user review.
+- "current": Add to Current section (with optional slice link)
 
 **FIELD REQUIREMENTS:**
 - text: Required. Concise task description (1-2 sentences max)
@@ -899,18 +861,7 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 **DESTINATION OPTIONS:**
 - "discard": Not actually actionable or already done
 - "later": Actionable but not urgent, add to Later section
-- "next": Add to Next section (with optional slice link)
-- "now": The single most important task to work on immediately
-
-**ROADMAP SYNCHRONIZATION (when destination is "now"):**
-When a task is assigned destination "now", the Roadmap.md may need updating:
-1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice Name]] → M1)
-2. Update the milestone's **Status:** from "planned" to "active"
-3. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
-4. If changing from a different active milestone:
-   - Set the old milestone back to "planned" (unless it was "done")
-   - Update the Milestone Index entry for the old milestone too
-Include these Roadmap changes in the modal for user review.
+- "current": Add to Current section (with optional slice link)
 
 **FIELD REQUIREMENTS:**
 - text: Required. Concise task description (1-2 sentences max)
@@ -1036,16 +987,10 @@ Example structure:
 \`\`\`diff
 --- Tasks.md
 +++ Tasks.md
-@@ -5,18 +5,18 @@
- ## Now
--- [ ] <The ONE task you're actively working on> [[Roadmap#VS1 — <Slice Name>]]
-+- [ ] [Single most important task] [[Roadmap#VS1 — Slice Name]]
-
- ---
-
- ## Next
+@@ -5,15 +5,15 @@
+ ## Current
+-- [ ] <Task you're actively working on> [[Roadmap#VS1 — <Slice Name>]]
 -- [ ] <Task ready to start> [[Roadmap#VS1 — <Slice Name>]]
--- [ ] <Task ready to start> [[Roadmap#VS2 — <Slice Name>]]
 -- [ ] <Standalone task>
 +- [ ] [Task from summary] [[Roadmap#VS1 — Slice Name]]
 +- [ ] [Task from summary] [[Roadmap#VS2 — Slice Name]]
@@ -1067,7 +1012,7 @@ Example structure:
  - [x] <Item> (details in [[Archive]])
 \`\`\`
 
-Note: The diff shows that only Now and Next sections get real tasks. Blocked, Later, and Done sections remain as template placeholders. The file ends with Done - nothing follows it.
+Note: The diff shows that only the Current section gets real tasks. Blocked, Later, and Done sections remain as template placeholders. The file ends with Done - nothing follows it.
 
 **FRONTMATTER STRUCTURE (CRITICAL - READ CAREFULLY)**
 
@@ -1132,11 +1077,11 @@ Tasks.md:
 - Link tasks using [[Roadmap#VS1 — Slice Name]]
 - Tasks should be 15-60 minutes, concrete, with clear acceptance criteria
 - Standalone tasks (no slice link) are valid for misc items
-- Set Now to the single most important immediate task
+- Place tasks in the Current section
 - Do NOT invent tasks - only extract from the provided summary
 - **CRITICAL - No duplication:**
   - Each task appears EXACTLY ONCE in the file
-  - Only modify Now and Next sections with extracted tasks
+  - Only modify the Current section with extracted tasks
   - Blocked, Later, and Done sections should keep their template placeholders
   - Done section should remain as: \`- [x] <Item> (details in [[Archive]])\`
   - The file ends with the Done section - no content should follow it
@@ -1176,7 +1121,7 @@ In commit messages:
 - Feature names mentioned in both commit and task
 
 In Tasks.md:
-- Unchecked tasks (- [ ]) in any section (Now, Next, Later)
+- Unchecked tasks (- [ ]) in any section (Current, Later)
 - Task descriptions and acceptance criteria
 - Slice links that might relate to commits (e.g., [[Roadmap#VS1 — Feature Name]])
 
@@ -1223,8 +1168,7 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 \`\`\`
 
 **TASK SECTION VALUES:**
-- "now": From "Now" section (single current task)
-- "next": From "Next" section (queued tasks)
+- "current": From "Current" section (active tasks)
 - "later": From "Later" section (backlog)
 
 **FIELD REQUIREMENTS:**
@@ -1297,7 +1241,7 @@ Return ONLY a JSON object with this exact structure:
 \`\`\`
 
 **RULES:**
-- Find ALL completed tasks (- [x]) across all sections (Now, Next, Later, Done)
+- Find ALL completed tasks (- [x]) across all sections (Current, Later, Done)
 - Group tasks by their [[Roadmap#VS... — Name]] reference
 - Tasks without a slice ref go in standaloneTasks
 - Include line numbers for accurate file modification
@@ -1310,33 +1254,20 @@ ${workflowFileContents}
       // Special handling for promote-next-task workflow - outputs JSON
       workflowSection = `
 ================================================================================
-ACTIVE WORKFLOW: TASKS: PROMOTE NEXT
+ACTIVE WORKFLOW: TASKS: PROMOTE TO CURRENT
 ================================================================================
 Intent: ${activeWorkflow.intent}
 
-You are selecting the best task to promote from Next or Later to the Now section.
-When promoting, you also update Roadmap.md if the milestone changes.
+You are selecting the best task to promote from Later to the Current section.
 
 **PRE-CHECK (DO THIS FIRST)**
-1. Check if the Now section in Tasks.md already has an unchecked task (- [ ])
-2. If Now has an active task, output:
-   \`\`\`json
-   {
-     "status": "already_active",
-     "currentNowTask": "The task text currently in Now",
-     "message": "Now section already has an active task. No promotion needed."
-   }
-   \`\`\`
-3. If Now is empty or only has completed tasks (- [x]), proceed with selection
-
-**SOURCE PRIORITY**
-1. First, look for unchecked tasks in the Next section (## Next)
-2. If Next has no unchecked tasks, look in Later section (## Later)
-3. If both are empty, output:
+1. Check if the Current section in Tasks.md has tasks (- [ ])
+2. The workflow can still run even if Current has tasks (to add more from Later)
+3. If Later section is empty, output:
    \`\`\`json
    {
      "status": "no_tasks",
-     "message": "No tasks available to promote. Both Next and Later sections are empty."
+     "message": "No tasks available to promote. Later section is empty."
    }
    \`\`\`
 
@@ -1348,22 +1279,11 @@ When promoting, you also update Roadmap.md if the milestone changes.
 5. **Strategic Importance**: Tasks that advance MVP goals
 
 **EVALUATION PROCESS**
-For each candidate task in Next (or Later as fallback):
+For each candidate task in Later:
 - Extract the slice link if present (e.g., [[Roadmap#VS1 — Core Interview Flow]])
 - Check if the slice's milestone has Status: active in Roadmap.md
 - Consider if the task description suggests it unblocks other work
 - Score: 1 (low priority) to 5 (high priority)
-
-**ROADMAP SYNCHRONIZATION (when promoting to Now)**
-After selecting the task to promote, check if Roadmap.md needs updating:
-1. Extract the milestone from the task's slice link (e.g., [[Roadmap#VS1 — Slice]] → M1)
-2. Compare with the currently active milestone (Status: active) in Roadmap.md
-3. If the milestone is DIFFERENT (or no milestone is active):
-   - Update the new milestone's **Status:** from "planned" to "active"
-   - Update "## Milestone Index (fast scan)" entry for the new milestone: (Status: active)
-   - If switching from a previous milestone that wasn't "done", set it back to "planned"
-   - Update Milestone Index entry for the previous milestone too
-4. Include roadmapChanges in the JSON output when changes are needed
 
 **OUTPUT FORMAT (SUCCESS CASE)**
 \`\`\`json
@@ -1371,46 +1291,27 @@ After selecting the task to promote, check if Roadmap.md needs updating:
   "status": "success",
   "selectedTask": {
     "text": "Exact task text from Tasks.md (without checkbox)",
-    "sourceSection": "next",
     "sliceLink": "[[Roadmap#VS1 — Core Interview Flow]]"
   },
   "reasoning": "1-2 sentences explaining why this task was selected",
   "candidates": [
     {
       "text": "Another task that was considered",
-      "sourceSection": "next",
       "sliceLink": null,
       "score": 3,
       "note": "Good task but not aligned with active milestone"
     }
-  ],
-  "roadmapChanges": {
-    "needed": true,
-    "newMilestone": "M2",
-    "previousMilestone": "M1",
-    "milestoneStatusUpdates": [
-      { "milestone": "M1", "from": "active", "to": "planned" },
-      { "milestone": "M2", "from": "planned", "to": "active" }
-    ],
-    "milestoneIndexUpdates": [
-      { "milestone": "M1", "newStatus": "planned" },
-      { "milestone": "M2", "newStatus": "active" }
-    ]
-  }
+  ]
 }
 \`\`\`
 
 **FIELD REQUIREMENTS:**
-- status: Required. One of: "success", "already_active", "no_tasks"
+- status: Required. One of: "success", "no_tasks"
 - selectedTask.text: Required for success. The exact task text (without "- [ ]" prefix)
-- selectedTask.sourceSection: Required for success. Either "next" or "later"
 - selectedTask.sliceLink: Optional. The [[Roadmap#...]] link if present
 - reasoning: Required for success. Brief explanation of selection
 - candidates: Required for success. List of other tasks considered (can be empty array)
-- Each candidate needs: text, sourceSection, sliceLink (or null), score (1-5), note
-- roadmapChanges: Required for success. Set needed=false if no milestone change needed
-  - If needed=true: include newMilestone, previousMilestone (if any),
-    milestoneStatusUpdates (array of changes), milestoneIndexUpdates (array of changes)
+- Each candidate needs: text, sliceLink (or null), score (1-5), note
 
 FILE CONTENTS (for analysis):
 ${workflowFileContents}
@@ -1576,7 +1477,7 @@ Determine the MODE based on current Tasks.md state:
 - **FIRST STEP**: Review Roadmap.md for existing vertical slices
   - Each slice has: **VS# — Name** with Purpose, Delivers, and Solves fields
   - Create tasks that link to these slices: \`[[Roadmap#VS1 — Slice Name]]\`
-- Populate "Next" section with tasks linked to Roadmap slices
+- Populate "Current" section with tasks linked to Roadmap slices
 - Standalone tasks (not linked to any slice) are also allowed
 - Populate "Later" section with any loose items from Log.md or Ideas.md
 
@@ -1584,7 +1485,7 @@ Determine the MODE based on current Tasks.md state:
 - User has done work and wants to update/refine the task list
 - Check Log.md and Ideas.md for new items that should become tasks
 - Look for entries with keywords: "need to", "should", "TODO", "don't forget", "fix", "add"
-- Add new items to appropriate section (Next or Later)
+- Add new items to appropriate section (Current or Later)
 
 GitHub Repo Check (see AI CONFIG section in snapshot):
 - Look for github_repo in .ai/config.json (shown in snapshot as "AI CONFIG")
@@ -1608,7 +1509,7 @@ Archive.md Check (see RECENTLY COMPLETED in snapshot):
 
 For BOTH modes:
 - Never invent tasks - only extract from existing project content
-- Keep exactly ONE task in "Now" section - the single current focus
+- Active work items belong in the "Current" section
 - Vertical slices should link back to Roadmap milestones when possible
 - In CREATE MODE: Always start with the slice list, then expand active slice
 
@@ -1783,14 +1684,12 @@ DOCUMENT FORMAT STANDARDS (ALWAYS APPLY):
 - All sections use checkboxes: \`- [ ] Task description\`
 - Tasks linked to Roadmap slices: \`- [ ] Task description [[Roadmap#VS1 — Slice Name]]\`
 - Standalone tasks (not linked to any slice): \`- [ ] Task description\`
-- "Now" has exactly ONE task - the single current focus
+- "Current" contains tasks actively being worked on or ready to start
 
 Example Tasks.md structure:
 \`\`\`markdown
-## Now
+## Current
 - [ ] Write elevator pitch [[Roadmap#VS1 — Project Definition]]
-
-## Next
 - [ ] Define the problem [[Roadmap#VS1 — Project Definition]]
 - [ ] Fix typo in README
 \`\`\`
@@ -1799,16 +1698,6 @@ Example Tasks.md structure:
 - Milestones: High-level demo-able outcomes (### M1 — Name)
 - Vertical Slices: Features nested under milestones (#### Slices with VS1, VS2, etc.)
 - **Milestone Status:** planned | active | done | blocked | cut (active indicates current work)
-
-**ROADMAP SYNCHRONIZATION:**
-When a task is moved to the "Now" section in Tasks.md:
-1. Identify which milestone the task's slice belongs to (from [[Roadmap#VS... — Name]])
-2. Update the milestone's **Status:** from "planned" to "active"
-3. Update "## Milestone Index (fast scan)" entry for that milestone: (Status: active)
-4. If switching milestones:
-   - Set the previous active milestone back to "planned" (unless it was "done")
-   - Update the Milestone Index entry for the previous milestone too
-This ensures milestone Status always reflects the actual work focus.
 
 **Log.md:** Freeform notes. Items with "need to", "should", "TODO" get extracted to Tasks.md.
 

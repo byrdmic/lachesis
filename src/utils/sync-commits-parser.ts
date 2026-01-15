@@ -36,7 +36,7 @@ export type ConfidenceLevel = 'high' | 'medium' | 'low'
 /**
  * Task section in Tasks.md
  */
-export type TaskSection = 'now' | 'next' | 'later'
+export type TaskSection = 'current' | 'later'
 
 /**
  * Action the user can take for each match
@@ -278,20 +278,16 @@ export function parseSyncCommitsResponse(
 
 /**
  * Normalize task section strings from AI response.
- * Supports both new (now/next/later) and legacy (next-actions/active-tasks/future-tasks) values.
+ * Supports both new (current/later) and legacy (now/next/next-actions/active-tasks/future-tasks) values.
  */
 function normalizeTaskSection(section: string): TaskSection {
   const normalized = section.toLowerCase().replace(/[^a-z]/g, '')
-  // "now" or legacy "next-actions" / "next 1-3 actions"
-  if (normalized === 'now' || normalized.includes('action')) {
-    return 'now'
-  }
   // "later" or legacy "future-tasks" / "future tasks"
   if (normalized === 'later' || normalized.includes('future')) {
     return 'later'
   }
-  // Default to "next" (or legacy "active-tasks")
-  return 'next'
+  // Everything else maps to "current" (including legacy "now", "next", "next-actions", "active-tasks")
+  return 'current'
 }
 
 // ============================================================================
@@ -470,10 +466,8 @@ export function getDefaultAction(confidence: ConfidenceLevel): SyncAction {
  */
 export function getTaskSectionLabel(section: TaskSection): string {
   switch (section) {
-    case 'now':
-      return 'Now'
-    case 'next':
-      return 'Next'
+    case 'current':
+      return 'Current'
     case 'later':
       return 'Later'
   }
@@ -488,11 +482,12 @@ export function extractUncheckedTasks(
   const lines = tasksContent.split('\n')
   const tasks: Array<{ text: string; section: TaskSection; lineNumber: number }> = []
 
-  let currentSection: TaskSection = 'next'
+  let currentSection: TaskSection = 'current'
 
   // Section detection patterns - support both new and legacy section names
-  const nowRegex = /^##\s*(?:Now|Next\s+1[–-]3\s+Actions)/i
-  const nextRegex = /^##\s*(?:Next|Active\s+Tasks)$/i
+  // Current: "## Current" or legacy "## Now" or "## Next" or "## Next 1-3 Actions" or "## Active Tasks"
+  const currentRegex = /^##\s*(?:Current|Now|Next(?:\s+1[–-]3\s+Actions)?|Active\s+Tasks)$/i
+  // Later: "## Later" or legacy "## Future Tasks" or "## Potential Future Tasks"
   const laterRegex = /^##\s*(?:Later|Future\s+Tasks|Potential\s+Future\s+Tasks)/i
 
   // Unchecked task pattern
@@ -502,12 +497,8 @@ export function extractUncheckedTasks(
     const line = lines[i]
 
     // Update current section
-    if (nowRegex.test(line)) {
-      currentSection = 'now'
-      continue
-    }
-    if (nextRegex.test(line)) {
-      currentSection = 'next'
+    if (currentRegex.test(line)) {
+      currentSection = 'current'
       continue
     }
     if (laterRegex.test(line)) {

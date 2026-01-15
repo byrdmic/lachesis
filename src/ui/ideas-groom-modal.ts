@@ -307,8 +307,7 @@ export class IdeasGroomModal extends Modal {
     const destinations: TaskDestination[] = [
       'discard',
       'later',
-      'next',
-      'now',
+      'current',
     ]
 
     for (const dest of destinations) {
