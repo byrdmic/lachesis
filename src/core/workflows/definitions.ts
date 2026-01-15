@@ -797,7 +797,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
       'Milestones must be vertical (demo-able), not horizontal (layers/components)',
       'Each milestone: status, why it matters, outcome, definition of done',
       'Vertical slices: nested under each milestone as #### Slices section, 1-5 days work, demo-able',
-      'Format slices as: **VS1 — Slice Name**: description',
+      'Each slice needs: **VS# — Name** with Purpose (why it exists), Delivers (what user gets), Solves (what problem it fixes)',
       'Set first milestone Status to active to indicate current work',
 
       // Content mapping - Tasks.md

@@ -159,8 +159,16 @@ tags: ["project/roadmap"]
 - Key log entries: [[Log]]
 
 #### Slices
-- **VS1 — <Slice Name>**: <1-2 sentence description of what it delivers>
-- **VS2 — <Slice Name>**: <1-2 sentence description>
+
+**VS1 — <Slice Name>**
+- **Purpose:** <Why this slice exists — the user need or gap it addresses>
+- **Delivers:** <What capability or feature the user gets when this is done>
+- **Solves:** <What problem or friction this removes>
+
+**VS2 — <Slice Name>**
+- **Purpose:** <Why this slice exists>
+- **Delivers:** <What it provides>
+- **Solves:** <What problem it addresses>
 
 ---
 
@@ -176,7 +184,11 @@ tags: ["project/roadmap"]
 - Tasks: [[Tasks]]
 
 #### Slices
-- **VS3 — <Slice Name>**: <1-2 sentence description>
+
+**VS3 — <Slice Name>**
+- **Purpose:** <Why this slice exists>
+- **Delivers:** <What it provides>
+- **Solves:** <What problem it addresses>
 
 ---
 

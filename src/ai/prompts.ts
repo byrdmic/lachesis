@@ -180,15 +180,25 @@ Before starting, identify:
 - **End-to-end**: Delivers user-visible value, not just a layer
 - **Right-sized**: 1-5 days of work
 - **Clearly named**: VS1 — [Short Descriptive Name]
-- **Brief description**: 1-2 sentences explaining what it delivers
+- **Detailed description**: Each slice needs Purpose, Delivers, and Solves fields
 
-Good slice examples:
-- "VS1 — Basic Modal Opens: User can click the ribbon icon and see a modal appear."
-- "VS2 — Interview Flow: Modal guides user through project questions and captures answers."
+Each slice should include:
+- **Purpose**: Why this slice exists — the user need or gap it addresses
+- **Delivers**: What capability or feature the user gets when this is done
+- **Solves**: What problem or friction this removes
+
+Good slice example:
+\`\`\`
+**VS1 — Basic Modal Opens**
+- **Purpose:** Users need a way to initiate the project creation flow from within Obsidian
+- **Delivers:** Clicking the ribbon icon opens a modal dialog ready for input
+- **Solves:** Without this, users have no entry point to start creating a project
+\`\`\`
 
 Bad slice examples:
 - "VS1 — Database layer" (horizontal, not demo-able)
 - "VS2 — Everything working" (too vague)
+- Single-line descriptions without Purpose/Delivers/Solves (not detailed enough)
 
 ## EXAMPLE MILESTONE + SLICES STRUCTURE
 
@@ -211,9 +221,21 @@ Slices are nested UNDER the milestone they belong to (not in a separate section)
 - Key log entries: [[Log]]
 
 #### Slices
-- **VS1 — Basic Modal Opens**: User can click ribbon icon and see a modal appear.
-- **VS2 — Interview Flow**: Modal guides user through project questions.
-- **VS3 — File Scaffolding**: Generate project files from captured answers.
+
+**VS1 — Basic Modal Opens**
+- **Purpose:** Users need a way to initiate the project creation flow from within Obsidian
+- **Delivers:** Clicking the ribbon icon opens a modal dialog ready for input
+- **Solves:** Without this, users have no entry point to start creating a project
+
+**VS2 — Interview Flow**
+- **Purpose:** Users need guidance to articulate their project idea clearly
+- **Delivers:** Modal presents questions one at a time and captures responses
+- **Solves:** Blank page paralysis — users don't know what info to provide without prompts
+
+**VS3 — File Scaffolding**
+- **Purpose:** Users need their captured ideas persisted in a usable format
+- **Delivers:** Project folder with Overview, Roadmap, Tasks, Log, Ideas, Archive files
+- **Solves:** Manual file creation is tedious and users forget what structure to use
 \`\`\`
 
 ## PROPOSING CHANGES
@@ -981,7 +1003,7 @@ Example structure:
 \`\`\`diff
 --- Roadmap.md
 +++ Roadmap.md
-@@ -10,15 +10,35 @@
+@@ -10,15 +10,45 @@
  ## Milestones
 
 -### M1 — [First Milestone Name]
@@ -999,8 +1021,16 @@ Example structure:
 +- Tasks: [[Tasks]]
 +
 +#### Slices
-+- **VS1 — [Slice Name]**: [1-2 sentence description]
-+- **VS2 — [Slice Name]**: [1-2 sentence description]
++
++**VS1 — [Slice Name]**
++- **Purpose:** [Why this slice exists — the user need or gap it addresses]
++- **Delivers:** [What capability or feature the user gets when this is done]
++- **Solves:** [What problem or friction this removes]
++
++**VS2 — [Slice Name]**
++- **Purpose:** [Why this slice exists]
++- **Delivers:** [What it provides]
++- **Solves:** [What problem it addresses]
 \`\`\`
 
 \`\`\`diff
@@ -1091,7 +1121,10 @@ Roadmap.md:
 - Milestones must be vertical (demo-able), not horizontal (layers/components)
 - Vertical slices nested under each milestone as #### Slices section
 - Slices are 1-5 days of work, demo-able, end-to-end
-- Format slices as: **VS1 — Slice Name**: 1-2 sentence description
+- Each slice needs: **VS# — Name** with Purpose, Delivers, and Solves fields
+- Purpose: Why this slice exists (user need or gap)
+- Delivers: What capability/feature the user gets
+- Solves: What problem or friction this removes
 - Set M1 Status to "active" to indicate current work, other milestones to "planned"
 
 Tasks.md:
@@ -1541,7 +1574,7 @@ Determine the MODE based on current Tasks.md state:
     (including vertical slices) for a more complete picture."
   → Still proceed if user wants, but note the incompleteness
 - **FIRST STEP**: Review Roadmap.md for existing vertical slices
-  - Each slice in Roadmap has format: VS1 — Slice Name with description
+  - Each slice has: **VS# — Name** with Purpose, Delivers, and Solves fields
   - Create tasks that link to these slices: \`[[Roadmap#VS1 — Slice Name]]\`
 - Populate "Next" section with tasks linked to Roadmap slices
 - Standalone tasks (not linked to any slice) are also allowed
