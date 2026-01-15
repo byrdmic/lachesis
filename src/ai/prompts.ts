@@ -1033,6 +1033,42 @@ Example structure:
 +- [ ] [Task from summary] [[Roadmap#VS2 — Slice Name]]
 \`\`\`
 
+**FRONTMATTER STRUCTURE (CRITICAL - READ CAREFULLY)**
+
+All three files use YAML frontmatter. For Obsidian to parse frontmatter correctly:
+1. The file MUST start with \`---\` on line 1 (nothing before it, not even whitespace)
+2. Frontmatter content follows (schema_version, doc_type, project info, etc.)
+3. Frontmatter ends with \`---\` on its own line
+4. The markdown title (e.g., \`# Tasks — Project Name\`) comes AFTER the frontmatter
+
+**WRONG** (frontmatter will show as visible text):
+\`\`\`markdown
+# Tasks — My Project
+
+---
+schema_version: 2
+doc_type: tasks
+---
+\`\`\`
+
+**CORRECT** (frontmatter will be parsed):
+\`\`\`markdown
+---
+schema_version: 2
+doc_type: tasks
+project:
+  id: "20260115-my-project"
+  name: "My Project"
+  status: active
+...
+---
+
+# Tasks — My Project
+\`\`\`
+
+When generating diffs, NEVER put a title or any content before the opening \`---\`.
+If updating content in the body, make sure the diff context shows the frontmatter is preserved.
+
 **CONTENT MAPPING RULES**
 
 Overview.md:

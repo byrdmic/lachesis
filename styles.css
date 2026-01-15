@@ -75,7 +75,7 @@
 }
 
 .lachesis-diff-modal {
-  height: 85vh; /* Taller for diffs */
+  height: 90vh; /* Taller for diffs to ensure buttons are visible */
 }
 
 /* Header in conversation phase */
@@ -512,6 +512,9 @@
   flex: 1;
   overflow: auto;
   margin: 12px 24px;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
 }
 
 .lachesis-diff-modal-pre {
@@ -525,6 +528,16 @@
   border-radius: 8px;
   color: var(--text-normal);
   overflow-x: auto;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+.lachesis-diff-modal-pre *,
+.lachesis-diff-line {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
 }
 
 .lachesis-diff-modal-footer {
