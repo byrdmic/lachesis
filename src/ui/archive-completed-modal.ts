@@ -39,6 +39,7 @@ export class ArchiveCompletedModal extends Modal {
   private onAction: ArchiveCompletedActionCallback
   private selections: Map<string, ArchiveSelection> = new Map()
   private viewOnly: boolean
+  private footerEl: HTMLElement | null = null
 
   constructor(
     app: App,
@@ -112,7 +113,8 @@ export class ArchiveCompletedModal extends Modal {
     }
 
     // Footer with actions
-    this.renderFooter(contentEl)
+    this.footerEl = contentEl.createDiv()
+    this.renderFooter(this.footerEl)
   }
 
   private renderHeader(container: HTMLElement) {
@@ -276,11 +278,15 @@ export class ArchiveCompletedModal extends Modal {
         ...selection,
         action: select.value as ArchiveAction,
       })
-      this.render()
+      // Only re-render the footer to update stats, not the entire list
+      if (this.footerEl) {
+        this.renderFooter(this.footerEl)
+      }
     })
   }
 
   private renderFooter(container: HTMLElement) {
+    container.empty()
     const footer = container.createDiv({ cls: 'lachesis-archive-completed-footer' })
 
     // Stats summary
