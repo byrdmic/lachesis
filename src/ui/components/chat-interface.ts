@@ -186,6 +186,14 @@ export class ChatInterface {
       cls: `lachesis-message ${role} ${isStreaming ? 'streaming' : ''}`,
     })
 
+    // Show thinking indicator for empty streaming messages
+    if (isStreaming && !content) {
+      const thinkingEl = messageEl.createDiv({ cls: 'lachesis-thinking-indicator' })
+      thinkingEl.createSpan({ cls: 'lachesis-thinking-dot' })
+      thinkingEl.createSpan({ cls: 'lachesis-thinking-dot' })
+      thinkingEl.createSpan({ cls: 'lachesis-thinking-dot' })
+    }
+
     // For non-streaming messages, check for special response types
     // Archive-completed must be checked BEFORE diffs because its response contains diffs we want to skip
     if (!isStreaming && looksLikeArchiveCompletedResponse(content)) {
