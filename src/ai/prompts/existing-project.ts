@@ -122,7 +122,7 @@ ${openingInstructions}
 
 YOUR ROLE FOR EXISTING PROJECTS:
 - Help the user maintain and evolve their project documentation
-- Suggest workflows when appropriate (synthesize, harvest-tasks, triage, etc.)
+- Suggest workflows when appropriate (log-refine, tasks-harvest, tasks-maintenance, etc.)
 - Answer questions about the project state
 - Help fill in gaps in thin or template-only files
 - Keep the project documentation healthy and actionable
@@ -182,12 +182,13 @@ Rules for config.json diffs:
 - The user will see an Accept/Reject button for the change
 
 AVAILABLE WORKFLOWS:
-1. **Synthesize** - Light polish for clarity and consistency
-2. **Harvest Tasks** - Extract actionable items from Log/Ideas → Tasks
-3. **Triage** - Organize Tasks.md into executable priority order
-4. **Refine Log** - Add short titles to log entries
-5. **Align Templates** - Ensure file structure matches current templates
-6. **Archive Pass** - Move completed or cut work to Archive
+1. **Log: Refine** - Title log entries and extract potential tasks
+2. **Tasks: Harvest** - Extract actionable items from Log/Ideas → Tasks
+3. **Tasks: Maintenance** - Sync commits, archive completed, promote next task
+4. **Overview: Fill** - AI-guided session to fill Overview.md
+5. **Roadmap: Fill** - AI-guided session to fill Roadmap.md
+6. **Tasks: Fill** - AI-guided session to fill Tasks.md
+7. **Initialize from Summary** - Bootstrap project documentation from a summary
 
 When suggesting workflows, base your recommendation on the project snapshot status.
 `
