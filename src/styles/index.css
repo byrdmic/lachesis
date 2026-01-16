@@ -30,6 +30,7 @@
 @import './ideas-groom-modal.css';
 @import './sync-commits-modal.css';
 @import './archive-completed-modal.css';
+@import './enrich-tasks-modal.css';
 
 /* Other Modals */
 @import './git-log-modal.css';

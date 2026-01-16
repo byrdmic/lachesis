@@ -69,6 +69,12 @@ import {
   containsBatchDiffResponse,
   type InitSummaryFile,
 } from '../../utils/init-summary-parser'
+import {
+  parseEnrichTasksResponse,
+  applyEnrichments,
+  type TaskEnrichment,
+  type EnrichTaskSelection,
+} from '../../utils/enrich-tasks-parser'
 import type { DiffBlock } from '../../utils/diff'
 
 // ============================================================================
@@ -167,6 +173,13 @@ export type InitSummaryParseResult = {
   diffs: Map<InitSummaryFile, DiffBlock>
 }
 
+/** Result from parsing enrich tasks response */
+export type EnrichTasksParseResult = {
+  success: boolean
+  error?: string
+  enrichments: TaskEnrichment[]
+}
+
 // ============================================================================
 // Workflow Engine
 // ============================================================================
@@ -205,6 +218,9 @@ export class WorkflowEngine {
 
   // Keyword for promote-next-task confirmation
   static readonly PROMOTE_KEYWORD = 'PROMOTE'
+
+  // State for enrich-tasks workflow
+  private pendingEnrichments: TaskEnrichment[] = []
 
   // State for combined workflow execution
   private combinedWorkflowState: CombinedWorkflowState | null = null
@@ -1200,5 +1216,47 @@ export class WorkflowEngine {
         diffs: new Map(),
       }
     }
+  }
+
+  // ============================================================================
+  // Enrich Tasks Workflow
+  // ============================================================================
+
+  /**
+   * Parse AI response for enrich tasks.
+   */
+  parseEnrichTasks(content: string): EnrichTasksParseResult {
+    try {
+      const enrichments = parseEnrichTasksResponse(content)
+      this.pendingEnrichments = enrichments
+      return { success: true, enrichments }
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+        enrichments: [],
+      }
+    }
+  }
+
+  /**
+   * Apply enrich task selections and return new content.
+   */
+  applyEnrichSelections(tasksContent: string, selections: EnrichTaskSelection[]): string {
+    return applyEnrichments(tasksContent, this.pendingEnrichments, selections)
+  }
+
+  /**
+   * Clear enrich tasks state.
+   */
+  clearEnrichTasksState(): void {
+    this.pendingEnrichments = []
+  }
+
+  /**
+   * Get pending enrichments.
+   */
+  getPendingEnrichments(): TaskEnrichment[] {
+    return this.pendingEnrichments
   }
 }

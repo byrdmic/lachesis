@@ -16,6 +16,8 @@ import type { SyncCommitSelection, GitCommit } from '../../utils/sync-commits-pa
 import { SyncCommitsModal } from '../sync-commits-modal'
 import type { ArchiveSelection } from '../../utils/archive-completed-parser'
 import { ArchiveCompletedModal } from '../archive-completed-modal'
+import type { EnrichTaskSelection } from '../../utils/enrich-tasks-parser'
+import { EnrichTasksModal } from '../enrich-tasks-modal'
 import type { PromoteSelection } from '../../utils/promote-next-parser'
 import { PromoteNextModal } from '../promote-next-modal'
 import { fetchCommits } from '../../github'
@@ -1170,6 +1172,107 @@ export class WorkflowExecutor {
 
     this.engine.advanceCombinedWorkflow()
     this.advanceCombinedWorkflow()
+  }
+
+  // ============================================================================
+  // Enrich Tasks Workflow
+  // ============================================================================
+
+  /**
+   * Handle the AI response from the enrich-tasks workflow.
+   */
+  async handleEnrichTasksResponse(content: string): Promise<void> {
+    try {
+      const result = this.engine.parseEnrichTasks(content)
+
+      if (!result.success || result.enrichments.length === 0) {
+        new Notice('No tasks found to enrich.')
+        return
+      }
+
+      this.openEnrichTasksModal()
+    } catch (err) {
+      console.error('Failed to process enrich tasks response:', err)
+      new Notice(`Failed to process tasks: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Open the enrich tasks review modal.
+   */
+  private openEnrichTasksModal(): void {
+    const modal = new EnrichTasksModal(
+      this.app,
+      this.engine.getPendingEnrichments(),
+      this.projectPath,
+      (selections, confirmed) => this.handleEnrichTasksAction(selections, confirmed)
+    )
+    modal.open()
+  }
+
+  /**
+   * Handle actions from the enrich tasks modal.
+   */
+  private async handleEnrichTasksAction(
+    selections: EnrichTaskSelection[],
+    confirmed: boolean
+  ): Promise<void> {
+    if (!confirmed) return
+
+    const selectedCount = selections.filter((s) => s.selected).length
+
+    if (selectedCount === 0) {
+      new Notice('No enrichments selected.')
+      return
+    }
+
+    try {
+      const tasksPath = `${this.projectPath}/Tasks.md`
+      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
+
+      if (!tasksFile || !(tasksFile instanceof TFile)) {
+        new Notice('Tasks.md not found')
+        return
+      }
+
+      const tasksContent = await this.app.vault.read(tasksFile)
+      const newContent = this.engine.applyEnrichSelections(tasksContent, selections)
+      await this.app.vault.modify(tasksFile, newContent)
+
+      new Notice(`Applied ${selectedCount} enrichment${selectedCount !== 1 ? 's' : ''} to Tasks.md`)
+
+      this.engine.clearEnrichTasksState()
+      await this.callbacks.onSnapshotRefresh()
+    } catch (err) {
+      console.error('Failed to apply enrichments:', err)
+      new Notice(`Failed to apply enrichments: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Open the enrich tasks modal for viewing history.
+   */
+  async openEnrichTasksModalForHistory(content: string): Promise<void> {
+    try {
+      const result = this.engine.parseEnrichTasks(content)
+
+      if (!result.success || result.enrichments.length === 0) {
+        new Notice('Could not parse enrichments from response.')
+        return
+      }
+
+      const modal = new EnrichTasksModal(
+        this.app,
+        this.engine.getPendingEnrichments(),
+        this.projectPath,
+        (selections, confirmed) => this.handleEnrichTasksAction(selections, confirmed),
+        { viewOnly: true }
+      )
+      modal.open()
+    } catch (err) {
+      console.error('Failed to open enrich tasks modal for history:', err)
+      new Notice(`Failed to open enrichments: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
   }
 
   // ============================================================================

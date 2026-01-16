@@ -21,6 +21,8 @@ export type ChatInterfaceCallbacks = {
   onViewArchiveCompleted: (content: string) => void
   /** Called when user clicks "View Tasks" for a harvest-tasks response */
   onViewHarvestTasks: (content: string) => void
+  /** Called when user clicks "View Enrichments" for an enrich-tasks response */
+  onViewEnrichTasks: (content: string) => void
   /** Called to check if auto-accept is enabled */
   isAutoAcceptEnabled: () => boolean
   /** Called to check if a specific workflow has auto-apply enabled */

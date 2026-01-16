@@ -160,6 +160,7 @@ export class ExistingProjectModal extends Modal {
         onViewSyncCommits: (content) => this.workflowExecutor?.openSyncCommitsModalForHistory(content),
         onViewArchiveCompleted: (content) => this.workflowExecutor?.openArchiveCompletedModalForHistory(content),
         onViewHarvestTasks: (content) => this.workflowExecutor?.openHarvestTasksModalForHistory(content),
+        onViewEnrichTasks: (content) => this.workflowExecutor?.openEnrichTasksModalForHistory(content),
         isAutoAcceptEnabled: () => this.plugin.settings.autoAcceptChanges,
         getWorkflowAutoApply: (name) => {
           // Check if workflow is auto-applyable and user has enabled it
@@ -629,6 +630,11 @@ export class ExistingProjectModal extends Modal {
         // Check if this was an init-from-summary workflow - handle specially
         if (this.lastUsedWorkflowName === 'init-from-summary') {
           await this.workflowExecutor?.handleInitFromSummaryResponse(result.content)
+        }
+
+        // Check if this was an enrich-tasks workflow - handle specially
+        if (this.lastUsedWorkflowName === 'enrich-tasks') {
+          await this.workflowExecutor?.handleEnrichTasksResponse(result.content)
         }
 
         this.messages.push({

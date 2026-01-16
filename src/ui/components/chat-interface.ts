@@ -25,6 +25,10 @@ import {
   containsHarvestResponse,
   extractHarvestTasksSummary,
 } from '../../utils/harvest-tasks-parser'
+import {
+  containsEnrichTasksResponse,
+  extractEnrichTasksSummary,
+} from '../../utils/enrich-tasks-parser'
 import { DiffViewerModal, type DiffAction } from '../diff-viewer-modal'
 import {
   ChatState,
@@ -210,6 +214,9 @@ export class ChatInterface {
     } else if (!isStreaming && containsHarvestResponse(content)) {
       // Harvest tasks response - render with a "View Tasks" button
       this.renderMessageWithHarvestTasks(messageEl, content)
+    } else if (!isStreaming && containsEnrichTasksResponse(content)) {
+      // Enrich tasks response - render with a "View Enrichments" button
+      this.renderMessageWithEnrichTasks(messageEl, content)
     } else {
       // Parse hint tags and render them specially
       const hintMatch = content.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
@@ -305,6 +312,10 @@ export class ChatInterface {
         // Clear and re-render with harvest tasks summary
         streamingEl.empty()
         this.renderMessageWithHarvestTasks(streamingEl, streamingText)
+      } else if (containsEnrichTasksResponse(streamingText)) {
+        // Clear and re-render with enrich tasks summary
+        streamingEl.empty()
+        this.renderMessageWithEnrichTasks(streamingEl, streamingText)
       } else {
         // Re-render with markdown + hint styling
         streamingEl.empty()
@@ -731,6 +742,45 @@ export class ChatInterface {
     })
     viewBtn.addEventListener('click', () => {
       this.callbacks.onViewHarvestTasks(content)
+    })
+  }
+
+  /**
+   * Render a message for enrich-tasks workflow.
+   * Shows a summary with a "View Enrichments" button that opens the modal.
+   */
+  private renderMessageWithEnrichTasks(container: HTMLElement, content: string): void {
+    const summary = extractEnrichTasksSummary(content)
+
+    // Render summary message
+    const summaryEl = container.createDiv({ cls: 'lachesis-enrich-tasks-summary' })
+
+    if (summary && summary.tasksEnriched > 0) {
+      let summaryText = `Generated enrichments for ${summary.tasksEnriched} task${summary.tasksEnriched === 1 ? '' : 's'}`
+      if (summary.tasksSkipped > 0) {
+        summaryText += ` (${summary.tasksSkipped} skipped)`
+      }
+      summaryText += '.'
+      summaryEl.createEl('p', { text: summaryText })
+
+      if (summary.skipReasons.length > 0) {
+        summaryEl.createEl('p', {
+          text: `Skip reasons: ${summary.skipReasons.join(', ')}`,
+          cls: 'lachesis-enrich-tasks-note',
+        })
+      }
+    } else {
+      summaryEl.createEl('p', { text: 'No tasks found to enrich.' })
+    }
+
+    // View button
+    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-enrich-tasks-button-container' })
+    const viewBtn = btnContainer.createEl('button', {
+      text: 'View Enrichments',
+      cls: 'lachesis-enrich-tasks-view-btn',
+    })
+    viewBtn.addEventListener('click', () => {
+      this.callbacks.onViewEnrichTasks(content)
     })
   }
 

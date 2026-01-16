@@ -29,6 +29,7 @@ export const WORKFLOW_NAMES = [
   'archive-completed',
   'promote-next-task',
   'init-from-summary',
+  'enrich-tasks',
   // TODO: Re-enable as they're refined
   // 'synthesize',
   // 'triage',

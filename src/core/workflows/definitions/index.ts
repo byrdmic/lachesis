@@ -26,6 +26,7 @@ import { syncCommitsWorkflow } from './sync-commits'
 import { archiveCompletedWorkflow } from './archive-completed'
 import { promoteNextTaskWorkflow } from './promote-next-task'
 import { initFromSummaryWorkflow } from './init-from-summary'
+import { enrichTasksWorkflow } from './enrich-tasks'
 
 // ============================================================================
 // Registry
@@ -50,6 +51,7 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
   'archive-completed': archiveCompletedWorkflow,
   'promote-next-task': promoteNextTaskWorkflow,
   'init-from-summary': initFromSummaryWorkflow,
+  'enrich-tasks': enrichTasksWorkflow,
 }
 
 // ============================================================================

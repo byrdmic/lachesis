@@ -12,6 +12,7 @@ import {
   buildArchiveCompletedSection,
   buildPromoteNextTaskSection,
   buildDefaultWorkflowSection,
+  buildEnrichTasksSection,
 } from './workflows'
 
 export function buildExistingProjectPrompt(options: ExistingProjectPromptOptions): string {
@@ -86,6 +87,8 @@ LANGUAGE RULES (STRICT):
       workflowSection = buildArchiveCompletedSection(workflowFileContents, activeWorkflow.intent)
     } else if (activeWorkflow.name === 'promote-next-task') {
       workflowSection = buildPromoteNextTaskSection(workflowFileContents, activeWorkflow.intent)
+    } else if (activeWorkflow.name === 'enrich-tasks') {
+      workflowSection = buildEnrichTasksSection(workflowFileContents, activeWorkflow.intent)
     } else {
       workflowSection = buildDefaultWorkflowSection(activeWorkflow, workflowFileContents)
     }
