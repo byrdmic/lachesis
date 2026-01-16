@@ -1,29 +1,26 @@
 // Existing Project Modal - Chat interface for continuing work on existing projects
 // This is the orchestrator that coordinates the extracted components.
 
-import { App, Modal, Component, MarkdownRenderer } from 'obsidian'
+import { App, Modal, Component } from 'obsidian'
 import type LachesisPlugin from '../main'
 import type { ProjectSnapshot, ExpectedCoreFile } from '../core/project/snapshot'
 import { buildProjectSnapshot, formatProjectSnapshotForModel, fetchProjectFileContents, formatFileContentsForModel } from '../core/project/snapshot-builder'
-import { getProvider } from '../ai/providers/factory'
-import { isProviderAvailable } from '../ai/providers/factory'
+import { getProvider, isProviderAvailable } from '../ai/providers/factory'
 import type { AIProvider, ConversationMessage } from '../ai/providers/types'
 import { buildSystemPrompt } from '../ai/prompts'
 import { PROJECT_FILES, getWorkflowDefinition } from '../core/workflows/definitions'
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 import type { DiffBlock } from '../utils/diff'
-import { applyDiffToFile } from '../utils/diff'
 import { getTrimmedLogContent, getFilteredLogForTitleEntries, type TrimmedLogResult, type FilteredLogResult } from '../utils/log-parser'
-import { loadChatLog, saveChatLog } from '../core/chat'
-import { DiffViewerModal, type DiffAction } from './diff-viewer-modal'
+import type { DiffAction } from './diff-viewer-modal'
 import { fetchCommits, formatCommitLog } from '../github'
 
 // Components
 import { ChatSidebar } from './components/chat-sidebar'
-import { IssuesPanel, type ProjectIssue } from './components/issues-panel'
+import { IssuesPanel } from './components/issues-panel'
 import { WorkflowExecutor } from './components/workflow-executor'
 import { ChatInterface } from './components/chat-interface'
-import { ConfigEditorModal } from './config-editor-modal'
+import { ModalHeader } from './components/modal-header'
 
 // ============================================================================
 // Types
@@ -48,16 +45,15 @@ export class ExistingProjectModal extends Modal {
   private isProcessing = false
   private activeWorkflow: WorkflowDefinition | null = null
   private focusedFile: ExpectedCoreFile | null = null // File being filled via "Fill with AI"
-  private pendingDiffs: DiffBlock[] = []
   private lastUsedWorkflowName: WorkflowName | null = null // Track workflow for post-diff processing
   private currentChatFilename: string | null = null
-  private isViewingLoadedChat = false
 
   // Components
   private chatSidebar: ChatSidebar | null = null
   private issuesPanel: IssuesPanel | null = null
   private workflowExecutor: WorkflowExecutor | null = null
   private chatInterface: ChatInterface | null = null
+  private modalHeader: ModalHeader | null = null
 
   constructor(
     app: App,
@@ -111,6 +107,7 @@ export class ExistingProjectModal extends Modal {
     this.issuesPanel = null
     this.workflowExecutor = null
     this.chatInterface = null
+    this.modalHeader = null
   }
 
   // ============================================================================
@@ -173,6 +170,27 @@ export class ExistingProjectModal extends Modal {
       },
       this.renderComponent
     )
+
+    // Modal Header
+    this.modalHeader = new ModalHeader(
+      this.app,
+      this.projectPath,
+      this.snapshot,
+      {
+        onAutoApplyChange: async (enabled) => {
+          this.plugin.settings.autoAcceptChanges = enabled
+          await this.plugin.saveSettings()
+        },
+        onConfigSaved: async () => {
+          await this.refreshSnapshot()
+          this.renderChatPhase()
+        },
+        onStatusBadgeClick: (badgeEl) => {
+          this.issuesPanel?.toggleDropdown(badgeEl)
+        },
+      },
+      { autoAcceptChanges: this.plugin.settings.autoAcceptChanges }
+    )
   }
 
   // ============================================================================
@@ -218,29 +236,9 @@ export class ExistingProjectModal extends Modal {
     // Main content area
     const mainEl = layoutEl.createDiv({ cls: 'lachesis-main-content' })
 
-    // Header with project name
-    const header = mainEl.createDiv({ cls: 'lachesis-header' })
-    header.createEl('h2', { text: this.snapshot.projectName })
-
-    // Status badge
-    const isReady = this.snapshot.readiness.isReady
-    const statusBadge = header.createEl('span', {
-      cls: `lachesis-status-badge ${isReady ? 'ready' : 'needs-work'} ${!isReady ? 'clickable' : ''}`,
-    })
-    statusBadge.setText(isReady ? 'Ready' : 'Needs attention')
-
-    // Add click handler for issues dropdown (only when not ready)
-    if (!isReady) {
-      statusBadge.addEventListener('click', (e) => {
-        e.stopPropagation()
-        this.issuesPanel?.toggleDropdown(statusBadge)
-      })
-    }
-
-    // Header controls container (toggle + edit config button)
-    const headerControls = header.createDiv({ cls: 'lachesis-header-controls' })
-    this.renderAutoApplyToggle(headerControls)
-    this.renderEditConfigButton(headerControls)
+    // Header with project name, status badge, and controls
+    const headerEl = mainEl.createDiv()
+    this.modalHeader?.render(headerEl)
 
     // Workflow buttons bar
     const workflowBar = mainEl.createDiv({ cls: 'lachesis-workflow-bar' })
@@ -251,46 +249,8 @@ export class ExistingProjectModal extends Modal {
     })
 
     // Render chat interface (messages, input, status)
+    const isReady = this.snapshot.readiness.isReady
     this.chatInterface?.render(mainEl, this.messages, this.snapshot.projectName, isReady)
-  }
-
-  private renderAutoApplyToggle(container: HTMLElement): void {
-    const toggleContainer = container.createDiv({ cls: 'lachesis-auto-apply-toggle' })
-
-    const label = toggleContainer.createEl('label', { cls: 'lachesis-toggle-label' })
-
-    const checkbox = label.createEl('input', { type: 'checkbox' })
-    checkbox.checked = this.plugin.settings.autoAcceptChanges
-
-    const slider = label.createSpan({ cls: 'lachesis-toggle-slider' })
-
-    const text = label.createSpan({
-      text: 'Auto-apply',
-      cls: 'lachesis-toggle-text',
-    })
-
-    checkbox.addEventListener('change', async () => {
-      this.plugin.settings.autoAcceptChanges = checkbox.checked
-      await this.plugin.saveSettings()
-    })
-  }
-
-  private renderEditConfigButton(container: HTMLElement): void {
-    const button = container.createEl('button', {
-      text: 'Edit Config',
-      cls: 'lachesis-edit-config-button',
-    })
-
-    button.addEventListener('click', () => {
-      const modal = new ConfigEditorModal(this.app, this.projectPath, async (saved) => {
-        if (saved) {
-          // Refresh snapshot and re-render to reflect config changes
-          this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
-          this.renderChatPhase()
-        }
-      })
-      modal.open()
-    })
   }
 
   private applyLoadedChat(filename: string, messages: ConversationMessage[]): void {
@@ -338,90 +298,14 @@ export class ExistingProjectModal extends Modal {
     this.chatInterface?.updateStatus(text)
   }
 
-  private renderMarkdown(content: string, container: HTMLElement) {
-    MarkdownRenderer.render(
-      this.app,
-      content,
-      container,
-      '',
-      this.renderComponent,
-    )
-  }
-
   /**
-   * Render a clickable file link for a diff block.
+   * Handle when a diff is accepted or rejected.
+   * Called by ChatInterface after it updates the UI.
    */
-  private renderDiffFileLink(container: HTMLElement, diffBlock: DiffBlock) {
-    const linkEl = container.createDiv({ cls: 'lachesis-diff-file-link' })
-    diffBlock.element = linkEl
-
-    // File icon
-    const iconEl = linkEl.createSpan({ cls: 'lachesis-diff-file-icon' })
-    iconEl.setText('📄')
-
-    // File name (clickable)
-    const nameEl = linkEl.createEl('a', {
-      text: diffBlock.fileName,
-      cls: 'lachesis-diff-file-name',
-    })
-    nameEl.addEventListener('click', (e) => {
-      e.preventDefault()
-      this.openDiffViewer(diffBlock)
-    })
-
-    // Change summary
-    if (diffBlock.parsed) {
-      let addCount = 0
-      let removeCount = 0
-      for (const hunk of diffBlock.parsed.hunks) {
-        for (const line of hunk.lines) {
-          if (line.type === 'add') addCount++
-          if (line.type === 'remove') removeCount++
-        }
-      }
-      const changeEl = linkEl.createSpan({ cls: 'lachesis-diff-file-changes' })
-      changeEl.setText(`+${addCount} / -${removeCount}`)
-    }
-
-    // Status indicator
-    const statusEl = linkEl.createSpan({ cls: `lachesis-diff-file-status ${diffBlock.status}` })
-    statusEl.setText(diffBlock.status === 'pending' ? 'pending' : diffBlock.status)
-  }
-
-  /**
-   * Open the diff viewer modal for a specific diff block.
-   */
-  private openDiffViewer(diffBlock: DiffBlock) {
-    const modal = new DiffViewerModal(
-      this.app,
-      diffBlock,
-      this.projectPath,
-      (updatedDiff, action) => this.handleDiffAction(updatedDiff, action),
-      { viewOnly: this.isViewingLoadedChat },
-    )
-    modal.open()
-  }
-
-  /**
-   * Handle when a diff is accepted or rejected from the viewer modal.
-   */
-  private async handleDiffAction(diffBlock: DiffBlock, action: DiffAction) {
-    // Update the file link UI
-    if (diffBlock.element) {
-      const statusEl = diffBlock.element.querySelector('.lachesis-diff-file-status')
-      if (statusEl) {
-        statusEl.removeClass('pending')
-        statusEl.addClass(action)
-        statusEl.setText(action)
-      }
-      diffBlock.element.addClass(action)
-    }
-
+  private async handleDiffAction(_diffBlock: DiffBlock, action: DiffAction) {
     // Refresh snapshot if changes were applied
     if (action === 'accepted') {
-      this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
-      this.issuesPanel?.setSnapshot(this.snapshot)
-      this.workflowExecutor?.setSnapshot(this.snapshot)
+      await this.refreshSnapshot()
     }
   }
 
@@ -429,7 +313,7 @@ export class ExistingProjectModal extends Modal {
     this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
     this.issuesPanel?.setSnapshot(this.snapshot)
     this.workflowExecutor?.setSnapshot(this.snapshot)
-    this.issuesPanel?.updateStatusBadge()
+    this.modalHeader?.setSnapshot(this.snapshot)
     return this.snapshot
   }
 
@@ -776,52 +660,10 @@ export class ExistingProjectModal extends Modal {
   private startNewChat(): void {
     this.messages = []
     this.currentChatFilename = null
-    this.pendingDiffs = []
     this.activeWorkflow = null
-    this.focusedFile = null  // Clear any active "fill file" mode
+    this.focusedFile = null
     this.lastUsedWorkflowName = null
-    this.isViewingLoadedChat = false // New chat is not a loaded chat
+    this.chatInterface?.setViewingLoadedChat(false)
     this.renderChatPhase()
-  }
-
-  /**
-   * Load an existing chat from file.
-   */
-  private async loadChat(filename: string): Promise<void> {
-    const chatLog = await loadChatLog(this.app.vault, this.projectPath, filename)
-    if (chatLog) {
-      this.messages = chatLog.messages
-      this.currentChatFilename = filename
-      this.pendingDiffs = []
-      this.activeWorkflow = null
-      this.focusedFile = null  // Clear any active "fill file" mode
-      this.lastUsedWorkflowName = null
-      this.isViewingLoadedChat = true // Mark as viewing saved chat (diffs are view-only)
-      this.renderChatPhase()
-    }
-  }
-
-  /**
-   * Save current chat to file (called after each message).
-   */
-  private async saveCurrentChat(): Promise<void> {
-    if (this.messages.length === 0) return
-
-    const wasNewChat = !this.currentChatFilename
-
-    const result = await saveChatLog(
-      this.app.vault,
-      this.projectPath,
-      this.messages,
-      this.currentChatFilename
-    )
-
-    if (result.success) {
-      // If this was a new chat, update our filename reference
-      if (wasNewChat) {
-        this.currentChatFilename = result.filename
-      }
-      // Note: Sidebar refresh is handled by ChatSidebar component
-    }
   }
 }

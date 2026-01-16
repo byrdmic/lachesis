@@ -6,3 +6,5 @@ export { IssuesPanel, type IssuesPanelCallbacks, type ProjectIssue } from './iss
 export { WorkflowExecutor, type WorkflowExecutorCallbacks } from './workflow-executor'
 export { ChatInterface, type ChatInterfaceCallbacks } from './chat-interface'
 export { ChatState, looksLikeArchiveCompletedResponse } from './chat-state'
+export { HeaderControls, type HeaderControlsCallbacks, type HeaderControlsSettings } from './header-controls'
+export { ModalHeader, type ModalHeaderCallbacks } from './modal-header'
