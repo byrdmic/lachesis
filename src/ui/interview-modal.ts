@@ -1,61 +1,31 @@
 // Interview Modal - Main UI for project planning interviews
 
-import { App, Modal, Notice, Setting, MarkdownRenderer, Component } from 'obsidian'
+import { App, Modal, Notice, MarkdownRenderer, Component } from 'obsidian'
 import type LachesisPlugin from '../main'
-import type { LachesisSettings } from '../settings'
-import {
-  createSessionManager,
-  type SessionManagerConfig,
-} from '../core/session/session-manager'
-import type {
-  ISessionManager,
-  SessionState,
-  SessionStep,
-  ProjectNameSuggestion,
-} from '../core/session/types'
 import { initializeStore, loadFromDisk } from '../core/session/session-store'
 import { isProviderAvailable } from '../ai/providers/factory'
-import { DISCOVERY_TOPICS, type DiscoveryTopic } from '../core/interview/phases'
 import { buildProjectSnapshot } from '../core/project/snapshot-builder'
-
-// ============================================================================
-// Planning Level Options
-// ============================================================================
-
-const PLANNING_LEVELS = [
-  { value: 'Light spark', label: 'Light spark', description: 'Just a vague idea' },
-  { value: 'Some notes', label: 'Some notes', description: 'Have some thoughts written down' },
-  { value: 'Well defined', label: 'Well defined', description: 'Pretty clear on what I want' },
-] as const
-
-// Human-readable labels for discovery topics
-const TOPIC_LABELS: Record<DiscoveryTopic, string> = {
-  elevator_pitch: 'What',
-  problem_statement: 'Why',
-  target_users: 'Who',
-  value_proposition: 'Value',
-  scope_and_antigoals: 'Scope',
-  constraints: 'Constraints',
-}
+import {
+  InterviewFlowController,
+  PLANNING_LEVELS,
+  TOPIC_LABELS,
+  DISCOVERY_TOPICS,
+  type InterviewPhase,
+  type PlanningLevel,
+} from '../core/interview'
+import type { SessionState } from '../core/session/types'
 
 // ============================================================================
 // Interview Modal
 // ============================================================================
 
-type ModalPhase = 'setup' | 'conversation' | 'naming' | 'complete' | 'error'
-
 export class InterviewModal extends Modal {
   private plugin: LachesisPlugin
-  private sessionManager: ISessionManager | null = null
-  private currentSession: SessionState | null = null
+  private flowController: InterviewFlowController | null = null
   private renderComponent: Component
 
-  // UI State
-  private phase: ModalPhase = 'setup'
-  private selectedPlanningLevel: string = 'Light spark'
-  private isLaunching = false
-  private isProcessing = false
-  private streamingText = ''
+  // Cached session state for rendering
+  private cachedSession: SessionState | null = null
 
   // DOM Elements
   private messagesContainer: HTMLElement | null = null
@@ -73,7 +43,6 @@ export class InterviewModal extends Modal {
   async onOpen() {
     const { contentEl } = this
     contentEl.empty()
-    // Style hook: Obsidian sizes modals via the root `.modal` element
     this.modalEl.addClass('lachesis-modal-root')
     contentEl.addClass('lachesis-modal')
     this.renderComponent.load()
@@ -88,12 +57,19 @@ export class InterviewModal extends Modal {
     initializeStore(this.plugin)
     await loadFromDisk()
 
-    // Create session manager
-    const config: SessionManagerConfig = {
-      settings: this.plugin.settings,
-      vault: this.app.vault,
-    }
-    this.sessionManager = createSessionManager(config)
+    // Create flow controller with event handlers
+    this.flowController = new InterviewFlowController(
+      this.plugin.settings,
+      this.app.vault,
+      {
+        onPhaseChange: (phase, error) => this.handlePhaseChange(phase, error),
+        onSessionUpdate: (session) => this.handleSessionUpdate(session),
+        onStreamingUpdate: (text) => this.handleStreamingUpdate(text),
+        onStatusChange: (status) => this.updateStatus(status),
+        onProcessingChange: (isProcessing) => this.handleProcessingChange(isProcessing),
+      }
+    )
+    this.flowController.initialize()
 
     // Render initial setup phase
     this.renderSetupPhase()
@@ -103,8 +79,49 @@ export class InterviewModal extends Modal {
     const { contentEl } = this
     contentEl.empty()
     this.renderComponent.unload()
-    this.sessionManager = null
-    this.currentSession = null
+    this.flowController?.dispose()
+    this.flowController = null
+    this.cachedSession = null
+  }
+
+  // ============================================================================
+  // Event Handlers (from FlowController)
+  // ============================================================================
+
+  private handlePhaseChange(phase: InterviewPhase, error?: string): void {
+    switch (phase) {
+      case 'setup':
+        this.renderSetupPhase()
+        break
+      case 'conversation':
+        this.renderConversationPhase()
+        break
+      case 'naming':
+        this.renderNamingPhase()
+        break
+      case 'complete':
+        this.renderCompletePhase()
+        break
+      case 'error':
+        this.renderErrorPhase(error || 'Unknown error')
+        break
+    }
+  }
+
+  private handleSessionUpdate(session: SessionState): void {
+    this.cachedSession = session
+    // Update progress indicator if in conversation phase
+    if (this.flowController?.getPhase() === 'conversation') {
+      this.updateProgressIndicator()
+    }
+  }
+
+  private handleStreamingUpdate(text: string): void {
+    this.updateStreamingMessage(text)
+  }
+
+  private handleProcessingChange(isProcessing: boolean): void {
+    this.setInputEnabled(!isProcessing)
   }
 
   // ============================================================================
@@ -140,6 +157,8 @@ export class InterviewModal extends Modal {
     const { contentEl } = this
     contentEl.empty()
 
+    const selectedLevel = this.flowController?.getSelectedPlanningLevel() || 'Light spark'
+
     // Header
     contentEl.createEl('h2', { text: 'New Project Interview' })
     contentEl.createEl('p', {
@@ -152,14 +171,14 @@ export class InterviewModal extends Modal {
 
     for (const level of PLANNING_LEVELS) {
       const option = optionsContainer.createDiv({
-        cls: `lachesis-planning-option ${this.selectedPlanningLevel === level.value ? 'selected' : ''}`,
+        cls: `lachesis-planning-option ${selectedLevel === level.value ? 'selected' : ''}`,
       })
 
       option.createEl('div', { text: level.label, cls: 'lachesis-option-label' })
       option.createEl('div', { text: level.description, cls: 'lachesis-option-desc' })
 
       option.addEventListener('click', () => {
-        this.selectedPlanningLevel = level.value
+        this.flowController?.setPlanningLevel(level.value as PlanningLevel)
         // Update selection visually
         optionsContainer.querySelectorAll('.lachesis-planning-option').forEach((el) => {
           el.removeClass('selected')
@@ -182,38 +201,20 @@ export class InterviewModal extends Modal {
       text: 'Quick Start',
       cls: 'lachesis-quick-start-button',
     })
-    quickStartButton.addEventListener('click', () => this.startQuickStart())
+    quickStartButton.addEventListener('click', () => this.flowController?.startQuickStart())
 
     // Start Interview button
     const startButton = buttonContainer.createEl('button', {
       text: 'Start Interview',
       cls: 'mod-cta',
     })
-    startButton.addEventListener('click', () => this.startInterview())
+    startButton.addEventListener('click', () => this.flowController?.startInterview())
 
     // Quick Start description
     contentEl.createEl('p', {
       text: 'Quick Start skips the interview and creates project files immediately',
       cls: 'lachesis-quick-start-hint',
     })
-  }
-
-  /**
-   * Lightweight loading view shown while quick start prepares the naming step.
-   * This replaces the setup UI immediately to avoid duplicate launches.
-   */
-  private renderQuickStartLoading() {
-    const { contentEl } = this
-    contentEl.empty()
-
-    contentEl.createEl('h2', { text: 'Quick Start' })
-    contentEl.createEl('p', {
-      text: 'Setting up your project...',
-      cls: 'lachesis-subtitle',
-    })
-
-    this.statusEl = contentEl.createDiv({ cls: 'lachesis-status' })
-    this.updateStatus('Creating session...')
   }
 
   private renderConversationPhase() {
@@ -233,8 +234,8 @@ export class InterviewModal extends Modal {
     this.messagesContainer = contentEl.createDiv({ cls: 'lachesis-messages' })
 
     // Render existing messages
-    if (this.currentSession) {
-      for (const msg of this.currentSession.messages) {
+    if (this.cachedSession) {
+      for (const msg of this.cachedSession.messages) {
         this.addMessageToUI(msg.role, msg.content)
       }
     }
@@ -249,7 +250,7 @@ export class InterviewModal extends Modal {
     })
 
     this.inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey && !this.isProcessing) {
+      if (e.key === 'Enter' && !e.shiftKey && !this.flowController?.isCurrentlyProcessing()) {
         e.preventDefault()
         this.handleUserInput()
       }
@@ -261,8 +262,9 @@ export class InterviewModal extends Modal {
       cls: 'lachesis-skip-button',
     })
     skipButton.addEventListener('click', () => {
-      if (!this.isProcessing) {
-        this.handleSkipTopic()
+      if (!this.flowController?.isCurrentlyProcessing()) {
+        this.addMessageToUI('user', "I don't know yet, let's move on")
+        this.flowController?.handleSkipTopic()
       }
     })
 
@@ -271,7 +273,7 @@ export class InterviewModal extends Modal {
       cls: 'lachesis-send-button',
     })
     sendButton.addEventListener('click', () => {
-      if (!this.isProcessing) {
+      if (!this.flowController?.isCurrentlyProcessing()) {
         this.handleUserInput()
       }
     })
@@ -285,13 +287,24 @@ export class InterviewModal extends Modal {
     const { contentEl } = this
     contentEl.empty()
 
+    // Check if we're in loading state (quick start)
+    if (this.flowController?.isCurrentlyLaunching()) {
+      contentEl.createEl('h2', { text: 'Quick Start' })
+      contentEl.createEl('p', {
+        text: 'Setting up your project...',
+        cls: 'lachesis-subtitle',
+      })
+      this.statusEl = contentEl.createDiv({ cls: 'lachesis-status' })
+      return
+    }
+
     contentEl.createEl('h2', { text: 'Name Your Project' })
     contentEl.createEl('p', {
       text: 'Choose a name or enter your own:',
       cls: 'lachesis-subtitle',
     })
 
-    const suggestions = this.currentSession?.nameSuggestions || []
+    const suggestions = this.cachedSession?.nameSuggestions || []
 
     // Name suggestions
     const suggestionsContainer = contentEl.createDiv({ cls: 'lachesis-name-suggestions' })
@@ -345,8 +358,8 @@ export class InterviewModal extends Modal {
 
     contentEl.createEl('h2', { text: 'Project Created!' })
 
-    const projectPath = this.currentSession?.scaffoldedPath || 'Unknown'
-    const projectName = this.currentSession?.selectedName || 'Your Project'
+    const projectPath = this.cachedSession?.scaffoldedPath || 'Unknown'
+    const projectName = this.cachedSession?.selectedName || 'Your Project'
 
     contentEl.createEl('p', {
       text: `"${projectName}" has been created successfully.`,
@@ -386,12 +399,12 @@ export class InterviewModal extends Modal {
   }
 
   private async transitionToExistingProject() {
-    if (!this.currentSession?.scaffoldedPath) {
+    if (!this.cachedSession?.scaffoldedPath) {
       new Notice('No project path available')
       return
     }
 
-    const projectPath = this.currentSession.scaffoldedPath
+    const projectPath = this.cachedSession.scaffoldedPath
 
     // Show loading state
     const { contentEl } = this
@@ -427,8 +440,7 @@ export class InterviewModal extends Modal {
       cls: 'mod-cta',
     })
     retryButton.addEventListener('click', () => {
-      this.phase = 'setup'
-      this.renderSetupPhase()
+      this.flowController?.resetToSetup()
     })
 
     const closeButton = buttonContainer.createEl('button', { text: 'Close' })
@@ -460,7 +472,13 @@ export class InterviewModal extends Modal {
   private updateStreamingMessage(content: string) {
     if (!this.messagesContainer) return
 
-    const streamingEl = this.messagesContainer.querySelector('.lachesis-message.streaming') as HTMLElement
+    let streamingEl = this.messagesContainer.querySelector('.lachesis-message.streaming') as HTMLElement
+
+    // Create streaming element if it doesn't exist
+    if (!streamingEl) {
+      streamingEl = this.addMessageToUI('assistant', '', true) as HTMLElement
+    }
+
     if (streamingEl) {
       streamingEl.empty()
       if (content) {
@@ -499,14 +517,18 @@ export class InterviewModal extends Modal {
     if (this.inputEl) {
       this.inputEl.disabled = !enabled
     }
-    this.isProcessing = !enabled
+    // Finalize streaming message when enabling input
+    if (enabled) {
+      this.finalizeStreamingMessage()
+      this.inputEl?.focus()
+    }
   }
 
   private updateProgressIndicator() {
     if (!this.progressContainer) return
 
     this.progressContainer.empty()
-    const coveredTopics = this.currentSession?.coveredTopics || []
+    const coveredTopics = this.flowController?.getCoveredTopics() || []
 
     for (const topic of DISCOVERY_TOPICS) {
       const isCovered = coveredTopics.includes(topic)
@@ -519,135 +541,11 @@ export class InterviewModal extends Modal {
   }
 
   // ============================================================================
-  // Interview Flow
+  // User Input Handling
   // ============================================================================
 
-  private async startInterview() {
-    if (!this.sessionManager || this.isLaunching || this.phase !== 'setup') return
-
-    this.isLaunching = true
-
-    this.phase = 'conversation'
-    this.renderConversationPhase()
-
-    try {
-      // Create session
-      this.currentSession = await this.sessionManager.createSession({
-        type: 'new_project',
-        planningLevel: this.selectedPlanningLevel,
-      })
-
-      // Stream first question
-      await this.streamNextQuestion()
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Failed to start interview'
-      this.phase = 'error'
-      this.renderErrorPhase(error)
-    } finally {
-      this.isLaunching = false
-    }
-  }
-
-  private async startQuickStart() {
-    if (!this.sessionManager || this.isLaunching || this.phase !== 'setup') return
-
-    this.isLaunching = true
-    // Replace setup UI immediately to prevent concurrent launches
-    this.phase = 'naming'
-    this.renderQuickStartLoading()
-
-    try {
-      // Create session with Quick Start planning level
-      this.currentSession = await this.sessionManager.createSession({
-        type: 'new_project',
-        planningLevel: 'Quick Start',
-      })
-
-      // Go directly to naming phase
-      this.updateStatus('Getting name suggestions...')
-
-      this.currentSession = await this.sessionManager.requestNameSuggestions(
-        this.currentSession.id,
-      )
-
-      this.renderNamingPhase()
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Failed to start quick project'
-      this.phase = 'error'
-      this.renderErrorPhase(error)
-    } finally {
-      this.isLaunching = false
-    }
-  }
-
-  private async handleSkipTopic() {
-    if (!this.sessionManager || !this.currentSession || !this.inputEl) return
-    if (this.isProcessing) return
-
-    this.setInputEnabled(false)
-
-    // Clear any existing input
-    this.inputEl.value = ''
-
-    // Add a skip message that the AI will handle gracefully
-    this.addMessageToUI('user', "I don't know yet, let's move on")
-
-    try {
-      this.currentSession = await this.sessionManager.sendMessage(
-        this.currentSession.id,
-        "I don't know yet, let's move on to the next topic",
-      )
-
-      // Stream next question
-      await this.streamNextQuestion()
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Failed to skip topic'
-      this.updateStatus(`Error: ${error}`)
-      this.setInputEnabled(true)
-    }
-  }
-
-  private async streamNextQuestion() {
-    if (!this.sessionManager || !this.currentSession) return
-
-    this.setInputEnabled(false)
-    this.updateStatus('Lachesis is thinking...')
-
-    // Add placeholder for streaming message
-    this.addMessageToUI('assistant', '', true)
-
-    try {
-      this.currentSession = await this.sessionManager.streamNextQuestion(
-        this.currentSession.id,
-        (partial) => {
-          this.streamingText = partial
-          this.updateStreamingMessage(partial)
-        },
-      )
-
-      this.finalizeStreamingMessage()
-
-      // Update progress indicator with new topics
-      this.updateProgressIndicator()
-
-      // Check if we should transition to naming
-      if (this.shouldTransitionToNaming()) {
-        await this.transitionToNaming()
-      } else {
-        this.setInputEnabled(true)
-        this.updateStatus('Your turn')
-        this.inputEl?.focus()
-      }
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Failed to generate question'
-      this.finalizeStreamingMessage()
-      this.updateStatus(`Error: ${error}`)
-      this.setInputEnabled(true)
-    }
-  }
-
-  private async handleUserInput() {
-    if (!this.sessionManager || !this.currentSession || !this.inputEl) return
+  private handleUserInput() {
+    if (!this.inputEl) return
 
     const message = this.inputEl.value.trim()
     if (!message) return
@@ -658,93 +556,16 @@ export class InterviewModal extends Modal {
     // Add user message to UI
     this.addMessageToUI('user', message)
 
-    // Send message to session
-    try {
-      this.currentSession = await this.sessionManager.sendMessage(
-        this.currentSession.id,
-        message,
-      )
-
-      // Stream next question
-      await this.streamNextQuestion()
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Failed to send message'
-      this.updateStatus(`Error: ${error}`)
-      this.setInputEnabled(true)
-    }
+    // Send to flow controller
+    this.flowController?.handleUserMessage(message)
   }
 
-  private shouldTransitionToNaming(): boolean {
-    if (!this.currentSession) return false
-
-    // Check if the last assistant message contains the transition phrase
-    const lastMessage = this.currentSession.messages[this.currentSession.messages.length - 1]
-    if (lastMessage?.role === 'assistant') {
-      const content = lastMessage.content.toLowerCase()
-      return content.includes('very well, sir. let us proceed')
-    }
-
-    return false
-  }
-
-  private async transitionToNaming() {
-    if (!this.sessionManager || !this.currentSession) return
-
-    this.updateStatus('Generating name suggestions...')
-
-    try {
-      this.currentSession = await this.sessionManager.requestNameSuggestions(
-        this.currentSession.id,
-      )
-
-      this.phase = 'naming'
-      this.renderNamingPhase()
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Failed to generate names'
-      new Notice(`Error: ${error}`)
-      // Fall back to naming phase with empty suggestions
-      this.phase = 'naming'
-      this.renderNamingPhase()
-    }
-  }
-
-  private async selectProjectName(name: string) {
-    if (!this.sessionManager || !this.currentSession) return
-
+  private selectProjectName(name: string) {
     const { contentEl } = this
     contentEl.empty()
     contentEl.createEl('h2', { text: 'Creating Project...' })
-    const statusEl = contentEl.createEl('p', { text: 'Selecting name...' })
+    this.statusEl = contentEl.createEl('p', { text: 'Selecting name...' })
 
-    try {
-      // Select name
-      this.currentSession = await this.sessionManager.selectProjectName(
-        this.currentSession.id,
-        name,
-      )
-      statusEl.setText('Extracting project data...')
-
-      // Extract data
-      this.currentSession = await this.sessionManager.extractProjectData(
-        this.currentSession.id,
-      )
-      statusEl.setText('Creating project files...')
-
-      // Scaffold
-      const result = await this.sessionManager.scaffold(this.currentSession.id)
-
-      if (result.success) {
-        // Refresh session state
-        this.currentSession = this.sessionManager.getSession(this.currentSession.id)
-        this.phase = 'complete'
-        this.renderCompletePhase()
-      } else {
-        throw new Error(result.error || 'Failed to create project')
-      }
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Failed to create project'
-      this.phase = 'error'
-      this.renderErrorPhase(error)
-    }
+    this.flowController?.selectProjectName(name)
   }
 }
