@@ -6,39 +6,23 @@ import * as path from 'path'
 import type { App, TFile } from 'obsidian'
 import { Notice } from 'obsidian'
 import type { ProjectSnapshot, ExpectedCoreFile } from '../../core/project/snapshot'
-import { buildProjectSnapshot } from '../../core/project/snapshot-builder'
 import { TEMPLATES, type TemplateName } from '../../scaffolder/templates'
 import { processTemplateForFile } from '../../scaffolder/scaffolder'
 import {
-  validateOverviewHeadings,
   fixOverviewHeadings,
-  validateRoadmapHeadings,
   fixRoadmapHeadings,
 } from '../../core/project/template-evaluator'
+import {
+  type ProjectIssue,
+  type IssuesPanelCallbacks,
+  type FixActionFactory,
+  ISSUE_ICONS,
+  formatIssuesHeader,
+  buildIssuesFromSnapshot,
+} from '../../core/project/issues'
 
-// ============================================================================
-// Types
-// ============================================================================
-
-export type ProjectIssue = {
-  file: ExpectedCoreFile | '.ai/config.json'
-  type: 'missing' | 'template_only' | 'thin' | 'config' | 'headings_invalid'
-  message: string
-  /** Additional details shown below the message (e.g., list of missing headings) */
-  details?: string
-  fixLabel: string
-  fixAction: () => Promise<void>
-  /** Optional secondary fix action */
-  secondaryFixLabel?: string
-  secondaryFixAction?: () => Promise<void>
-}
-
-export type IssuesPanelCallbacks = {
-  /** Called when an issue needs AI assistance (triggers chat input) */
-  onStartAIChat: (message: string, focusedFile?: ExpectedCoreFile) => void
-  /** Called after a fix is applied to refresh the snapshot */
-  onSnapshotRefresh: () => Promise<ProjectSnapshot>
-}
+// Re-export types for backward compatibility
+export type { ProjectIssue, IssuesPanelCallbacks } from '../../core/project/issues'
 
 // ============================================================================
 // Issues Panel Component
@@ -60,7 +44,7 @@ export class IssuesPanel {
     projectPath: string,
     snapshot: ProjectSnapshot,
     callbacks: IssuesPanelCallbacks,
-    modalEl: HTMLElement,
+    modalEl: HTMLElement
   ) {
     this.app = app
     this.projectPath = projectPath
@@ -98,83 +82,8 @@ export class IssuesPanel {
    * Build the list of issues from the snapshot readiness data.
    */
   buildIssuesList(): ProjectIssue[] {
-    const issues: ProjectIssue[] = []
-
-    // Check for config issues first (higher priority)
-    if (this.snapshot.health.configIssues.length > 0) {
-      const configMissing = !this.snapshot.aiConfig
-      issues.push({
-        file: '.ai/config.json',
-        type: 'config',
-        message: configMissing
-          ? 'AI config file is missing'
-          : 'GitHub repository not configured',
-        fixLabel: configMissing ? 'Create Config' : 'Configure',
-        fixAction: () => this.fixMissingConfig(),
-      })
-    }
-
-    for (const fileName of this.snapshot.readiness.prioritizedFiles) {
-      const fileEntry = this.snapshot.files[fileName]
-
-      if (!fileEntry.exists) {
-        issues.push({
-          file: fileName,
-          type: 'missing',
-          message: `${fileName} does not exist`,
-          fixLabel: 'Create File',
-          fixAction: () => this.fixMissingFile(fileName),
-        })
-      } else if (fileEntry.templateStatus === 'template_only') {
-        issues.push({
-          file: fileName,
-          type: 'template_only',
-          message: `${fileName} has not been filled in`,
-          fixLabel: 'Fill with AI',
-          fixAction: () => this.fixTemplateOnlyFile(fileName),
-        })
-      } else if (fileEntry.templateStatus === 'thin') {
-        issues.push({
-          file: fileName,
-          type: 'thin',
-          message: `${fileName} needs more content`,
-          fixLabel: 'Expand with AI',
-          fixAction: () => this.fixThinFile(fileName),
-        })
-      }
-    }
-
-    // Check Overview.md headings validation (only if file exists and isn't already flagged as missing/template_only)
-    const overviewEntry = this.snapshot.files['Overview.md']
-    if (overviewEntry?.exists && overviewEntry.templateStatus !== 'missing') {
-      // Don't duplicate if Overview.md is already in issues as template_only
-      const alreadyHasOverviewIssue = issues.some(
-        (i) => i.file === 'Overview.md' && (i.type === 'missing' || i.type === 'template_only')
-      )
-      if (!alreadyHasOverviewIssue) {
-        const headingIssue = this.checkOverviewHeadingsSync()
-        if (headingIssue) {
-          issues.push(headingIssue)
-        }
-      }
-    }
-
-    // Check Roadmap.md headings validation (only if file exists and isn't already flagged as missing/template_only)
-    const roadmapEntry = this.snapshot.files['Roadmap.md']
-    if (roadmapEntry?.exists && roadmapEntry.templateStatus !== 'missing') {
-      // Don't duplicate if Roadmap.md is already in issues as template_only
-      const alreadyHasRoadmapIssue = issues.some(
-        (i) => i.file === 'Roadmap.md' && (i.type === 'missing' || i.type === 'template_only')
-      )
-      if (!alreadyHasRoadmapIssue) {
-        const headingIssue = this.checkRoadmapHeadingsSync()
-        if (headingIssue) {
-          issues.push(headingIssue)
-        }
-      }
-    }
-
-    return issues
+    const basePath = (this.app.vault.adapter as any).getBasePath() as string
+    return buildIssuesFromSnapshot(this.snapshot, basePath, this.createFixActionFactory())
   }
 
   /**
@@ -199,7 +108,7 @@ export class IssuesPanel {
 
     // Header
     const header = this.issuesDropdown.createDiv({ cls: 'lachesis-issues-header' })
-    header.setText(`${issues.length} issue${issues.length > 1 ? 's' : ''} to address`)
+    header.setText(formatIssuesHeader(issues.length))
 
     // Issues list
     const listEl = this.issuesDropdown.createDiv({ cls: 'lachesis-issues-list' })
@@ -247,14 +156,7 @@ export class IssuesPanel {
 
     // Icon based on type
     const iconEl = itemEl.createSpan({ cls: 'lachesis-issue-icon' })
-    const iconMap: Record<ProjectIssue['type'], string> = {
-      missing: '!',
-      template_only: '?',
-      thin: '~',
-      config: '\u2699', // ⚙
-      headings_invalid: '\u2630', // ☰
-    }
-    iconEl.setText(iconMap[issue.type])
+    iconEl.setText(ISSUE_ICONS[issue.type])
 
     // Issue content
     const contentEl = itemEl.createDiv({ cls: 'lachesis-issue-content' })
@@ -334,84 +236,22 @@ export class IssuesPanel {
   }
 
   // ============================================================================
-  // Headings Validation
+  // Fix Action Factory
   // ============================================================================
 
   /**
-   * Synchronously check Overview.md heading validation using filesystem.
-   * Returns an issue if headings are invalid, null otherwise.
+   * Create the fix action factory for building issues.
    */
-  private checkOverviewHeadingsSync(): ProjectIssue | null {
-    try {
-      const basePath = (this.app.vault.adapter as any).getBasePath() as string
-      const overviewPath = path.join(basePath, this.projectPath, 'Overview.md')
-
-      if (!fs.existsSync(overviewPath)) return null
-
-      const content = fs.readFileSync(overviewPath, 'utf-8')
-      const validation = validateOverviewHeadings(content)
-
-      if (!validation.isValid) {
-        // Format the missing headings as a readable list
-        const missingList = validation.missingHeadings
-          .map((h) => h.replace(/^##+ /, '')) // Remove markdown heading markers for display
-          .join(', ')
-
-        return {
-          file: 'Overview.md',
-          type: 'headings_invalid',
-          message: `Missing ${validation.missingHeadings.length} heading(s)`,
-          details: `Missing: ${missingList}`,
-          fixLabel: 'Add Missing (AI)',
-          fixAction: () => this.addMissingHeadingsWithAI('Overview.md', validation.missingHeadings),
-          secondaryFixLabel: 'Reformat File',
-          secondaryFixAction: () => this.fixInvalidHeadings(),
-        }
-      }
-
-      return null
-    } catch (err) {
-      console.warn('Failed to validate Overview.md headings:', err)
-      return null
-    }
-  }
-
-  /**
-   * Synchronously check Roadmap.md heading validation using filesystem.
-   * Returns an issue if headings are invalid, null otherwise.
-   */
-  private checkRoadmapHeadingsSync(): ProjectIssue | null {
-    try {
-      const basePath = (this.app.vault.adapter as any).getBasePath() as string
-      const roadmapPath = path.join(basePath, this.projectPath, 'Roadmap.md')
-
-      if (!fs.existsSync(roadmapPath)) return null
-
-      const content = fs.readFileSync(roadmapPath, 'utf-8')
-      const validation = validateRoadmapHeadings(content)
-
-      if (!validation.isValid) {
-        // Format the missing headings as a readable list
-        const missingList = validation.missingHeadings
-          .map((h) => h.replace(/^##+ /, '')) // Remove markdown heading markers for display
-          .join(', ')
-
-        return {
-          file: 'Roadmap.md',
-          type: 'headings_invalid',
-          message: `Missing ${validation.missingHeadings.length} heading(s)`,
-          details: `Missing: ${missingList}`,
-          fixLabel: 'Add Missing (AI)',
-          fixAction: () => this.addMissingHeadingsWithAI('Roadmap.md', validation.missingHeadings),
-          secondaryFixLabel: 'Reformat File',
-          secondaryFixAction: () => this.fixRoadmapInvalidHeadings(),
-        }
-      }
-
-      return null
-    } catch (err) {
-      console.warn('Failed to validate Roadmap.md headings:', err)
-      return null
+  private createFixActionFactory(): FixActionFactory {
+    return {
+      createMissingFileFix: (fileName) => () => this.fixMissingFile(fileName),
+      createTemplateOnlyFix: (fileName) => () => this.fixTemplateOnlyFile(fileName),
+      createThinFileFix: (fileName) => () => this.fixThinFile(fileName),
+      createConfigFix: () => () => this.fixMissingConfig(),
+      createHeadingsAIFix: (fileName, missingHeadings) => () =>
+        this.addMissingHeadingsWithAI(fileName, missingHeadings),
+      createHeadingsReformatFix: (fileName) => () =>
+        fileName === 'Overview.md' ? this.fixInvalidHeadings() : this.fixRoadmapInvalidHeadings(),
     }
   }
 
@@ -483,7 +323,6 @@ export class IssuesPanel {
 
   /**
    * Add missing headings to a file using AI to propose targeted diffs.
-   * This allows the user to review and accept/reject each proposed change.
    */
   private async addMissingHeadingsWithAI(
     fileName: ExpectedCoreFile,
@@ -502,11 +341,8 @@ export class IssuesPanel {
 
   /**
    * Fix Overview.md headings by adding missing sections with placeholders.
-   * This is a structural fix that doesn't require AI.
-   * WARNING: This reformats the entire file structure.
    */
   private async fixInvalidHeadings(): Promise<void> {
-    // Confirm with user since this reformats the file
     const confirmed = window.confirm(
       'This will reformat Overview.md to match the expected template structure.\n\n' +
         'Your existing content will be preserved where possible, but the file structure will change.\n\n' +
@@ -537,11 +373,8 @@ export class IssuesPanel {
 
   /**
    * Fix Roadmap.md headings by adding missing sections with placeholders.
-   * This is a structural fix that doesn't require AI.
-   * WARNING: This reformats the entire file structure.
    */
   private async fixRoadmapInvalidHeadings(): Promise<void> {
-    // Confirm with user since this reformats the file
     const confirmed = window.confirm(
       'This will reformat Roadmap.md to match the expected template structure.\n\n' +
         'Your existing content will be preserved where possible, but the file structure will change.\n\n' +
@@ -572,8 +405,6 @@ export class IssuesPanel {
 
   /**
    * Fix missing or incomplete .ai/config.json.
-   * - If config doesn't exist: create it and ask AI for help
-   * - If config exists but github_repo is empty: ask AI to help configure it
    */
   private async fixMissingConfig(): Promise<void> {
     this.closeDropdown()
@@ -582,14 +413,13 @@ export class IssuesPanel {
       const configFolderPath = `${this.projectPath}/.ai`
       const configFilePath = `${configFolderPath}/config.json`
 
-      // Check if config file already exists (use filesystem directly for reliability)
+      // Check if config file already exists
       const basePath = (this.app.vault.adapter as any).getBasePath() as string
       const fullConfigPath = path.join(basePath, configFilePath)
       const configExists = fs.existsSync(fullConfigPath)
 
       if (configExists) {
         // Config exists but needs github_repo configured
-        // Start a conversation with the AI to help configure it
         this.callbacks.onStartAIChat(
           'Help me configure my .ai/config.json - I need to set up the GitHub repository.'
         )
@@ -597,14 +427,11 @@ export class IssuesPanel {
       }
 
       // Config doesn't exist - need to create it first
-      // Ensure .ai folder exists
       const fullFolderPath = path.join(basePath, configFolderPath)
       if (!fs.existsSync(fullFolderPath)) {
-        // Try vault API first, fall back to fs
         try {
           await this.app.vault.createFolder(configFolderPath)
         } catch {
-          // Vault API failed, try fs directly
           fs.mkdirSync(fullFolderPath, { recursive: true })
         }
       }
@@ -617,20 +444,16 @@ export class IssuesPanel {
           'Add your GitHub repo URL (e.g., "github.com/user/repo") to enable commit analysis for task tracking.',
       }
 
-      // Try vault API first, fall back to fs
       try {
         await this.app.vault.create(configFilePath, JSON.stringify(aiConfig, null, 2))
       } catch {
-        // Vault API failed, write directly
         fs.writeFileSync(fullConfigPath, JSON.stringify(aiConfig, null, 2), 'utf-8')
       }
 
       new Notice('Created .ai/config.json')
 
-      // Refresh to update the snapshot
       await this.refreshAfterFix()
 
-      // Now start a conversation with the AI to configure it
       this.callbacks.onStartAIChat(
         'Help me configure my .ai/config.json - I need to set up the GitHub repository.'
       )
