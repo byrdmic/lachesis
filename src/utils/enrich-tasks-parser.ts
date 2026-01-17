@@ -323,9 +323,11 @@ export function applyEnrichments(
 
           if (!hasExisting) {
             // Add empty line then enrichment block (empty line needed for Obsidian reading view)
+            // Also add empty line after enrichment for visual separation from next task
             const enrichmentBlock = formatEnrichmentBlock(enrichment)
             result.push('')
             result.push(enrichmentBlock)
+            result.push('')
           }
         }
       }
