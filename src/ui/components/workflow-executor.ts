@@ -211,8 +211,6 @@ export class WorkflowExecutor {
       this.runLogRefineStep(current.step, current.workflow)
     } else if (state.combinedName === 'tasks-harvest') {
       this.runTasksHarvestStep(current.step, current.workflow)
-    } else if (state.combinedName === 'tasks-maintenance') {
-      this.runTasksMaintenanceStep(current.step, current.workflow)
     }
   }
 
@@ -246,46 +244,6 @@ export class WorkflowExecutor {
     } else if (step.workflowName === 'ideas-groom') {
       this.engine.advanceCombinedWorkflow()
       this.advanceCombinedWorkflow()
-    }
-  }
-
-  /**
-   * Run a step in the tasks-maintenance combined workflow.
-   */
-  private async runTasksMaintenanceStep(step: { workflowName: string; status: string }, workflow: WorkflowDefinition): Promise<void> {
-    const snapshot = this.engine.getSnapshot()
-
-    if (step.workflowName === 'sync-commits') {
-      if (!snapshot.aiConfig?.github_repo) {
-        this.engine.skipCurrentStep('No GitHub repository configured')
-        this.callbacks.onAddMessage('assistant', `*Skipping sync commits: No GitHub repository configured*`)
-        this.engine.advanceCombinedWorkflow()
-        this.advanceCombinedWorkflow()
-        return
-      }
-
-      const syncWorkflow = getWorkflowDefinition('sync-commits')
-      this.callbacks.onTriggerAIWorkflow(syncWorkflow, 'Sync recent commits to tasks')
-    } else if (step.workflowName === 'archive-completed') {
-      const archiveWorkflow = getWorkflowDefinition('archive-completed')
-      this.callbacks.onTriggerAIWorkflow(archiveWorkflow, 'Archive completed tasks')
-    } else if (step.workflowName === 'promote-next-task') {
-      const tasksPath = `${this.projectPath}/Tasks.md`
-      const tasksFile = this.app.vault.getAbstractFileByPath(tasksPath)
-
-      if (tasksFile && tasksFile instanceof TFile) {
-        const tasksContent = await this.app.vault.read(tasksFile)
-        if (this.engine.checkHasTasksInCurrent(tasksContent)) {
-          this.engine.skipCurrentStep('Current section already has tasks')
-          this.callbacks.onAddMessage('assistant', `*Skipping task promotion: Current section already has tasks*`)
-          this.engine.advanceCombinedWorkflow()
-          this.advanceCombinedWorkflow()
-          return
-        }
-      }
-
-      const promoteWorkflow = getWorkflowDefinition('promote-next-task')
-      this.callbacks.onTriggerAIWorkflow(promoteWorkflow, 'Select the best task to promote to Current')
     }
   }
 

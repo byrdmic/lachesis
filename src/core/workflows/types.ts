@@ -15,14 +15,10 @@ export const WORKFLOW_NAMES = [
   // Combined workflows
   'log-refine',
   'tasks-harvest',
-  'tasks-maintenance',
   // Individual workflows (some hidden from UI)
   'title-entries',
   'generate-tasks',
   'groom-tasks',
-  'fill-overview',
-  'roadmap-fill',
-  'tasks-fill',
   'harvest-tasks',
   'ideas-groom',
   'sync-commits',

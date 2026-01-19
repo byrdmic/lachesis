@@ -13,13 +13,9 @@ export { PROJECT_FILES, ALL_CORE_FILES } from './constants'
 // Import all workflow definitions
 import { logRefineWorkflow } from './log-refine'
 import { tasksHarvestWorkflow } from './tasks-harvest'
-import { tasksMaintenanceWorkflow } from './tasks-maintenance'
 import { titleEntriesWorkflow } from './title-entries'
 import { generateTasksWorkflow } from './generate-tasks'
 import { groomTasksWorkflow } from './groom-tasks'
-import { fillOverviewWorkflow } from './fill-overview'
-import { roadmapFillWorkflow } from './roadmap-fill'
-import { tasksFillWorkflow } from './tasks-fill'
 import { harvestTasksWorkflow } from './harvest-tasks'
 import { ideasGroomWorkflow } from './ideas-groom'
 import { syncCommitsWorkflow } from './sync-commits'
@@ -36,15 +32,11 @@ export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
   // Combined workflows
   'log-refine': logRefineWorkflow,
   'tasks-harvest': tasksHarvestWorkflow,
-  'tasks-maintenance': tasksMaintenanceWorkflow,
 
   // Individual workflows
   'title-entries': titleEntriesWorkflow,
   'generate-tasks': generateTasksWorkflow,
   'groom-tasks': groomTasksWorkflow,
-  'fill-overview': fillOverviewWorkflow,
-  'roadmap-fill': roadmapFillWorkflow,
-  'tasks-fill': tasksFillWorkflow,
   'harvest-tasks': harvestTasksWorkflow,
   'ideas-groom': ideasGroomWorkflow,
   'sync-commits': syncCommitsWorkflow,

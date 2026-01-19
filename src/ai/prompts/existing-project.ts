@@ -187,11 +187,10 @@ Rules for config.json diffs:
 AVAILABLE WORKFLOWS:
 1. **Log: Refine** - Title log entries and extract potential tasks
 2. **Tasks: Harvest** - Extract actionable items from Log/Ideas → Tasks
-3. **Tasks: Maintenance** - Sync commits, archive completed, promote next task
-4. **Overview: Fill** - AI-guided session to fill Overview.md
-5. **Roadmap: Fill** - AI-guided session to fill Roadmap.md
-6. **Tasks: Fill** - AI-guided session to fill Tasks.md
-7. **Initialize from Summary** - Bootstrap project documentation from a summary
+3. **Tasks: Sync Commits** - Match git commits to tasks
+4. **Tasks: Archive Completed** - Move completed tasks to Archive.md
+5. **Tasks: Promote Next** - Promote a task from Later to Current
+6. **Initialize from Summary** - Bootstrap project documentation from a summary
 
 When suggesting workflows, base your recommendation on the project snapshot status.
 `

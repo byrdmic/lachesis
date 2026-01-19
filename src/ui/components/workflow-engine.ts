@@ -362,31 +362,6 @@ export class WorkflowEngine {
       return { type: 'combined' }
     }
 
-    // Fill workflows use focused file mechanism
-    if (workflow.name === 'fill-overview') {
-      return {
-        type: 'focused-file',
-        focusedFile: 'Overview.md',
-        focusedMessage: `Help me fill in Overview.md. It currently only has template placeholders. Let's work through it section by section.`,
-      }
-    }
-
-    if (workflow.name === 'roadmap-fill') {
-      return {
-        type: 'focused-file',
-        focusedFile: 'Roadmap.md',
-        focusedMessage: `Help me fill in Roadmap.md. I need to define milestones for my project from scratch. Let's work through it step by step.`,
-      }
-    }
-
-    if (workflow.name === 'tasks-fill') {
-      return {
-        type: 'focused-file',
-        focusedFile: 'Tasks.md',
-        focusedMessage: `Help me fill in Tasks.md. I need to create vertical slices and tasks aligned with my roadmap. Let's work through it step by step.`,
-      }
-    }
-
     // Init-from-summary needs input modal first
     if (workflow.name === 'init-from-summary') {
       return { type: 'input-modal' }
