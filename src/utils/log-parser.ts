@@ -289,6 +289,17 @@ export interface FilteredLogResult {
   allSummarized: boolean
 }
 
+export interface BottomLinesResult {
+  /** The content to send to the AI (bottom N lines) */
+  content: string
+  /** Whether the log was trimmed */
+  wasTrimmed: boolean
+  /** Number of lines that were excluded */
+  excludedLineCount: number
+  /** Number of lines included */
+  includedLineCount: number
+}
+
 /**
  * Filter log content to only include entries that lack titles.
  * This is specifically for the title-entries workflow to ensure
@@ -355,5 +366,72 @@ export function getFilteredLogForTitleEntries(content: string): FilteredLogResul
     excludedEntryCount: summarizedEntries.length,
     includedEntryCount: unsummarizedEntries.length,
     allSummarized: false,
+  }
+}
+
+// Default number of lines to include from the bottom of the log
+export const DEFAULT_BOTTOM_LINES = 300
+
+/**
+ * Get the bottom N lines of the log file.
+ * This is used for the log-refine workflow to avoid overwhelming the AI with
+ * too much content while still providing sufficient context for processing.
+ *
+ * The function preserves frontmatter and adds a note about excluded content.
+ */
+export function getBottomLinesOfLog(
+  content: string,
+  lineCount: number = DEFAULT_BOTTOM_LINES,
+): BottomLinesResult {
+  const lines = content.split('\n')
+
+  // If file is small enough, return everything
+  if (lines.length <= lineCount) {
+    return {
+      content,
+      wasTrimmed: false,
+      excludedLineCount: 0,
+      includedLineCount: lines.length,
+    }
+  }
+
+  // Find end of frontmatter
+  let frontmatterEndLine = 0
+  let inFrontmatter = false
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (i === 0 && line === '---') {
+      inFrontmatter = true
+      continue
+    }
+    if (inFrontmatter && line === '---') {
+      frontmatterEndLine = i + 1
+      break
+    }
+  }
+
+  // Calculate how many content lines we can include
+  const frontmatterLines = lines.slice(0, frontmatterEndLine)
+  const contentLines = lines.slice(frontmatterEndLine)
+
+  // How many content lines to include (accounting for frontmatter)
+  const maxContentLines = lineCount - frontmatterLines.length - 4 // 4 lines for the trim notice
+  const bottomContentLines = contentLines.slice(-maxContentLines)
+  const excludedCount = contentLines.length - bottomContentLines.length
+
+  // Build the result
+  const resultLines: string[] = [
+    ...frontmatterLines,
+    '',
+    `<!-- TRIMMED: ${excludedCount} earlier lines excluded to focus on recent entries -->`,
+    '',
+    ...bottomContentLines,
+  ]
+
+  return {
+    content: resultLines.join('\n'),
+    wasTrimmed: true,
+    excludedLineCount: excludedCount,
+    includedLineCount: bottomContentLines.length,
   }
 }

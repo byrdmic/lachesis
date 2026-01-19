@@ -11,7 +11,7 @@ import { buildSystemPrompt } from '../ai/prompts'
 import { PROJECT_FILES, getWorkflowDefinition } from '../core/workflows/definitions'
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 import type { DiffBlock } from '../utils/diff'
-import { getTrimmedLogContent, getFilteredLogForTitleEntries, type TrimmedLogResult, type FilteredLogResult } from '../utils/log-parser'
+import { getTrimmedLogContent, getFilteredLogForTitleEntries, getBottomLinesOfLog, type TrimmedLogResult, type FilteredLogResult, type BottomLinesResult } from '../utils/log-parser'
 import type { DiffAction } from './diff-viewer-modal'
 import { fetchCommits, formatCommitLog } from '../github'
 
@@ -456,6 +456,7 @@ export class ExistingProjectModal extends Modal {
     let workflowFileContents: string | undefined
     let logTrimResult: TrimmedLogResult | null = null
     let logFilterResult: FilteredLogResult | null = null
+    let logBottomResult: BottomLinesResult | null = null
     if (this.activeWorkflow) {
       this.chatInterface.updateStatus(`Fetching files for ${this.activeWorkflow.displayName}...`)
       try {
@@ -476,6 +477,13 @@ export class ExistingProjectModal extends Modal {
             if (logTrimResult.wasTrimmed) {
               fileContents['Log.md'] = logTrimResult.content
               console.log(`Log trimmed: ${logTrimResult.trimSummary}`)
+            }
+          } else if (this.activeWorkflow.name === 'log-refine') {
+            // For log-refine, limit to bottom 300 lines to avoid overwhelming AI
+            logBottomResult = getBottomLinesOfLog(fileContents['Log.md'])
+            if (logBottomResult.wasTrimmed) {
+              fileContents['Log.md'] = logBottomResult.content
+              console.log(`Log trimmed for log-refine: showing ${logBottomResult.includedLineCount} lines, excluded ${logBottomResult.excludedLineCount} earlier lines`)
             }
           }
         }
