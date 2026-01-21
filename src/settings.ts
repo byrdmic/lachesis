@@ -15,6 +15,8 @@ import { getAllWorkflows } from './core/workflows/definitions'
 // Settings Types
 // ============================================================================
 
+export type ValidationResult = { valid: true } | { valid: false; errors: string[] }
+
 export interface LachesisSettings {
   // Provider selection
   provider: ProviderType
@@ -33,6 +35,9 @@ export interface LachesisSettings {
   // Project settings
   projectsFolder: string
 
+  // State persistence
+  lastActiveProjectPath?: string
+
   // Behavior settings
   autoAcceptChanges: boolean
   // Per-workflow auto-apply settings (workflow name -> enabled)
@@ -42,7 +47,7 @@ export interface LachesisSettings {
 export const DEFAULT_SETTINGS: LachesisSettings = {
   provider: 'anthropic',
   anthropicApiKey: '',
-  anthropicModel: 'claude-sonnet-4-20250514',
+  anthropicModel: 'claude-sonnet-4-5',
   openaiApiKey: '',
   openaiModel: 'gpt-5.2',
   githubToken: '',
@@ -92,6 +97,32 @@ class FolderSuggest extends AbstractInputSuggest<TFolder> {
     this.inputEl.trigger('input')
     this.close()
   }
+}
+
+// ============================================================================
+// Settings Validation
+// ============================================================================
+
+export function validateSettings(app: App, settings: LachesisSettings): ValidationResult {
+  const errors: string[] = []
+
+  // Required API key for selected provider
+  if (settings.provider === 'anthropic' && !settings.anthropicApiKey?.trim()) {
+    errors.push('Anthropic API key is required when Anthropic is selected')
+  }
+  if (settings.provider === 'openai' && !settings.openaiApiKey?.trim()) {
+    errors.push('OpenAI API key is required when OpenAI is selected')
+  }
+
+  // Projects folder must be a directory (if it exists)
+  if (settings.projectsFolder) {
+    const folder = app.vault.getAbstractFileByPath(settings.projectsFolder)
+    if (folder && !(folder instanceof TFolder)) {
+      errors.push('Projects folder path points to a file, not a folder')
+    }
+  }
+
+  return errors.length ? { valid: false, errors } : { valid: true }
 }
 
 // ============================================================================

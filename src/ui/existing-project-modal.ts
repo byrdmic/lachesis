@@ -3,6 +3,7 @@
 
 import { App, Modal, Component } from 'obsidian'
 import type LachesisPlugin from '../main'
+import { resolveAbsoluteProjectPath } from '../utils/path'
 import type { ProjectSnapshot, ExpectedCoreFile } from '../core/project/snapshot'
 import { buildProjectSnapshot, formatProjectSnapshotForModel, fetchProjectFileContents, formatFileContentsForModel } from '../core/project/snapshot-builder'
 import { getProvider, isProviderAvailable } from '../ai/providers/factory'
@@ -75,6 +76,10 @@ export class ExistingProjectModal extends Modal {
     this.modalEl.addClass('lachesis-modal-root')
     contentEl.addClass('lachesis-modal')
     this.renderComponent.load()
+
+    // Save this project as the last-used project
+    this.plugin.settings.lastActiveProjectPath = this.projectPath
+    await this.plugin.saveSettings()
 
     // Check if provider is configured
     if (!isProviderAvailable(this.plugin.settings.provider, this.plugin.settings)) {
@@ -598,14 +603,40 @@ export class ExistingProjectModal extends Modal {
     }
     this.activeWorkflow = null
 
+    // Use agent chat for non-workflow chat when provider supports it
+    const useAgentChat = !this.lastUsedWorkflowName && this.provider.streamAgentChat
+
     try {
-      const result = await this.provider.streamText(
-        systemPrompt,
-        this.messages,
-        (partial) => {
-          this.chatInterface?.updateStreamingMessage(partial)
-        },
-      )
+      let result
+
+      if (useAgentChat) {
+        // Use Agent SDK for non-workflow chat (enables tool access)
+        const absolutePath = resolveAbsoluteProjectPath(this.app.vault, this.projectPath)
+
+        result = await this.provider.streamAgentChat!(
+          systemPrompt,
+          this.messages,
+          {
+            cwd: absolutePath,
+            allowedTools: ['Glob', 'Grep', 'Read', 'Edit', 'Write'],
+          },
+          {
+            onTextUpdate: (partial) => this.chatInterface?.updateStreamingMessage(partial),
+            onToolActivity: (activity) => this.chatInterface?.showToolActivity(activity),
+          },
+        )
+
+        this.chatInterface?.clearToolActivity()
+      } else {
+        // Use regular streamText for workflows
+        result = await this.provider.streamText(
+          systemPrompt,
+          this.messages,
+          (partial) => {
+            this.chatInterface?.updateStreamingMessage(partial)
+          },
+        )
+      }
 
       this.chatInterface.finalizeStreamingMessage()
 
@@ -659,6 +690,7 @@ export class ExistingProjectModal extends Modal {
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to generate response'
       this.chatInterface?.finalizeStreamingMessage()
+      this.chatInterface?.clearToolActivity()
       this.chatInterface?.updateStatus(`Error: ${error}`)
       this.setInputEnabled(true)
     }

@@ -64,16 +64,33 @@ export default class LachesisPlugin extends Plugin {
    * Main entry point - checks for active project file first
    */
   async openLachesis() {
+    // 1. Try inference from active file
     const activeProjectPath = this.getActiveProjectPath()
 
     if (activeProjectPath) {
       // Active file is in a project - go directly to existing project modal
       const snapshot = await buildProjectSnapshot(this.app.vault, activeProjectPath)
       this.openExistingProject(activeProjectPath, snapshot)
-    } else {
-      // No active project - show picker
-      this.openProjectPicker()
+      return
     }
+
+    // 2. Check last-used project path
+    const lastUsed = this.settings.lastActiveProjectPath
+    if (lastUsed) {
+      // Validate the path still exists as a folder
+      const folder = this.app.vault.getAbstractFileByPath(lastUsed)
+      if (folder && folder instanceof TFolder) {
+        // Open picker with last-used project pre-selected
+        this.openProjectPicker(lastUsed)
+        return
+      }
+      // Clear invalid last-used path
+      this.settings.lastActiveProjectPath = undefined
+      await this.saveSettings()
+    }
+
+    // 3. No valid last-used - open picker normally
+    this.openProjectPicker()
   }
 
   /**
@@ -107,11 +124,12 @@ export default class LachesisPlugin extends Plugin {
 
   /**
    * Open the project picker modal
+   * @param preSelectedPath - Optional project path to highlight/pre-select
    */
-  openProjectPicker() {
+  openProjectPicker(preSelectedPath?: string) {
     new ProjectPickerModal(this.app, this, (projectPath, snapshot) => {
       this.openExistingProject(projectPath, snapshot)
-    }).open()
+    }, preSelectedPath).open()
   }
 
   /**

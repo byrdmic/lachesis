@@ -7,12 +7,13 @@ An Obsidian plugin for AI-powered project planning and management. Lachesis help
 - **AI-Powered Project Discovery**: Conversational interface to explore, define, and refine project ideas
 - **Structured Project Scaffolding**: Generates organized markdown files with consistent structure
 - **Multi-Provider Support**: Works with Anthropic (Claude) and OpenAI models
-- **Automated Workflows**: Maintenance workflows for titling log entries, harvesting tasks, syncing git commits, and archiving completed work
-- **AI-Guided Fill Sessions**: Iterative sessions to build out Overview, Roadmap, and Tasks documents
+- **Automated Workflows**: Maintenance workflows for refining log entries, harvesting tasks, and enriching task context
+- **AI-Guided Document Building**: Focused chat sessions to build out Overview, Roadmap, and Tasks documents
 - **GitHub Integration**: Sync git commits to automatically mark tasks as complete
 - **Persistent Chat History**: Chat logs saved per-project for continuity across sessions
 - **Project Health Assessment**: Automatic detection of missing files, thin documents, and configuration issues
 - **Diff Preview**: Review all AI-proposed changes before applying them
+- **Auto-Apply**: Optional auto-apply for low-risk workflows (configurable per workflow)
 
 ## Installation
 
@@ -53,10 +54,11 @@ bun run build
 Open Obsidian Settings > Lachesis to configure:
 
 - **Provider**: Anthropic (Claude) or OpenAI
-- **API Key**: Your provider's API key
-- **Model**: Which model to use for conversations
+- **API Key**: API key for each provider (Anthropic and/or OpenAI)
+- **Model**: Model selection per provider (e.g., claude-sonnet-4 for Anthropic, gpt-4o for OpenAI)
 - **Projects Folder**: Where to create new projects
 - **GitHub Token**: Personal access token for private repos (optional, increases rate limits)
+- **Workflow Auto-Apply**: Enable auto-apply for specific low-risk workflows
 
 ## Project Structure
 
@@ -65,11 +67,11 @@ When a project is scaffolded, these files are created:
 ```
 ProjectName/
 ├── Overview.md      # Project north star (elevator pitch, problem, users, scope, constraints)
-├── Roadmap.md       # Milestones, vertical slices, current focus
-├── Tasks.md         # Now (single active task), Next, Later, with slice links
-├── Log.md           # Progress notes, thinking, AI-extracted potential tasks
+├── Roadmap.md       # Milestones with vertical slices (demo-able features)
+├── Tasks.md         # Current, Blocked, Later, Done - with optional slice links
+├── Log.md           # Freeform progress notes and thinking
 ├── Ideas.md         # Scratch ideas and open questions
-├── Archive.md       # Completed work organized by vertical slice
+├── Archive.md       # Completed work, superseded plans, rejected ideas
 └── .ai/             # AI configuration and chat history
     ├── config.json  # Project settings (GitHub repo URL, etc.)
     └── logs/        # Persisted chat sessions as markdown files
@@ -77,40 +79,47 @@ ProjectName/
 
 ## Workflows
 
-Lachesis provides combined workflows for common project maintenance tasks:
+Lachesis provides automated workflows for common project maintenance tasks. Workflows are accessible via buttons in the project UI or by requesting them in chat.
+
+### Main Workflows
 
 | Workflow | Display Name | Description |
 |----------|--------------|-------------|
 | `log-refine` | Log: Refine | Title entries, extract potential tasks, review and move to Tasks.md |
-| `tasks-harvest` | Tasks: Harvest | Find actionable items across all files (including Ideas.md) |
-| `tasks-maintenance` | Tasks: Maintenance | Sync commits, archive completed tasks, promote next task |
+| `tasks-harvest` | Tasks: Harvest | Find actionable items across all project files |
+| `enrich-tasks` | Tasks: Enrich | Add rich context to tasks for Claude Code handoff |
+| `init-from-summary` | Initialize from Summary | Batch-fill Overview, Roadmap, and Tasks from a design document |
 
-AI-guided fill workflows for building documents from scratch:
+### Individual Workflows (Hidden from UI, available via chat)
 
 | Workflow | Display Name | Description |
 |----------|--------------|-------------|
-| `fill-overview` | Overview: Fill | Interactive session to complete Overview.md section by section |
-| `roadmap-fill` | Roadmap: Fill | Define milestones and vertical slices for your project |
-| `tasks-fill` | Tasks: Fill | Extract tasks from Roadmap slices and set up initial work items |
-| `init-from-summary` | Initialize from Summary | Batch-fill Overview, Roadmap, and Tasks from a design document |
+| `sync-commits` | Tasks: Sync Commits | Match git commits to tasks and mark complete |
+| `archive-completed` | Tasks: Archive Completed | Move completed tasks to Archive.md by vertical slice |
+| `promote-next-task` | Tasks: Promote to Current | AI-powered selection of best task to promote |
 
 ### Workflow Details
 
-**Log: Refine** combines three steps:
+**Log: Refine** is a combined workflow with three steps:
 1. Add short titles (1-5 words) to log entries that lack them
 2. Extract 0-3 potential tasks from each entry
 3. Open groom modal to Keep, Reject, or Move tasks to Tasks.md
 
-**Tasks: Harvest** scans all project files:
+**Tasks: Harvest** scans all project files in a single pass:
 - Reads Overview, Roadmap, Tasks, Ideas, and Log
 - Finds implicit TODOs, gaps, and actionable ideas
 - De-duplicates against existing tasks
-- Suggests destination (Now, Next, Later) and Roadmap slice links
+- Suggests destination (Current, Later) and Roadmap slice links
 
-**Tasks: Maintenance** handles the task lifecycle:
-1. Sync git commits (if GitHub configured) to mark tasks complete
-2. Archive completed tasks to Archive.md organized by vertical slice
-3. If Now is empty, AI promotes the best task from Next/Later
+**Tasks: Enrich** adds context to tasks for handoff:
+- Gathers context from Overview constraints, Roadmap slices, and Log entries
+- Adds why the task exists, key considerations, and acceptance criteria
+- Prioritizes tasks in the Current section
+
+**Initialize from Summary** batch-fills project files:
+- Parses a design summary (from an external AI conversation or planning document)
+- Generates unified diffs for Overview.md, Roadmap.md, and Tasks.md
+- Presents changes in a batch diff viewer for review
 
 ## Development
 

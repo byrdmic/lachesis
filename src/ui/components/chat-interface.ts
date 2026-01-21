@@ -3,7 +3,7 @@
 
 import type { App, Component } from 'obsidian'
 import { MarkdownRenderer, Notice } from 'obsidian'
-import type { ConversationMessage } from '../../ai/providers/types'
+import type { ConversationMessage, ToolActivity } from '../../ai/providers/types'
 import {
   extractDiffBlocks,
   containsDiffBlocks,
@@ -54,6 +54,7 @@ export class ChatInterface {
   private messagesContainer: HTMLElement | null = null
   private inputEl: HTMLInputElement | null = null
   private statusEl: HTMLElement | null = null
+  private toolActivityEl: HTMLElement | null = null
 
   constructor(
     app: App,
@@ -385,6 +386,51 @@ export class ChatInterface {
    */
   getState(): ChatState {
     return this.state
+  }
+
+  /**
+   * Show tool activity indicator (e.g., when Agent SDK is using a tool).
+   */
+  showToolActivity(activity: ToolActivity): void {
+    if (!this.messagesContainer) return
+
+    // Remove existing activity indicator if present
+    this.clearToolActivity()
+
+    // Create new activity indicator
+    this.toolActivityEl = this.messagesContainer.createDiv({ cls: 'lachesis-tool-activity' })
+
+    // Icon based on status
+    const iconEl = this.toolActivityEl.createSpan({ cls: 'lachesis-tool-activity-icon' })
+    if (activity.status === 'running') {
+      iconEl.addClass('spinning')
+      iconEl.setText('⚙')
+    } else if (activity.status === 'completed') {
+      iconEl.setText('✓')
+    } else {
+      iconEl.setText('✗')
+    }
+
+    // Tool name
+    const nameEl = this.toolActivityEl.createSpan({ cls: 'lachesis-tool-activity-name' })
+    nameEl.setText(activity.toolName)
+
+    // Status text
+    const statusEl = this.toolActivityEl.createSpan({ cls: 'lachesis-tool-activity-status' })
+    statusEl.setText(activity.status)
+
+    // Scroll to show the activity indicator
+    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight
+  }
+
+  /**
+   * Clear the tool activity indicator.
+   */
+  clearToolActivity(): void {
+    if (this.toolActivityEl) {
+      this.toolActivityEl.remove()
+      this.toolActivityEl = null
+    }
   }
 
   // ============================================================================

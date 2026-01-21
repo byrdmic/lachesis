@@ -1,0 +1,43 @@
+/* Tool Activity Indicator Styles */
+
+.lachesis-tool-activity {
+  padding: 6px 10px;
+  margin: 4px 0;
+  background: var(--background-secondary);
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-left: 2px solid var(--interactive-accent);
+}
+
+.lachesis-tool-activity-icon {
+  font-size: 1.1em;
+  width: 18px;
+  text-align: center;
+}
+
+.lachesis-tool-activity-icon.spinning {
+  animation: lachesis-spin 1s linear infinite;
+}
+
+@keyframes lachesis-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.lachesis-tool-activity-name {
+  font-weight: 500;
+  color: var(--text-normal);
+}
+
+.lachesis-tool-activity-status {
+  font-style: italic;
+  color: var(--text-faint);
+}

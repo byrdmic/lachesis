@@ -60,7 +60,7 @@ export function getAvailableProviders(): Array<{ type: ProviderType; displayName
 export function getDefaultModel(type: ProviderType): string {
   switch (type) {
     case 'anthropic':
-      return 'claude-sonnet-4-20250514'
+      return 'claude-sonnet-4-5'
     case 'openai':
       return 'gpt-5.2'
     default:
@@ -75,9 +75,9 @@ export function getModelsForProvider(type: ProviderType): Array<{ value: string;
   switch (type) {
     case 'anthropic':
       return [
-        { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (Recommended)' },
-        { value: 'claude-opus-4-20250514', label: 'Claude Opus 4 (Most capable)' },
-        { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku (Fast)' },
+        { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 (Recommended)' },
+        { value: 'claude-opus-4-5', label: 'Claude Opus 4.5 (Most capable)' },
+        { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (Fast)' },
       ]
     case 'openai':
       return [

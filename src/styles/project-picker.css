@@ -2,6 +2,7 @@
 
 /* Project Picker */
 .lachesis-project-item {
+  position: relative;
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
 }
@@ -10,4 +11,21 @@
   background: var(--background-modifier-hover);
   border-color: var(--interactive-accent);
   box-shadow: 0 0 15px rgba(var(--interactive-accent-rgb), 0.1);
+}
+
+/* Pre-selected (last-used) project */
+.lachesis-project-item.is-preselected {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 10px rgba(var(--interactive-accent-rgb), 0.15);
+}
+
+.lachesis-project-item.is-preselected::before {
+  content: 'Last used';
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }

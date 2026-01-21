@@ -9,7 +9,10 @@ import type {
   TextResult,
   StructuredResult,
   ConversationMessage,
+  AgentChatOptions,
+  AgentChatCallbacks,
 } from '../types'
+import { streamAgentChat as agentChatQuery } from './agent-chat'
 import { zodToJsonSchema } from './zod-to-json-schema'
 
 // ============================================================================
@@ -31,6 +34,7 @@ export class AnthropicProvider implements AIProvider {
     if (!this.client) {
       this.client = new Anthropic({
         apiKey: this.apiKey,
+        dangerouslyAllowBrowser: true,
       })
     }
     return this.client
@@ -212,5 +216,25 @@ export class AnthropicProvider implements AIProvider {
         debugDetails: stack ? `${message}\n${stack}` : message,
       }
     }
+  }
+
+  // --------------------------------------------------------------------------
+  // Agent Chat (Claude Agent SDK)
+  // --------------------------------------------------------------------------
+
+  async streamAgentChat(
+    systemPrompt: string,
+    messages: ConversationMessage[],
+    options: AgentChatOptions,
+    callbacks: AgentChatCallbacks,
+  ): Promise<TextResult> {
+    return agentChatQuery(
+      this.apiKey,
+      this.model,
+      systemPrompt,
+      messages,
+      options,
+      callbacks,
+    )
   }
 }

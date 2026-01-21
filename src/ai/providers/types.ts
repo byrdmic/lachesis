@@ -93,6 +93,38 @@ export interface AIProvider {
    * Check if this provider is available (has API key, etc.)
    */
   isAvailable(): boolean
+
+  /**
+   * Stream chat using Claude Agent SDK with tool access (optional - only Anthropic implements this).
+   * Enables AI to use tools like Read, Glob, Grep, Edit, Write for context retrieval.
+   */
+  streamAgentChat?(
+    systemPrompt: string,
+    messages: ConversationMessage[],
+    options: AgentChatOptions,
+    callbacks: AgentChatCallbacks,
+  ): Promise<TextResult>
+}
+
+// ============================================================================
+// Agent Chat Types (for Claude Agent SDK integration)
+// ============================================================================
+
+export type ToolActivity = {
+  toolName: string
+  status: 'running' | 'completed' | 'failed'
+  input?: Record<string, unknown>
+  output?: string
+}
+
+export type AgentChatCallbacks = {
+  onTextUpdate?: (partial: string) => void
+  onToolActivity?: (activity: ToolActivity) => void
+}
+
+export type AgentChatOptions = {
+  cwd: string
+  allowedTools?: string[]
 }
 
 // ============================================================================

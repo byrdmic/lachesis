@@ -24,15 +24,18 @@ export class ProjectPickerModal extends Modal {
   private projects: ProjectInfo[] = []
   private isLoading = true
   private onSelect: (projectPath: string, snapshot: ProjectSnapshot) => void
+  private preSelectedPath?: string
 
   constructor(
     app: App,
     plugin: LachesisPlugin,
     onSelect: (projectPath: string, snapshot: ProjectSnapshot) => void,
+    preSelectedPath?: string,
   ) {
     super(app)
     this.plugin = plugin
     this.onSelect = onSelect
+    this.preSelectedPath = preSelectedPath
   }
 
   async onOpen() {
@@ -143,11 +146,27 @@ export class ProjectPickerModal extends Modal {
       return
     }
 
+    // Sort projects: pre-selected first, then by most recently modified
+    const sortedProjects = [...this.projects].sort((a, b) => {
+      // Pre-selected project always comes first
+      if (this.preSelectedPath) {
+        if (a.path === this.preSelectedPath) return -1
+        if (b.path === this.preSelectedPath) return 1
+      }
+      // Then sort by modification time
+      const aTime = this.getLatestMtime(a.snapshot)
+      const bTime = this.getLatestMtime(b.snapshot)
+      return bTime - aTime
+    })
+
     // Project list
     const listContainer = contentEl.createDiv({ cls: 'lachesis-project-list' })
 
-    for (const project of this.projects) {
-      const projectEl = listContainer.createDiv({ cls: 'lachesis-project-item' })
+    for (const project of sortedProjects) {
+      const isPreSelected = project.path === this.preSelectedPath
+      const projectEl = listContainer.createDiv({
+        cls: `lachesis-project-item${isPreSelected ? ' is-preselected' : ''}`
+      })
 
       // Project info
       const infoEl = projectEl.createDiv({ cls: 'lachesis-project-info' })
