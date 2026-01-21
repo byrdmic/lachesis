@@ -14,6 +14,11 @@ import type {
   AgentChatOptions,
   AgentChatCallbacks,
 } from '../types'
+import * as path from 'path'
+
+// Path to the Claude Agent SDK cli.js - injected at build time
+// This is needed because the SDK uses import.meta.url internally which doesn't work in CJS bundles
+const CLAUDE_CLI_PATH = process.env.CLAUDE_CLI_PATH
 
 // ============================================================================
 // Types for Stream Events
@@ -86,6 +91,7 @@ export async function streamAgentChat(
         cwd: options.cwd,
         model,
         systemPrompt,
+        pathToClaudeCodeExecutable: CLAUDE_CLI_PATH, // Required: bypass import.meta.url issue in bundled code
         allowedTools: options.allowedTools ?? ALLOWED_TOOLS,
         disallowedTools: DISALLOWED_TOOLS,
         includePartialMessages: true, // Enable streaming

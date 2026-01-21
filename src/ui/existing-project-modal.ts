@@ -387,10 +387,19 @@ export class ExistingProjectModal extends Modal {
         })
         await this.chatSidebar?.saveChat(this.messages)
         this.chatSidebar?.highlightCurrentChat()
+        this.setProcessing(false, 'Your turn')
+        this.chatInterface.focusInput()
+      } else if (!result.success) {
+        // API call failed - show error
+        const errorMsg = result.error || 'Failed to connect to AI provider'
+        this.chatInterface.updateStatus(`Error: ${errorMsg}`)
+        this.setProcessing(false, `Error: ${errorMsg}`)
+        console.error('AI provider error:', result.error, result.debugDetails)
+      } else {
+        // Success but empty content
+        this.setProcessing(false, 'Your turn')
+        this.chatInterface.focusInput()
       }
-
-      this.setProcessing(false, 'Your turn')
-      this.chatInterface.focusInput()
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to generate opening message'
       this.chatInterface.finalizeStreamingMessage()
@@ -612,6 +621,7 @@ export class ExistingProjectModal extends Modal {
       if (useAgentChat) {
         // Use Agent SDK for non-workflow chat (enables tool access)
         const absolutePath = resolveAbsoluteProjectPath(this.app.vault, this.projectPath)
+        console.log('[Lachesis] Agent chat cwd:', absolutePath)
 
         result = await this.provider.streamAgentChat!(
           systemPrompt,
@@ -683,10 +693,19 @@ export class ExistingProjectModal extends Modal {
         })
         await this.chatSidebar?.saveChat(this.messages)
         this.chatSidebar?.highlightCurrentChat()
+        this.setProcessing(false, 'Your turn')
+        this.chatInterface.focusInput()
+      } else if (!result.success) {
+        // API call failed - show error
+        const errorMsg = result.error || 'Failed to generate response'
+        this.chatInterface.updateStatus(`Error: ${errorMsg}`)
+        this.setProcessing(false, `Error: ${errorMsg}`)
+        console.error('AI provider error:', result.error, result.debugDetails)
+      } else {
+        // Success but empty content
+        this.setProcessing(false, 'Your turn')
+        this.chatInterface.focusInput()
       }
-
-      this.setProcessing(false, 'Your turn')
-      this.chatInterface.focusInput()
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to generate response'
       this.chatInterface?.finalizeStreamingMessage()

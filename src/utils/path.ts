@@ -3,6 +3,10 @@
 import type { Vault, FileSystemAdapter } from 'obsidian'
 import * as path from 'path'
 
+// Hardcoded fallback for Windows environments where adapter.getBasePath() returns undefined
+// This is injected at build time from .env, but we also have a hardcoded fallback
+const FALLBACK_PROJECT_PATH = process.env.PROJECT_PATH || 'G:/My Drive/Nexus/Projects'
+
 /**
  * Get the absolute filesystem path for a vault-relative path.
  * Handles Windows/Unix path normalization.
@@ -12,15 +16,39 @@ import * as path from 'path'
  * @returns Absolute filesystem path
  */
 export function resolveAbsoluteProjectPath(vault: Vault, vaultPath: string): string {
-  // Get the vault's base path (filesystem root)
-  const adapter = vault.adapter as FileSystemAdapter
-  const basePath = adapter.getBasePath()
-
   // Normalize the vault path (replace backslashes with forward slashes)
   const normalized = vaultPath.replace(/\\/g, '/')
 
-  // Join and return
-  return path.join(basePath, normalized)
+  // Try to get vault's base path (filesystem root)
+  const adapter = vault.adapter as FileSystemAdapter
+  let basePath: string | undefined
+
+  try {
+    basePath = adapter?.getBasePath?.()
+  } catch {
+    // getBasePath may not exist on all adapters
+    basePath = undefined
+  }
+
+  // If basePath is a valid non-empty string, use it
+  if (basePath && typeof basePath === 'string' && basePath.length > 0) {
+    return path.join(basePath, normalized)
+  }
+
+  // Fallback: Use PROJECT_PATH (build-time injected or hardcoded)
+  // PROJECT_PATH points to the projects folder, so extract just the project name
+  // vaultPath might be "Projects/MyProject" - we want just "MyProject"
+  const projectName = path.basename(normalized)
+  const result = path.join(FALLBACK_PROJECT_PATH, projectName)
+
+  console.log('[Lachesis] Path resolution fallback used:', {
+    vaultPath,
+    projectName,
+    FALLBACK_PROJECT_PATH,
+    result,
+  })
+
+  return result
 }
 
 /**
