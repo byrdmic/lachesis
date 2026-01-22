@@ -145,26 +145,9 @@ OVERVIEW.MD IS THE 40,000-FOOT VIEW (CRITICAL):
 
 HANDLING GITHUB REPO CONFIGURATION:
 When the user provides a GitHub repo URL (e.g., "github.com/user/repo" or "https://github.com/user/repo"):
-1. Acknowledge receipt and immediately propose a diff to update .ai/config.json
-2. Output a unified diff to update the github_repo field
-
-Example - user says "github.com/myuser/myproject":
-\`\`\`diff
---- .ai/config.json
-+++ .ai/config.json
-@@ -1,5 +1,5 @@
- {
-   "$schema": "https://lachesis.dev/schemas/ai-config.json",
--  "github_repo": "",
-+  "github_repo": "github.com/myuser/myproject",
-   "notes": "Add your GitHub repo URL..."
- }
-\`\`\`
-
-Rules for config.json diffs:
-- Always use the exact format shown above
-- Normalize URLs: strip "https://" prefix if present, keep just "github.com/user/repo"
-- The user will see an Accept/Reject button for the change
+1. Acknowledge receipt
+2. Use the Edit tool to update .ai/config.json with the github_repo field
+3. Normalize URLs: strip "https://" prefix if present, keep just "github.com/user/repo"
 
 AVAILABLE WORKFLOWS:
 1. **Log: Refine** - Title log entries and extract potential tasks
@@ -186,27 +169,14 @@ function buildFocusedFileSection(focusedFile?: string, focusedFileContents?: str
 ================================================================================
 PROJECT FILES (FULL CONTENT)
 ================================================================================
-You have access to all project files below. Use this context to answer questions
-and propose changes. When making changes, use unified diff format.
+You have access to all project files below. Use this context to answer questions.
 
-DIFF FORMAT FOR CHANGES:
-When proposing file changes, output them in unified diff format inside a diff code block:
-\`\`\`diff
---- Filename.md
-+++ Filename.md
-@@ -line,count +line,count @@
- context line
--old content
-+new content
- context line
-\`\`\`
-
-RULES:
-• The "-" lines must show the ACTUAL current content of the file
-• The "+" lines show what the content should become AFTER your changes
-• Include 1-2 lines of context around changes
-• Each file gets its own diff block
-• The user will see Accept/Reject buttons for each diff
+FILE MODIFICATIONS:
+You have access to Edit and Write tools for modifying project files.
+- Use the Edit tool to apply changes to existing files (provide file path and the text to replace)
+- Use the Write tool to create new files or fully replace file content
+- Always read a file first before editing to understand its current state
+- For multi-file operations (like moving tasks), use multiple tool calls
 
 ${focusedFileContents}
 ================================================================================
@@ -220,60 +190,24 @@ ${focusedFileContents}
   const isRoadmapFile = focusedFile.toLowerCase() === 'roadmap.md'
   const isOverviewFile = focusedFile.toLowerCase() === 'overview.md'
 
-  // Diff format instructions for file filling - propose changes as diffs
-  const fillDiffInstructions = `
-OUTPUT FORMAT FOR CHANGES (CRITICAL):
-When you have content to add or update, output it in unified diff format inside a diff code block.
-Do NOT ask the user to copy/paste content into files - propose changes as diffs they can accept.
+  // Tool-based instructions for file filling
+  const fillToolInstructions = `
+FILE MODIFICATIONS:
+You have access to Edit and Write tools for modifying project files.
+- Use the Edit tool to apply changes to existing files (provide file path and the text to replace)
+- Use the Write tool to create new files or fully replace file content
+- Always read the file contents provided below to understand current state
+- For multi-file operations (like moving tasks), use multiple tool calls
 
-CRITICAL: The lines marked with "-" (old content) MUST match EXACTLY what is currently in the file.
-Do NOT show what you WANT the file to contain as the old content - show what it ACTUALLY contains.
-
-Example - Adding an elevator pitch to Overview.md:
-\`\`\`diff
---- Overview.md
-+++ Overview.md
-@@ -5,7 +5,7 @@
- ## Elevator Pitch
-
--<!-- Brief project summary -->
-+Lachesis is an Obsidian plugin that helps users plan projects through AI-powered interviews, generating structured documentation within their vault.
-
- ## Problem Statement
-\`\`\`
-
-Example - Adding content to a section that's empty:
-\`\`\`diff
---- Overview.md
-+++ Overview.md
-@@ -10,6 +10,10 @@
- ## Target Users
-
--<!-- Who is this for? -->
-+**Primary users:** Developers and project managers who use Obsidian for knowledge management.
-+
-+**Context:** During the initial planning phase of new projects, when ideas need to be captured
-+and structured before development begins.
-
- ## Value Proposition
-\`\`\`
-
-RULES FOR DIFF OUTPUT:
-• Use exact unified diff format with --- and +++ headers
-• Include @@ line number markers (use approximate line numbers)
-• CRITICAL: The "-" lines must show the ACTUAL current content of the file
-• The "+" lines show what the content should become AFTER your changes
-• Include 1-2 lines of context around each change (lines starting with space)
-• Only show the changed sections, not entire files
-• Each file gets its own \`\`\`diff block
-• After showing the diff, briefly explain what was added/changed
-• The user will see Accept/Reject buttons for each diff block
-• Work through ONE section at a time - don't propose all changes at once
+ARCHIVE FORMAT (when archiving tasks):
+- Add date-stamped section header: ### YYYY-MM-DD
+- Include brief 1-3 sentence summary of what was completed
+- Preserve key context from the original task
 
 WORKFLOW FOR FILLING FILES:
 1. Discuss a section with the user (e.g., "What's the elevator pitch?")
-2. Once they provide information, propose the change as a diff
-3. After they accept/reject, move to the next section
+2. Once they provide information, use the Edit tool to update the file
+3. Move to the next section
 4. Repeat until the file is complete
 `
 
@@ -351,7 +285,7 @@ Determine the MODE based on current Roadmap.md state:
   1. Define MVP milestone (M1) with Status: active - the smallest version that proves this works
   2. Define vertical slices for M1 nested under it (2-5 slices, each 1-5 days of work)
   3. Define additional milestones (M2, M3, etc.) with Status: planned and their slices
-- Work through ONE milestone + its slices at a time, proposing diffs after each
+- Work through ONE milestone + its slices at a time, using the Edit tool to update the file after each
 - After Roadmap is filled, user can use Tasks: Fill to extract tasks from slices
 
 **REFINE MODE** (Roadmap.md already has real milestones defined):
@@ -416,7 +350,7 @@ Before helping fill ${focusedFile}, assess the project state from the snapshot a
    - Ask clarifying questions if needed
    - Work through it section by section with the user
    - Do NOT ask the user to paste file contents - you already have them below
-${fillDiffInstructions}
+${fillToolInstructions}
 ${tasksSpecificGuidance}
 ${roadmapSpecificGuidance}
 ${overviewSpecificGuidance}

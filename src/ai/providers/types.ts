@@ -22,6 +22,8 @@ export type TextResult = {
   content?: string
   error?: string
   debugDetails?: string
+  toolActivities?: PersistedToolActivity[]
+  hasPartialChanges?: boolean
 }
 
 export type StructuredResult<T> = {
@@ -32,6 +34,27 @@ export type StructuredResult<T> = {
 }
 
 // ============================================================================
+// Tool Activity Types (for persistence and display)
+// ============================================================================
+
+/**
+ * Persisted tool activity for saving in chat history.
+ * Simplified version of EnhancedToolActivity for storage.
+ */
+export type PersistedToolActivity = {
+  id: string
+  toolName: string
+  description: string
+  status: 'completed' | 'failed'
+  durationMs: number
+  summary: string // "Read 1,234 chars from Tasks.md"
+  changeDetails?: {
+    filePath: string
+    diffPreview?: string
+  }
+}
+
+// ============================================================================
 // Conversation Types
 // ============================================================================
 
@@ -39,6 +62,7 @@ export type ConversationMessage = {
   role: 'assistant' | 'user'
   content: string
   timestamp?: string
+  toolActivities?: PersistedToolActivity[]
 }
 
 // ============================================================================
@@ -110,6 +134,14 @@ export interface AIProvider {
 // Agent Chat Types (for Claude Agent SDK integration)
 // ============================================================================
 
+/**
+ * Tool names supported by the agent.
+ */
+export type ToolName = 'Read' | 'Write' | 'Edit' | 'Glob' | 'Grep'
+
+/**
+ * Basic tool activity for real-time UI updates during execution.
+ */
 export type ToolActivity = {
   toolName: string
   status: 'running' | 'completed' | 'failed'
@@ -117,9 +149,38 @@ export type ToolActivity = {
   output?: string
 }
 
+/**
+ * Enhanced tool activity with rich details for display and persistence.
+ */
+export type EnhancedToolActivity = {
+  id: string
+  toolName: ToolName
+  status: 'running' | 'completed' | 'failed'
+  description: string // "Reading Tasks.md", "Editing Overview.md (line 15)"
+  startedAt: number
+  completedAt?: number
+  durationMs?: number
+  input: Record<string, unknown>
+  output?: string
+  error?: string
+}
+
+/**
+ * Result from an agent chat operation.
+ * Always includes tool activities for visibility, even on failure.
+ */
+export type AgentChatResult = {
+  success: boolean
+  content?: string
+  error?: string
+  toolActivities: EnhancedToolActivity[]
+  hasPartialChanges: boolean // True if Edit/Write ran before error
+}
+
 export type AgentChatCallbacks = {
   onTextUpdate?: (partial: string) => void
   onToolActivity?: (activity: ToolActivity) => void
+  onEnhancedToolActivity?: (activity: EnhancedToolActivity) => void
 }
 
 export type AgentChatOptions = {

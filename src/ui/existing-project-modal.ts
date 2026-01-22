@@ -11,8 +11,6 @@ import type { AIProvider, ConversationMessage } from '../ai/providers/types'
 import { buildSystemPrompt } from '../ai/prompts'
 import { PROJECT_FILES, getWorkflowDefinition } from '../core/workflows/definitions'
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
-import type { DiffBlock } from '../utils/diff'
-import type { DiffAction } from './diff-viewer-modal'
 import { fetchCommits, formatCommitLog } from '../github'
 
 // Components
@@ -159,16 +157,8 @@ export class ExistingProjectModal extends Modal {
       this.projectPath,
       {
         onSubmit: (message) => this.handleUserInput(message),
-        onDiffAction: (diffBlock, action) => this.handleDiffAction(diffBlock, action),
         onViewEnrichTasks: (content) => this.workflowExecutor?.openEnrichTasksModalForHistory(content),
         onViewPlanWork: (content) => this.workflowExecutor?.openPlanWorkModalForHistory(content),
-        isAutoAcceptEnabled: () => this.plugin.settings.autoAcceptChanges,
-        getWorkflowAutoApply: (name) => {
-          // Check if workflow is auto-applyable and user has enabled it
-          const workflow = getWorkflowDefinition(name as WorkflowName)
-          if (!workflow?.autoApplyable) return false
-          return this.plugin.settings.workflowAutoApply[name] ?? false
-        },
       },
       this.renderComponent
     )
@@ -298,17 +288,6 @@ export class ExistingProjectModal extends Modal {
 
   private updateStatus(text: string): void {
     this.chatInterface?.updateStatus(text)
-  }
-
-  /**
-   * Handle when a diff is accepted or rejected.
-   * Called by ChatInterface after it updates the UI.
-   */
-  private async handleDiffAction(_diffBlock: DiffBlock, action: DiffAction) {
-    // Refresh snapshot if changes were applied
-    if (action === 'accepted') {
-      await this.refreshSnapshot()
-    }
   }
 
   private async refreshSnapshot(): Promise<ProjectSnapshot> {
@@ -539,8 +518,8 @@ export class ExistingProjectModal extends Modal {
     }
     this.activeWorkflow = null
 
-    // Use agent chat for non-workflow chat when provider supports it
-    const useAgentChat = !this.lastUsedWorkflowName && this.provider.streamAgentChat
+    // Always use agent chat when provider supports it (enables tool access for file modifications)
+    const useAgentChat = !!this.provider.streamAgentChat
 
     try {
       let result
@@ -575,9 +554,9 @@ export class ExistingProjectModal extends Modal {
         )
       }
 
-      this.chatInterface.finalizeStreamingMessage()
-
       if (result.success && result.content) {
+        this.chatInterface.finalizeStreamingMessage()
+
         // Check if this was an init-from-summary workflow - handle specially
         if (this.lastUsedWorkflowName === 'init-from-summary') {
           await this.workflowExecutor?.handleInitFromSummaryResponse(result.content)
@@ -597,19 +576,66 @@ export class ExistingProjectModal extends Modal {
           role: 'assistant',
           content: result.content,
           timestamp: new Date().toISOString(),
+          toolActivities: result.toolActivities,
         })
         await this.chatSidebar?.saveChat(this.messages)
         this.chatSidebar?.highlightCurrentChat()
         this.setProcessing(false, 'Your turn')
         this.chatInterface.focusInput()
       } else if (!result.success) {
-        // API call failed - show error
+        // API call failed - handle error with visibility of what happened
         const errorMsg = result.error || 'Failed to generate response'
-        this.chatInterface.updateStatus(`Error: ${errorMsg}`)
-        this.setProcessing(false, `Error: ${errorMsg}`)
         console.error('AI provider error:', result.error, result.debugDetails)
+
+        // Determine if files were modified before the error
+        const hasPartialChanges = result.hasPartialChanges ?? false
+        const toolActivities = result.toolActivities
+
+        // Build error message for user
+        let userMessage: string
+        if (hasPartialChanges) {
+          userMessage = `⚠️ **Error occurred after file changes**\n\n${errorMsg}\n\nSome files may have been modified before this error. Please review the tool activities below to see what changed.`
+        } else if (toolActivities && toolActivities.length > 0) {
+          userMessage = `❌ **Error**\n\n${errorMsg}\n\nNo files were modified.`
+        } else {
+          userMessage = `❌ **Error**\n\n${errorMsg}`
+        }
+
+        // Build full message content (partial content + error)
+        const partialContent = result.content
+        const fullContent = partialContent
+          ? `${partialContent}\n\n---\n\n${userMessage}`
+          : userMessage
+
+        // Replace streaming message with proper error message that includes tool activities
+        // First update streaming with content, then finalize
+        this.chatInterface.updateStreamingMessage(fullContent)
+        this.chatInterface.finalizeStreamingMessage()
+
+        // Render tool activities on the finalized message
+        if (toolActivities && toolActivities.length > 0) {
+          this.chatInterface.renderToolActivitiesOnLastMessage(toolActivities)
+        }
+
+        // Save error message with tool activities so user can see what happened
+        this.messages.push({
+          role: 'assistant',
+          content: fullContent,
+          timestamp: new Date().toISOString(),
+          toolActivities: toolActivities,
+        })
+
+        await this.chatSidebar?.saveChat(this.messages)
+        this.chatSidebar?.highlightCurrentChat()
+
+        const statusMsg = hasPartialChanges
+          ? 'Error (files may have changed)'
+          : `Error: ${errorMsg}`
+        this.chatInterface.updateStatus(statusMsg)
+        this.setProcessing(false, statusMsg)
       } else {
         // Success but empty content
+        this.chatInterface.finalizeStreamingMessage()
         this.setProcessing(false, 'Your turn')
         this.chatInterface.focusInput()
       }

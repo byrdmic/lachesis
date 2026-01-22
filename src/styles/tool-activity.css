@@ -1,22 +1,52 @@
 /* Tool Activity Indicator Styles */
 
+/* Container for all tool activities during a response */
+.lachesis-tool-activities-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+/* Individual tool activity item */
 .lachesis-tool-activity {
-  padding: 6px 10px;
-  margin: 4px 0;
+  padding: 8px 12px;
+  margin: 2px 0;
   background: var(--background-secondary);
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 0.85em;
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  gap: 6px;
-  border-left: 2px solid var(--interactive-accent);
+  gap: 8px;
+  border-left: 3px solid var(--interactive-accent);
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
 
+.lachesis-tool-activity.running {
+  border-left-color: var(--interactive-accent);
+  background: var(--background-secondary);
+}
+
+.lachesis-tool-activity.completed {
+  border-left-color: var(--text-success, #4ade80);
+  background: var(--background-secondary);
+}
+
+.lachesis-tool-activity.failed {
+  border-left-color: var(--text-error, #f87171);
+  background: rgba(248, 113, 113, 0.05);
+}
+
+/* Icon container */
 .lachesis-tool-activity-icon {
   font-size: 1.1em;
   width: 18px;
-  text-align: center;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .lachesis-tool-activity-icon.spinning {
@@ -32,6 +62,41 @@
   }
 }
 
+/* Main content area */
+.lachesis-tool-activity-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Description line */
+.lachesis-tool-activity-description {
+  font-weight: 500;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Summary line (shown on completion) */
+.lachesis-tool-activity-summary {
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+/* Timer display */
+.lachesis-tool-activity-timer {
+  font-size: 0.85em;
+  color: var(--text-faint);
+  font-family: var(--font-monospace);
+  flex-shrink: 0;
+  min-width: 45px;
+  text-align: right;
+}
+
+/* Legacy - keeping for compatibility */
 .lachesis-tool-activity-name {
   font-weight: 500;
   color: var(--text-normal);
@@ -40,4 +105,95 @@
 .lachesis-tool-activity-status {
   font-style: italic;
   color: var(--text-faint);
+}
+
+/* Collapsible diff preview */
+.lachesis-tool-activity-diff-toggle {
+  font-size: 0.8em;
+  color: var(--interactive-accent);
+  cursor: pointer;
+  text-decoration: underline;
+  margin-top: 4px;
+}
+
+.lachesis-tool-activity-diff-toggle:hover {
+  color: var(--interactive-accent-hover);
+}
+
+.lachesis-tool-activity-diff-preview {
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--background-primary);
+  border-radius: 4px;
+  font-family: var(--font-monospace);
+  font-size: 0.8em;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-tool-activity-diff-preview.collapsed {
+  display: none;
+}
+
+/* Persisted tool activities in message history */
+.lachesis-persisted-tool-activities {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.lachesis-persisted-tool-activities-header {
+  font-size: 0.75em;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.lachesis-persisted-tool-activity {
+  padding: 6px 10px;
+  margin: 4px 0;
+  background: var(--background-secondary);
+  border-radius: 4px;
+  font-size: 0.8em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lachesis-persisted-tool-activity.completed {
+  border-left: 2px solid var(--text-success, #4ade80);
+}
+
+.lachesis-persisted-tool-activity.failed {
+  border-left: 2px solid var(--text-error, #f87171);
+}
+
+.lachesis-persisted-tool-activity-icon {
+  width: 16px;
+  text-align: center;
+}
+
+.lachesis-persisted-tool-activity-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.lachesis-persisted-tool-activity-description {
+  color: var(--text-normal);
+  font-weight: 500;
+}
+
+.lachesis-persisted-tool-activity-summary {
+  color: var(--text-muted);
+  font-size: 0.95em;
+}
+
+.lachesis-persisted-tool-activity-duration {
+  color: var(--text-faint);
+  font-size: 0.9em;
+  font-family: var(--font-monospace);
 }

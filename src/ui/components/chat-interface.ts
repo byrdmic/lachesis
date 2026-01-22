@@ -1,15 +1,9 @@
 // Chat Interface View Component
-// Handles message rendering, input, streaming, and diff display
+// Handles message rendering, input, streaming, and tool activity display
 
 import type { App, Component } from 'obsidian'
-import { MarkdownRenderer, Notice } from 'obsidian'
-import type { ConversationMessage, ToolActivity } from '../../ai/providers/types'
-import {
-  extractDiffBlocks,
-  containsDiffBlocks,
-  applyDiffToFile,
-  type DiffBlock,
-} from '../../utils/diff'
+import { MarkdownRenderer } from 'obsidian'
+import type { ConversationMessage, ToolActivity, EnhancedToolActivity, PersistedToolActivity } from '../../ai/providers/types'
 import {
   containsEnrichTasksResponse,
   extractEnrichTasksSummary,
@@ -18,7 +12,6 @@ import {
   containsPlanWorkResponse,
   extractPlanWorkSummary,
 } from '../../utils/plan-work-parser'
-import { DiffViewerModal, type DiffAction } from '../diff-viewer-modal'
 import { ComposeMessageModal } from '../compose-message-modal'
 import {
   ChatState,
@@ -27,6 +20,17 @@ import {
 
 // Re-export types for consumers
 export type { ChatInterfaceCallbacks } from './chat-state'
+
+// ============================================================================
+// Tool Activity Tracking Types
+// ============================================================================
+
+type ActiveToolActivity = {
+  id: string
+  element: HTMLElement
+  timerInterval?: ReturnType<typeof setInterval>
+  startedAt: number
+}
 
 // ============================================================================
 // Chat Interface View Component
@@ -44,6 +48,10 @@ export class ChatInterface {
   private inputEl: HTMLInputElement | null = null
   private statusEl: HTMLElement | null = null
   private toolActivityEl: HTMLElement | null = null
+  private toolActivitiesContainer: HTMLElement | null = null
+
+  // Active tool activities tracking (for live updates)
+  private activeToolActivities: Map<string, ActiveToolActivity> = new Map()
 
   constructor(
     app: App,
@@ -59,7 +67,7 @@ export class ChatInterface {
   }
 
   /**
-   * Set whether we're viewing a loaded chat (affects diff view-only mode).
+   * Set whether we're viewing a loaded chat.
    */
   setViewingLoadedChat(viewing: boolean): void {
     this.state.setViewingLoadedChat(viewing)
@@ -96,7 +104,7 @@ export class ChatInterface {
       this.renderEmptyState(projectName, isReady)
     } else {
       for (const msg of messages) {
-        this.addMessageToUI(msg.role, msg.content)
+        this.addMessageToUI(msg.role, msg.content, false, msg.toolActivities)
       }
     }
 
@@ -153,7 +161,7 @@ export class ChatInterface {
       this.renderEmptyState(projectName, isReady)
     } else {
       for (const msg of messages) {
-        this.addMessageToUI(msg.role, msg.content)
+        this.addMessageToUI(msg.role, msg.content, false, msg.toolActivities)
       }
     }
   }
@@ -192,8 +200,14 @@ export class ChatInterface {
 
   /**
    * Add a message to the UI.
+   * Supports optional tool activities for messages loaded from history.
    */
-  addMessageToUI(role: 'assistant' | 'user', content: string, isStreaming = false): HTMLElement | undefined {
+  addMessageToUI(
+    role: 'assistant' | 'user',
+    content: string,
+    isStreaming = false,
+    toolActivities?: PersistedToolActivity[],
+  ): HTMLElement | undefined {
     if (!this.messagesContainer) return
 
     // Remove empty state if present
@@ -215,9 +229,7 @@ export class ChatInterface {
     }
 
     // For non-streaming messages, check for special response types
-    if (!isStreaming && containsDiffBlocks(content)) {
-      this.renderMessageWithDiffs(messageEl, content)
-    } else if (!isStreaming && containsEnrichTasksResponse(content)) {
+    if (!isStreaming && containsEnrichTasksResponse(content)) {
       // Enrich tasks response - render with a "View Enrichments" button
       this.renderMessageWithEnrichTasks(messageEl, content)
     } else if (!isStreaming && containsPlanWorkResponse(content)) {
@@ -243,6 +255,11 @@ export class ChatInterface {
           this.renderMarkdown(content, messageEl)
         }
       }
+    }
+
+    // Render persisted tool activities for assistant messages from history
+    if (!isStreaming && role === 'assistant' && toolActivities && toolActivities.length > 0) {
+      this.renderPersistedToolActivities(messageEl, toolActivities)
     }
 
     // Scroll to bottom
@@ -283,7 +300,7 @@ export class ChatInterface {
   }
 
   /**
-   * Finalize the streaming message (remove streaming class, re-render with diffs).
+   * Finalize the streaming message (remove streaming class, re-render).
    */
   finalizeStreamingMessage(): void {
     if (!this.messagesContainer) return
@@ -293,14 +310,9 @@ export class ChatInterface {
       streamingEl.removeClass('streaming')
 
       const streamingText = this.state.streamingText
-      const activeWorkflow = this.state.activeWorkflowName
 
       // Check if content contains special response types
-      if (containsDiffBlocks(streamingText)) {
-        // Clear and re-render with diff blocks
-        streamingEl.empty()
-        this.renderMessageWithDiffs(streamingEl, streamingText)
-      } else if (containsEnrichTasksResponse(streamingText)) {
+      if (containsEnrichTasksResponse(streamingText)) {
         // Clear and re-render with enrich tasks summary
         streamingEl.empty()
         this.renderMessageWithEnrichTasks(streamingEl, streamingText)
@@ -366,13 +378,6 @@ export class ChatInterface {
   }
 
   /**
-   * Get pending diffs.
-   */
-  getPendingDiffs(): DiffBlock[] {
-    return this.state.pendingDiffs
-  }
-
-  /**
    * Get the underlying state object (for advanced use cases).
    */
   getState(): ChatState {
@@ -381,47 +386,403 @@ export class ChatInterface {
 
   /**
    * Show tool activity indicator (e.g., when Agent SDK is using a tool).
+   * This is the basic version for backward compatibility.
    */
   showToolActivity(activity: ToolActivity): void {
     if (!this.messagesContainer) return
 
-    // Remove existing activity indicator if present
-    this.clearToolActivity()
+    // Ensure container exists
+    this.ensureToolActivitiesContainer()
 
-    // Create new activity indicator
-    this.toolActivityEl = this.messagesContainer.createDiv({ cls: 'lachesis-tool-activity' })
+    // Generate a simple ID based on tool name and status
+    const activityId = `${activity.toolName}-${Date.now()}`
 
-    // Icon based on status
-    const iconEl = this.toolActivityEl.createSpan({ cls: 'lachesis-tool-activity-icon' })
     if (activity.status === 'running') {
-      iconEl.addClass('spinning')
-      iconEl.setText('⚙')
-    } else if (activity.status === 'completed') {
-      iconEl.setText('✓')
+      // Create new activity element
+      const activityEl = this.createToolActivityElement(
+        activityId,
+        activity.toolName,
+        this.generateBasicDescription(activity),
+        'running',
+      )
+
+      // Track it
+      this.activeToolActivities.set(activityId, {
+        id: activityId,
+        element: activityEl,
+        startedAt: Date.now(),
+        timerInterval: this.startTimer(activityEl, Date.now()),
+      })
     } else {
-      iconEl.setText('✗')
+      // Find and update the most recent activity for this tool
+      const existingKey = Array.from(this.activeToolActivities.keys())
+        .reverse()
+        .find((key) => key.startsWith(activity.toolName + '-'))
+
+      if (existingKey) {
+        const existing = this.activeToolActivities.get(existingKey)!
+        this.updateToolActivityElement(
+          existing.element,
+          activity.status,
+          activity.output || '',
+          existing.startedAt,
+        )
+        if (existing.timerInterval) {
+          clearInterval(existing.timerInterval)
+        }
+        this.activeToolActivities.delete(existingKey)
+      }
     }
-
-    // Tool name
-    const nameEl = this.toolActivityEl.createSpan({ cls: 'lachesis-tool-activity-name' })
-    nameEl.setText(activity.toolName)
-
-    // Status text
-    const statusEl = this.toolActivityEl.createSpan({ cls: 'lachesis-tool-activity-status' })
-    statusEl.setText(activity.status)
 
     // Scroll to show the activity indicator
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight
   }
 
   /**
-   * Clear the tool activity indicator.
+   * Show enhanced tool activity with rich details.
+   */
+  showEnhancedToolActivity(activity: EnhancedToolActivity): void {
+    if (!this.messagesContainer) return
+
+    // Ensure container exists
+    this.ensureToolActivitiesContainer()
+
+    const existing = this.activeToolActivities.get(activity.id)
+
+    if (activity.status === 'running' && !existing) {
+      // Create new activity element
+      const activityEl = this.createToolActivityElement(
+        activity.id,
+        activity.toolName,
+        activity.description,
+        'running',
+      )
+
+      // Track it with timer
+      this.activeToolActivities.set(activity.id, {
+        id: activity.id,
+        element: activityEl,
+        startedAt: activity.startedAt,
+        timerInterval: this.startTimer(activityEl, activity.startedAt),
+      })
+    } else if (existing && activity.status !== 'running') {
+      // Update existing element
+      const summary = this.generateSummary(activity)
+      this.updateToolActivityElement(
+        existing.element,
+        activity.status,
+        summary,
+        existing.startedAt,
+        activity.toolName === 'Edit' ? (activity.input.diff as string | undefined) : undefined,
+      )
+
+      // Clear timer
+      if (existing.timerInterval) {
+        clearInterval(existing.timerInterval)
+      }
+      this.activeToolActivities.delete(activity.id)
+    }
+
+    // Scroll to show the activity
+    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight
+  }
+
+  /**
+   * Clear all tool activity indicators and stop timers.
    */
   clearToolActivity(): void {
+    // Clear legacy element
     if (this.toolActivityEl) {
       this.toolActivityEl.remove()
       this.toolActivityEl = null
     }
+
+    // Stop all timers
+    for (const activity of this.activeToolActivities.values()) {
+      if (activity.timerInterval) {
+        clearInterval(activity.timerInterval)
+      }
+    }
+    this.activeToolActivities.clear()
+
+    // Remove container
+    if (this.toolActivitiesContainer) {
+      this.toolActivitiesContainer.remove()
+      this.toolActivitiesContainer = null
+    }
+  }
+
+  /**
+   * Render tool activities on the last assistant message in the container.
+   * Used after finalizing a streaming message to add tool activity display.
+   */
+  renderToolActivitiesOnLastMessage(activities: PersistedToolActivity[]): void {
+    if (!this.messagesContainer || !activities || activities.length === 0) return
+
+    // Find the last assistant message
+    const messages = this.messagesContainer.querySelectorAll('.lachesis-message.assistant')
+    const lastMessage = messages[messages.length - 1]
+    if (!lastMessage) return
+
+    this.renderPersistedToolActivities(lastMessage as HTMLElement, activities)
+  }
+
+  /**
+   * Render persisted tool activities inline with a message.
+   */
+  renderPersistedToolActivities(container: HTMLElement, activities: PersistedToolActivity[]): void {
+    if (!activities || activities.length === 0) return
+
+    const wrapper = container.createDiv({ cls: 'lachesis-persisted-tool-activities' })
+    wrapper.createDiv({
+      text: `${activities.length} tool${activities.length === 1 ? '' : 's'} used`,
+      cls: 'lachesis-persisted-tool-activities-header',
+    })
+
+    for (const activity of activities) {
+      const activityEl = wrapper.createDiv({
+        cls: `lachesis-persisted-tool-activity ${activity.status}`,
+      })
+
+      // Icon
+      const iconEl = activityEl.createSpan({ cls: 'lachesis-persisted-tool-activity-icon' })
+      iconEl.setText(activity.status === 'completed' ? '✓' : '✗')
+
+      // Info container
+      const infoEl = activityEl.createDiv({ cls: 'lachesis-persisted-tool-activity-info' })
+      infoEl.createDiv({
+        text: activity.description,
+        cls: 'lachesis-persisted-tool-activity-description',
+      })
+      infoEl.createDiv({
+        text: activity.summary,
+        cls: 'lachesis-persisted-tool-activity-summary',
+      })
+
+      // Duration
+      activityEl.createDiv({
+        text: this.formatDuration(activity.durationMs),
+        cls: 'lachesis-persisted-tool-activity-duration',
+      })
+
+      // Diff preview for Edit tools
+      if (activity.changeDetails?.diffPreview) {
+        const toggleEl = infoEl.createDiv({
+          text: 'Show diff',
+          cls: 'lachesis-tool-activity-diff-toggle',
+        })
+        const previewEl = infoEl.createDiv({
+          cls: 'lachesis-tool-activity-diff-preview collapsed',
+        })
+        previewEl.setText(activity.changeDetails.diffPreview)
+
+        toggleEl.addEventListener('click', () => {
+          const isCollapsed = previewEl.hasClass('collapsed')
+          if (isCollapsed) {
+            previewEl.removeClass('collapsed')
+            toggleEl.setText('Hide diff')
+          } else {
+            previewEl.addClass('collapsed')
+            toggleEl.setText('Show diff')
+          }
+        })
+      }
+    }
+  }
+
+  // ============================================================================
+  // Tool Activity Private Methods
+  // ============================================================================
+
+  private ensureToolActivitiesContainer(): void {
+    if (!this.toolActivitiesContainer && this.messagesContainer) {
+      this.toolActivitiesContainer = this.messagesContainer.createDiv({
+        cls: 'lachesis-tool-activities-container',
+      })
+    }
+  }
+
+  private createToolActivityElement(
+    id: string,
+    toolName: string,
+    description: string,
+    status: 'running' | 'completed' | 'failed',
+  ): HTMLElement {
+    const container = this.toolActivitiesContainer || this.messagesContainer
+    if (!container) throw new Error('No container for tool activity')
+
+    const activityEl = container.createDiv({
+      cls: `lachesis-tool-activity ${status}`,
+      attr: { 'data-activity-id': id },
+    })
+
+    // Icon
+    const iconEl = activityEl.createSpan({ cls: 'lachesis-tool-activity-icon' })
+    if (status === 'running') {
+      iconEl.addClass('spinning')
+      iconEl.setText('⚙')
+    } else if (status === 'completed') {
+      iconEl.setText('✓')
+    } else {
+      iconEl.setText('✗')
+    }
+
+    // Content area
+    const contentEl = activityEl.createDiv({ cls: 'lachesis-tool-activity-content' })
+    contentEl.createDiv({
+      text: description,
+      cls: 'lachesis-tool-activity-description',
+    })
+
+    // Timer
+    activityEl.createDiv({
+      text: '0.0s',
+      cls: 'lachesis-tool-activity-timer',
+    })
+
+    return activityEl
+  }
+
+  private updateToolActivityElement(
+    element: HTMLElement,
+    status: 'completed' | 'failed',
+    summary: string,
+    startedAt: number,
+    diffPreview?: string,
+  ): void {
+    // Update class
+    element.removeClass('running')
+    element.addClass(status)
+
+    // Update icon
+    const iconEl = element.querySelector('.lachesis-tool-activity-icon')
+    if (iconEl) {
+      iconEl.removeClass('spinning')
+      iconEl.textContent = status === 'completed' ? '✓' : '✗'
+    }
+
+    // Add summary
+    const contentEl = element.querySelector('.lachesis-tool-activity-content')
+    if (contentEl) {
+      const existingSummary = contentEl.querySelector('.lachesis-tool-activity-summary')
+      if (!existingSummary) {
+        const summaryEl = createDiv({ cls: 'lachesis-tool-activity-summary' })
+        summaryEl.setText(summary)
+        contentEl.appendChild(summaryEl)
+      }
+
+      // Add diff preview toggle for Edit tools
+      if (diffPreview) {
+        const toggleEl = createDiv({
+          cls: 'lachesis-tool-activity-diff-toggle',
+          text: 'Show diff',
+        })
+        const previewEl = createDiv({
+          cls: 'lachesis-tool-activity-diff-preview collapsed',
+        })
+        previewEl.setText(diffPreview)
+
+        toggleEl.addEventListener('click', () => {
+          const isCollapsed = previewEl.hasClass('collapsed')
+          if (isCollapsed) {
+            previewEl.removeClass('collapsed')
+            toggleEl.setText('Hide diff')
+          } else {
+            previewEl.addClass('collapsed')
+            toggleEl.setText('Show diff')
+          }
+        })
+
+        contentEl.appendChild(toggleEl)
+        contentEl.appendChild(previewEl)
+      }
+    }
+
+    // Update timer with final duration
+    const timerEl = element.querySelector('.lachesis-tool-activity-timer')
+    if (timerEl) {
+      timerEl.textContent = this.formatDuration(Date.now() - startedAt)
+    }
+  }
+
+  private startTimer(element: HTMLElement, startedAt: number): ReturnType<typeof setInterval> {
+    const timerEl = element.querySelector('.lachesis-tool-activity-timer')
+    return setInterval(() => {
+      if (timerEl) {
+        timerEl.textContent = this.formatDuration(Date.now() - startedAt)
+      }
+    }, 100)
+  }
+
+  private formatDuration(ms: number): string {
+    if (ms < 1000) {
+      return `${(ms / 1000).toFixed(1)}s`
+    }
+    if (ms < 60000) {
+      return `${(ms / 1000).toFixed(1)}s`
+    }
+    const minutes = Math.floor(ms / 60000)
+    const seconds = ((ms % 60000) / 1000).toFixed(0)
+    return `${minutes}m ${seconds}s`
+  }
+
+  private generateBasicDescription(activity: ToolActivity): string {
+    const input = activity.input || {}
+    switch (activity.toolName) {
+      case 'Read':
+        return `Reading ${this.extractFileName(input.file_path as string | undefined)}`
+      case 'Write':
+        return `Writing to ${this.extractFileName(input.file_path as string | undefined)}`
+      case 'Edit':
+        return `Editing ${this.extractFileName(input.file_path as string | undefined)}`
+      case 'Glob':
+        return `Finding files matching ${input.pattern || 'pattern'}`
+      case 'Grep':
+        return `Searching for '${input.pattern || 'pattern'}'`
+      default:
+        return `Running ${activity.toolName}`
+    }
+  }
+
+  private generateSummary(activity: EnhancedToolActivity): string {
+    if (activity.error) {
+      return `Failed: ${activity.error.slice(0, 50)}`
+    }
+    switch (activity.toolName) {
+      case 'Read': {
+        const len = activity.output?.length ?? 0
+        return `Read ${this.formatNumber(len)} chars`
+      }
+      case 'Write': {
+        const len = (activity.input.content as string)?.length ?? 0
+        return `Wrote ${this.formatNumber(len)} chars`
+      }
+      case 'Edit':
+        return 'Edit applied'
+      case 'Glob': {
+        const count = activity.output?.split('\n').filter((l) => l.trim()).length ?? 0
+        return `Found ${count} file${count === 1 ? '' : 's'}`
+      }
+      case 'Grep': {
+        const count = activity.output?.split('\n').filter((l) => l.trim()).length ?? 0
+        return `Found ${count} match${count === 1 ? '' : 'es'}`
+      }
+      default:
+        return 'Completed'
+    }
+  }
+
+  private extractFileName(filePath: string | undefined): string {
+    if (!filePath) return 'file'
+    const parts = filePath.replace(/\\/g, '/').split('/')
+    return parts[parts.length - 1] || filePath
+  }
+
+  private formatNumber(num: number): string {
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+    }
+    return num.toString()
   }
 
   // ============================================================================
@@ -462,193 +823,6 @@ export class ChatInterface {
       text: subtitle,
       cls: 'lachesis-empty-state-subtitle',
     })
-  }
-
-  /**
-   * Render a message that contains diff blocks.
-   * Shows a summary with clickable file links that open the diff viewer modal.
-   * If auto-accept is enabled, applies diffs immediately.
-   */
-  private renderMessageWithDiffs(container: HTMLElement, content: string): void {
-    const diffBlocks = extractDiffBlocks(content)
-
-    if (diffBlocks.length === 0) {
-      // No diffs found, render as plain text
-      this.renderMarkdown(content, container)
-      return
-    }
-
-    // Check if auto-apply should be enabled
-    const shouldAutoApply = this.state.shouldAutoApply(this.callbacks)
-
-    // Store pending diffs
-    this.state.setPendingDiffs(diffBlocks)
-
-    // Extract text before first diff block
-    const firstDiffMarker = '```diff\n' + diffBlocks[0].rawDiff + '\n```'
-    const firstIdx = content.indexOf(firstDiffMarker)
-    if (firstIdx > 0) {
-      const textBefore = content.slice(0, firstIdx).trim()
-      if (textBefore) {
-        const textEl = container.createDiv({ cls: 'lachesis-diff-text' })
-        this.renderMarkdown(textBefore, textEl)
-      }
-    }
-
-    // Render summary message
-    const summaryEl = container.createEl('p', { cls: 'lachesis-diff-summary' })
-    if (shouldAutoApply) {
-      summaryEl.setText('Applying changes automatically...')
-    } else {
-      summaryEl.setText('Here are the proposed changes:')
-    }
-
-    // Render file links list
-    const fileListEl = container.createDiv({ cls: 'lachesis-diff-file-list' })
-
-    for (const diffBlock of diffBlocks) {
-      this.renderDiffFileLink(fileListEl, diffBlock)
-    }
-
-    // Extract text after last diff block
-    const lastDiffBlock = diffBlocks[diffBlocks.length - 1]
-    const lastDiffMarker = '```diff\n' + lastDiffBlock.rawDiff + '\n```'
-    const lastIdx = content.lastIndexOf(lastDiffMarker)
-    if (lastIdx >= 0) {
-      const textAfter = content.slice(lastIdx + lastDiffMarker.length).trim()
-      if (textAfter) {
-        const textEl = container.createDiv({ cls: 'lachesis-diff-text' })
-        this.renderMarkdown(textAfter, textEl)
-      }
-    }
-
-    // Auto-apply diffs if enabled
-    if (shouldAutoApply) {
-      this.autoApplyDiffs(diffBlocks, summaryEl)
-    }
-  }
-
-  /**
-   * Auto-apply all diff blocks.
-   */
-  private async autoApplyDiffs(diffBlocks: DiffBlock[], summaryEl: HTMLElement): Promise<void> {
-    let successCount = 0
-    let failCount = 0
-
-    for (const diffBlock of diffBlocks) {
-      const result = await applyDiffToFile(this.app, diffBlock, this.projectPath)
-
-      if (result.success) {
-        successCount++
-        diffBlock.status = 'accepted'
-        // Update UI
-        if (diffBlock.element) {
-          const statusEl = diffBlock.element.querySelector('.lachesis-diff-file-status')
-          if (statusEl) {
-            statusEl.removeClass('pending')
-            statusEl.addClass('accepted')
-            statusEl.setText('accepted')
-          }
-          diffBlock.element.addClass('accepted')
-        }
-        // Notify parent
-        this.callbacks.onDiffAction(diffBlock, 'accepted')
-      } else {
-        failCount++
-        diffBlock.status = 'rejected'
-        // Update UI to show error
-        if (diffBlock.element) {
-          const statusEl = diffBlock.element.querySelector('.lachesis-diff-file-status')
-          if (statusEl) {
-            statusEl.removeClass('pending')
-            statusEl.addClass('rejected')
-            statusEl.setText('failed')
-          }
-          diffBlock.element.addClass('rejected')
-        }
-        new Notice(`Failed to apply ${diffBlock.fileName}: ${result.error}`)
-      }
-    }
-
-    // Update summary text
-    if (failCount === 0) {
-      summaryEl.setText(`Applied ${successCount} change${successCount === 1 ? '' : 's'} automatically.`)
-    } else {
-      summaryEl.setText(`Applied ${successCount}, failed ${failCount} change${failCount === 1 ? '' : 's'}.`)
-    }
-  }
-
-  /**
-   * Render a clickable file link for a diff block.
-   */
-  private renderDiffFileLink(container: HTMLElement, diffBlock: DiffBlock): void {
-    const linkEl = container.createDiv({ cls: 'lachesis-diff-file-link' })
-    diffBlock.element = linkEl
-
-    // File icon
-    const iconEl = linkEl.createSpan({ cls: 'lachesis-diff-file-icon' })
-    iconEl.setText('\uD83D\uDCC4') // file emoji
-
-    // File name (clickable)
-    const nameEl = linkEl.createEl('a', {
-      text: diffBlock.fileName,
-      cls: 'lachesis-diff-file-name',
-    })
-    nameEl.addEventListener('click', (e) => {
-      e.preventDefault()
-      this.openDiffViewer(diffBlock)
-    })
-
-    // Change summary
-    if (diffBlock.parsed) {
-      let addCount = 0
-      let removeCount = 0
-      for (const hunk of diffBlock.parsed.hunks) {
-        for (const line of hunk.lines) {
-          if (line.type === 'add') addCount++
-          if (line.type === 'remove') removeCount++
-        }
-      }
-      const changeEl = linkEl.createSpan({ cls: 'lachesis-diff-file-changes' })
-      changeEl.setText(`+${addCount} / -${removeCount}`)
-    }
-
-    // Status indicator
-    const statusEl = linkEl.createSpan({ cls: `lachesis-diff-file-status ${diffBlock.status}` })
-    statusEl.setText(diffBlock.status === 'pending' ? 'pending' : diffBlock.status)
-  }
-
-  /**
-   * Open the diff viewer modal for a specific diff block.
-   */
-  private openDiffViewer(diffBlock: DiffBlock): void {
-    const modal = new DiffViewerModal(
-      this.app,
-      diffBlock,
-      this.projectPath,
-      (updatedDiff, action) => this.handleDiffAction(updatedDiff, action),
-      { viewOnly: this.state.isViewingLoadedChat }
-    )
-    modal.open()
-  }
-
-  /**
-   * Handle when a diff is accepted or rejected from the viewer modal.
-   */
-  private handleDiffAction(diffBlock: DiffBlock, action: DiffAction): void {
-    // Update the file link UI
-    if (diffBlock.element) {
-      const statusEl = diffBlock.element.querySelector('.lachesis-diff-file-status')
-      if (statusEl) {
-        statusEl.removeClass('pending')
-        statusEl.addClass(action)
-        statusEl.setText(action)
-      }
-      diffBlock.element.addClass(action)
-    }
-
-    // Notify parent
-    this.callbacks.onDiffAction(diffBlock, action)
   }
 
   /**

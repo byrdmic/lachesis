@@ -4,7 +4,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { executeTool, TOOL_DEFINITIONS } from './tools'
 import type { ToolExecutorContext } from './tools'
-import type { TextResult, ConversationMessage, AgentChatCallbacks } from '../types'
+import type { TextResult, ConversationMessage, AgentChatCallbacks, EnhancedToolActivity, ToolName, AgentChatResult } from '../types'
+import { generateToolDescription, generateActivityId } from './tools/descriptions'
 
 // ============================================================================
 // Constants
@@ -51,8 +52,9 @@ export type AgentLoopParams = {
  * 1. Sends messages to Claude with tool definitions
  * 2. When Claude wants to use a tool, executes it and continues
  * 3. Collects all text responses and returns when done
+ * 4. Tracks all tool activities for visibility and error recovery
  */
-export async function runAgentLoop(params: AgentLoopParams): Promise<TextResult> {
+export async function runAgentLoop(params: AgentLoopParams): Promise<AgentChatResult> {
   const { client, model, systemPrompt, messages, projectPath, callbacks } = params
 
   // Build context for tool execution
@@ -65,6 +67,9 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<TextResult>
 
   let iterations = 0
   let fullText = ''
+
+  // Track all tool activities for this session
+  const executedTools: EnhancedToolActivity[] = []
 
   while (iterations < MAX_ITERATIONS) {
     iterations++
@@ -92,6 +97,8 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<TextResult>
         return {
           success: true,
           content: fullText.trim(),
+          toolActivities: executedTools,
+          hasPartialChanges: hasFileModifications(executedTools),
         }
       }
 
@@ -101,25 +108,49 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<TextResult>
 
         for (const block of response.content as ContentBlock[]) {
           if (block.type === 'tool_use') {
-            const toolName = block.name
+            const toolName = block.name as ToolName
             const toolInput = block.input as Record<string, unknown>
+            const activityId = generateActivityId()
+            const startedAt = Date.now()
 
-            // Notify callback that tool is running
+            // Create enhanced activity for tracking
+            const activity: EnhancedToolActivity = {
+              id: activityId,
+              toolName,
+              status: 'running',
+              description: generateToolDescription(toolName, toolInput),
+              startedAt,
+              input: toolInput,
+            }
+
+            executedTools.push(activity)
+
+            // Notify callbacks that tool is running
             callbacks.onToolActivity?.({
               toolName,
               status: 'running',
               input: toolInput,
             })
+            callbacks.onEnhancedToolActivity?.(activity)
 
             // Execute the tool
             const result = await executeTool(toolName, toolInput, context)
+            const completedAt = Date.now()
 
-            // Notify callback of result
+            // Update activity with result
+            activity.status = result.success ? 'completed' : 'failed'
+            activity.completedAt = completedAt
+            activity.durationMs = completedAt - startedAt
+            activity.output = result.success ? result.output : undefined
+            activity.error = result.success ? undefined : result.error
+
+            // Notify callbacks of result
             callbacks.onToolActivity?.({
               toolName,
               status: result.success ? 'completed' : 'failed',
               output: result.success ? result.output : result.error,
             })
+            callbacks.onEnhancedToolActivity?.(activity)
 
             // Build tool result
             toolResults.push({
@@ -151,12 +182,20 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<TextResult>
       return {
         success: true,
         content: fullText.trim(),
+        toolActivities: executedTools,
+        hasPartialChanges: hasFileModifications(executedTools),
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
+      const hasPartialChanges = hasFileModifications(executedTools)
+
+      // Return detailed error with tool activities for visibility
       return {
         success: false,
         error: `Agent loop error: ${message}`,
+        content: fullText.trim() || undefined,
+        toolActivities: executedTools,
+        hasPartialChanges,
       }
     }
   }
@@ -165,7 +204,20 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<TextResult>
   return {
     success: true,
     content: fullText.trim() + '\n\n(Agent stopped: maximum iterations reached)',
+    toolActivities: executedTools,
+    hasPartialChanges: hasFileModifications(executedTools),
   }
+}
+
+/**
+ * Check if any completed tool activities modified files.
+ */
+function hasFileModifications(activities: EnhancedToolActivity[]): boolean {
+  return activities.some(
+    (a) =>
+      a.status === 'completed' &&
+      (a.toolName === 'Edit' || a.toolName === 'Write'),
+  )
 }
 
 // ============================================================================

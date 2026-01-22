@@ -1,7 +1,7 @@
 // Chat Store - File-based persistence for chat history
 
 import { Vault } from 'obsidian'
-import type { ConversationMessage } from '../../ai/providers/types'
+import type { ConversationMessage, PersistedToolActivity } from '../../ai/providers/types'
 import type { ChatLog, ChatLogMetadata } from './types'
 
 // ============================================================================
@@ -186,6 +186,7 @@ export async function deleteChatLog(
 
 /**
  * Serialize messages to markdown format with frontmatter.
+ * Tool activities are serialized as a JSON code block before the message content.
  */
 function serializeChatLog(messages: ConversationMessage[], projectPath: string): string {
   const now = new Date().toISOString()
@@ -209,6 +210,16 @@ function serializeChatLog(messages: ConversationMessage[], projectPath: string):
       : new Date().toTimeString().slice(0, 5)
 
     lines.push(`## ${time} - ${msg.role}`)
+
+    // Serialize tool activities as JSON code block (before content)
+    if (msg.toolActivities && msg.toolActivities.length > 0) {
+      lines.push('')
+      lines.push('```tool-activities')
+      lines.push(JSON.stringify(msg.toolActivities))
+      lines.push('```')
+      lines.push('')
+    }
+
     lines.push(msg.content)
     lines.push('')
     lines.push('---')
@@ -306,6 +317,7 @@ function parseFrontmatter(content: string): Record<string, unknown> {
 
 /**
  * Parse messages from chat log body.
+ * Extracts tool activities from JSON code blocks if present.
  */
 function parseMessages(content: string): ConversationMessage[] {
   const messages: ConversationMessage[] = []
@@ -324,14 +336,45 @@ function parseMessages(content: string): ConversationMessage[] {
   let match: RegExpExecArray | null
 
   while ((match = messageRegex.exec(body)) !== null) {
-    const [, , role, messageContent] = match
+    const [, , role, rawContent] = match
+
+    // Extract tool activities from JSON code block if present
+    const { toolActivities, content: messageContent } = extractToolActivities(rawContent)
+
     messages.push({
       role: role as 'assistant' | 'user',
       content: messageContent.trim(),
+      toolActivities,
     })
   }
 
   return messages
+}
+
+/**
+ * Extract tool activities from a message's raw content.
+ * Tool activities are stored in a ```tool-activities code block.
+ */
+function extractToolActivities(rawContent: string): {
+  toolActivities: PersistedToolActivity[] | undefined
+  content: string
+} {
+  // Match ```tool-activities\n[...]\n```
+  const toolActivitiesRegex = /```tool-activities\r?\n([\s\S]*?)\r?\n```\r?\n?/
+  const match = rawContent.match(toolActivitiesRegex)
+
+  if (!match) {
+    return { toolActivities: undefined, content: rawContent }
+  }
+
+  try {
+    const toolActivities = JSON.parse(match[1]) as PersistedToolActivity[]
+    const content = rawContent.replace(toolActivitiesRegex, '').trim()
+    return { toolActivities, content }
+  } catch (err) {
+    console.warn('Failed to parse tool activities:', err)
+    return { toolActivities: undefined, content: rawContent }
+  }
 }
 
 /**
