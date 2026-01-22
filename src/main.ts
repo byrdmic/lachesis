@@ -1,10 +1,12 @@
-import { Plugin, TFolder } from 'obsidian'
+import { Plugin, TFolder, Menu, TFile, type Editor, type MarkdownView, type MarkdownFileInfo } from 'obsidian'
 import { LachesisSettingTab, DEFAULT_SETTINGS, type LachesisSettings } from './settings'
 import { InterviewModal } from './ui/interview-modal'
 import { ProjectPickerModal } from './ui/project-picker-modal'
 import { ExistingProjectModal } from './ui/existing-project-modal'
+import { TitleEntryModal } from './ui/title-entry-modal'
 import type { ProjectSnapshot } from './core/project/snapshot'
 import { buildProjectSnapshot } from './core/project/snapshot-builder'
+import { findLogEntryAtCursor, type LogEntryAtCursor } from './utils/log-entry-finder'
 
 // ============================================================================
 // Main Plugin
@@ -40,6 +42,13 @@ export default class LachesisPlugin extends Plugin {
 
     // Add settings tab
     this.addSettingTab(new LachesisSettingTab(this.app, this))
+
+    // Register context menu for Log.md entries
+    this.registerEvent(
+      this.app.workspace.on('editor-menu', (menu, editor, info) => {
+        this.handleLogEntryContextMenu(menu, editor, info)
+      })
+    )
 
     console.log('Lachesis plugin loaded')
   }
@@ -144,5 +153,93 @@ export default class LachesisPlugin extends Plugin {
    */
   openExistingProject(projectPath: string, snapshot: ProjectSnapshot) {
     new ExistingProjectModal(this.app, this, projectPath, snapshot).open()
+  }
+
+  // ============================================================================
+  // Context Menu Handlers
+  // ============================================================================
+
+  /**
+   * Handle right-click context menu in the editor.
+   * Adds "Title Current Entry" option when in Log.md on an unsummarized entry.
+   */
+  private handleLogEntryContextMenu(
+    menu: Menu,
+    editor: Editor,
+    info: MarkdownView | MarkdownFileInfo
+  ): void {
+    // 1. Check if file is Log.md
+    const file = info.file
+    if (!file || file.name !== 'Log.md') return
+
+    // 2. Check if file is in a project folder
+    const projectPath = this.getProjectPathForFile(file)
+    if (!projectPath) return
+
+    // 3. Find entry at cursor
+    const cursorLine = editor.getCursor().line
+    const entryInfo = findLogEntryAtCursor(editor, cursorLine)
+
+    // 4. Only show if entry exists and is unsummarized
+    if (!entryInfo || entryInfo.entry.isSummarized) return
+
+    // 5. Add menu item
+    menu.addItem((item) => {
+      item
+        .setTitle('Title Current Entry')
+        .setIcon('pencil')
+        .onClick(() => {
+          this.titleCurrentEntry(projectPath, file, editor, entryInfo)
+        })
+    })
+  }
+
+  /**
+   * Get project path for a given file (if it's in a project folder).
+   */
+  private getProjectPathForFile(file: TFile): string | null {
+    const projectsFolder = this.settings.projectsFolder
+    const filePath = file.path
+
+    // Check if file is inside the projects folder
+    if (!filePath.startsWith(projectsFolder + '/')) return null
+
+    // Extract the project folder (first subfolder after projects folder)
+    const relativePath = filePath.slice(projectsFolder.length + 1)
+    const projectName = relativePath.split('/')[0]
+    if (!projectName) return null
+
+    const projectPath = `${projectsFolder}/${projectName}`
+
+    // Verify it's actually a folder
+    const folder = this.app.vault.getAbstractFileByPath(projectPath)
+    if (!folder || !(folder instanceof TFolder)) return null
+
+    return projectPath
+  }
+
+  /**
+   * Open the title entry modal and apply the title when confirmed.
+   */
+  private async titleCurrentEntry(
+    projectPath: string,
+    file: TFile,
+    editor: Editor,
+    entryInfo: LogEntryAtCursor
+  ): Promise<void> {
+    const snapshot = await buildProjectSnapshot(this.app.vault, projectPath)
+
+    new TitleEntryModal(
+      this.app,
+      this,
+      projectPath,
+      snapshot,
+      entryInfo,
+      async (updatedTimeLine) => {
+        // Apply the title to the specific line
+        const line = entryInfo.entry.startLine
+        editor.setLine(line, updatedTimeLine)
+      }
+    ).open()
   }
 }
