@@ -8,6 +8,7 @@ import {
   buildEnrichTasksSection,
   buildPlanWorkSection,
 } from './workflows'
+import { buildPlanningModeSection } from './modes'
 
 export function buildExistingProjectPrompt(options: ExistingProjectPromptOptions): string {
   const {
@@ -20,6 +21,7 @@ export function buildExistingProjectPrompt(options: ExistingProjectPromptOptions
     focusedFile,
     focusedFileContents,
     recentCommits,
+    chatMode,
   } = options
 
   const openingInstructions = isFirstMessage
@@ -93,6 +95,9 @@ ${recentCommits}
 `
     : ''
 
+  // Build planning mode section if chat mode is 'planning'
+  const planningModeSection = chatMode === 'planning' ? buildPlanningModeSection() : ''
+
   return `You are Lachesis, a project coach helping someone continue work on an existing project.
 
 ================================================================================
@@ -100,7 +105,7 @@ PROJECT SNAPSHOT (CURRENT STATE)
 ================================================================================
 ${snapshotSummary || 'No snapshot available.'}
 ================================================================================
-${recentCommitsSection}${workflowSection}${focusedFileSection}
+${recentCommitsSection}${workflowSection}${focusedFileSection}${planningModeSection}
 ${voiceSection}
 
 ${openingInstructions}

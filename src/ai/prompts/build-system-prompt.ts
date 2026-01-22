@@ -28,6 +28,7 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
       focusedFile: options.focusedFile,
       focusedFileContents: options.focusedFileContents,
       recentCommits: options.recentCommits,
+      chatMode: options.chatMode,
     })
   }
 

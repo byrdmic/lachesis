@@ -3,6 +3,7 @@
 import { Vault } from 'obsidian'
 import type { ConversationMessage, PersistedToolActivity } from '../../ai/providers/types'
 import type { ChatLog, ChatLogMetadata } from './types'
+import type { ChatMode } from '../../ai/prompts/types'
 
 // ============================================================================
 // Constants
@@ -129,7 +130,8 @@ export async function saveChatLog(
   vault: Vault,
   projectPath: string,
   messages: ConversationMessage[],
-  filename: string | null
+  filename: string | null,
+  chatMode?: ChatMode
 ): Promise<{ filename: string; success: boolean }> {
   try {
     // Ensure folder exists
@@ -140,7 +142,7 @@ export async function saveChatLog(
     const filePath = `${projectPath}/${AI_FOLDER}/${LOGS_FOLDER}/${actualFilename}`
 
     // Serialize messages to markdown
-    const content = serializeChatLog(messages, projectPath)
+    const content = serializeChatLog(messages, projectPath, chatMode)
 
     // Always use adapter.write to avoid vault cache timing issues
     // This works for both creating new files and updating existing ones
@@ -188,7 +190,7 @@ export async function deleteChatLog(
  * Serialize messages to markdown format with frontmatter.
  * Tool activities are serialized as a JSON code block before the message content.
  */
-function serializeChatLog(messages: ConversationMessage[], projectPath: string): string {
+function serializeChatLog(messages: ConversationMessage[], projectPath: string, chatMode?: ChatMode): string {
   const now = new Date().toISOString()
   const firstTimestamp = messages[0]?.timestamp || now
 
@@ -198,11 +200,14 @@ function serializeChatLog(messages: ConversationMessage[], projectPath: string):
     `updated: ${now}`,
     `messageCount: ${messages.length}`,
     `projectPath: ${projectPath}`,
-    '---',
-    '',
-    '# Chat Log',
-    '',
   ]
+
+  // Only include chatMode if it's set and not 'default'
+  if (chatMode && chatMode !== 'default') {
+    lines.push(`chatMode: ${chatMode}`)
+  }
+
+  lines.push('---', '', '# Chat Log', '')
 
   for (const msg of messages) {
     const time = msg.timestamp
@@ -241,6 +246,7 @@ function parseMetadataFromContent(content: string, filename: string): ChatLogMet
 
   const updated = (frontmatter.updated as string | undefined) || created
   const messageCount = (frontmatter.messageCount as number | undefined) || 0
+  const chatMode = (frontmatter.chatMode as ChatMode | undefined) || undefined
 
   // Extract preview from first assistant message
   const preview = extractPreview(content)
@@ -255,6 +261,7 @@ function parseMetadataFromContent(content: string, filename: string): ChatLogMet
     messageCount,
     displayDate,
     preview,
+    chatMode,
   }
 }
 
@@ -269,6 +276,7 @@ function parseChatLogContent(content: string, filename: string): ChatLog | null 
   }
 
   const updated = (frontmatter.updated as string | undefined) || created
+  const chatMode = (frontmatter.chatMode as ChatMode | undefined) || undefined
 
   // Parse messages from body
   const messages = parseMessages(content)
@@ -280,6 +288,7 @@ function parseChatLogContent(content: string, filename: string): ChatLog | null 
     messageCount: messages.length,
     displayDate: formatDisplayDate(created),
     preview: extractPreview(content),
+    chatMode,
   }
 
   return { metadata, messages }

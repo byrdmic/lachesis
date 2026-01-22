@@ -3,11 +3,17 @@
 import type { PlanningLevel } from '../../core/project/types'
 import type { WorkflowDefinition } from '../../core/workflows/types'
 
+export type ChatMode = 'default' | 'planning'
+
 export type SystemPromptOptions = {
   /**
    * Session type: 'new' for project discovery/creation, 'existing' for continuing a project.
    */
   sessionType?: 'new' | 'existing'
+  /**
+   * Chat mode: 'default' for normal conversation, 'planning' for structured milestone brainstorming.
+   */
+  chatMode?: ChatMode
   /**
    * Project name (can be empty for new projects that haven't been named yet).
    */
@@ -70,4 +76,5 @@ export type ExistingProjectPromptOptions = {
   focusedFile?: string
   focusedFileContents?: string
   recentCommits?: string
+  chatMode?: ChatMode
 }

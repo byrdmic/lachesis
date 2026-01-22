@@ -68,6 +68,24 @@
   transform: translateY(-1px);
 }
 
+/* Planning Mode indicator */
+.lachesis-planning-mode-indicator {
+  padding: 4px 10px;
+  font-size: 0.7em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(var(--interactive-accent-rgb), 0.15);
+  color: var(--interactive-accent);
+  border: 1px solid var(--interactive-accent);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.lachesis-planning-mode-indicator.hidden {
+  display: none;
+}
+
 /* Status indicator */
 .lachesis-status {
   font-size: 0.75em;

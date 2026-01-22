@@ -49,6 +49,7 @@ export class ChatInterface {
   private statusEl: HTMLElement | null = null
   private toolActivityEl: HTMLElement | null = null
   private toolActivitiesContainer: HTMLElement | null = null
+  private planningModeIndicator: HTMLElement | null = null
 
   // Active tool activities tracking (for live updates)
   private activeToolActivities: Map<string, ActiveToolActivity> = new Map()
@@ -78,6 +79,44 @@ export class ChatInterface {
    */
   setActiveWorkflow(workflowName: string | null): void {
     this.state.setActiveWorkflow(workflowName)
+  }
+
+  /**
+   * Set planning mode and update UI.
+   */
+  setPlanningMode(enabled: boolean): void {
+    this.state.setPlanningMode(enabled)
+    this.updatePlanningModeUI()
+  }
+
+  /**
+   * Get planning mode state.
+   */
+  isPlanningMode(): boolean {
+    return this.state.planningMode
+  }
+
+  /**
+   * Update the planning mode UI elements.
+   */
+  private updatePlanningModeUI(): void {
+    const enabled = this.state.planningMode
+
+    // Update input placeholder
+    if (this.inputEl) {
+      this.inputEl.placeholder = enabled
+        ? 'Brainstorm your next milestones...'
+        : 'Ask about the project or request changes...'
+    }
+
+    // Update planning mode indicator
+    if (this.planningModeIndicator) {
+      if (enabled) {
+        this.planningModeIndicator.removeClass('hidden')
+      } else {
+        this.planningModeIndicator.addClass('hidden')
+      }
+    }
   }
 
   /**
@@ -111,9 +150,17 @@ export class ChatInterface {
     // Input area
     const inputContainer = container.createDiv({ cls: 'lachesis-input-area' })
 
+    // Planning mode indicator (hidden by default)
+    this.planningModeIndicator = inputContainer.createDiv({
+      cls: 'lachesis-planning-mode-indicator hidden',
+      text: 'Planning Mode',
+    })
+
     this.inputEl = inputContainer.createEl('input', {
       type: 'text',
-      placeholder: 'Ask about the project or request changes...',
+      placeholder: this.state.planningMode
+        ? 'Brainstorm your next milestones...'
+        : 'Ask about the project or request changes...',
       cls: 'lachesis-input',
     })
 

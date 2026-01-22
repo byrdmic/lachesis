@@ -6,6 +6,7 @@ import * as path from 'path'
 import type { App, Vault } from 'obsidian'
 import type { ConversationMessage } from '../../ai/providers/types'
 import { listChatLogs, loadChatLog, saveChatLog, type ChatLogMetadata } from '../../core/chat'
+import type { ChatMode } from '../../ai/prompts/types'
 
 // ============================================================================
 // Types
@@ -154,7 +155,7 @@ export class ChatSidebar {
    * Save the current chat to disk.
    * Called by the parent modal after each message.
    */
-  async saveChat(messages: ConversationMessage[]): Promise<string | null> {
+  async saveChat(messages: ConversationMessage[], chatMode?: ChatMode): Promise<string | null> {
     if (messages.length === 0) return null
 
     const wasNewChat = !this.currentChatFilename
@@ -163,7 +164,8 @@ export class ChatSidebar {
       this.app.vault,
       this.projectPath,
       messages,
-      this.currentChatFilename
+      this.currentChatFilename,
+      chatMode
     )
 
     if (result.success) {

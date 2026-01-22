@@ -1,6 +1,7 @@
 // Chat History Types
 
 import type { ConversationMessage } from '../../ai/providers/types'
+import type { ChatMode } from '../../ai/prompts/types'
 
 /**
  * Metadata for a chat log file (used in sidebar listing).
@@ -18,6 +19,8 @@ export type ChatLogMetadata = {
   displayDate: string
   /** Preview text from first assistant message (~50 chars) */
   preview: string
+  /** Chat mode: 'default' or 'planning' */
+  chatMode?: ChatMode
 }
 
 /**

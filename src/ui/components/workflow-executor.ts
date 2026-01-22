@@ -45,6 +45,8 @@ export type WorkflowExecutorCallbacks = {
   onAddMessage: (role: 'assistant' | 'user', content: string) => void
   /** Called to set processing state */
   onSetProcessing: (processing: boolean, status: string) => void
+  /** Called when planning mode is toggled */
+  onPlanningModeToggle?: (enabled: boolean) => void
 }
 
 // ============================================================================
@@ -57,6 +59,8 @@ export class WorkflowExecutor {
   private callbacks: WorkflowExecutorCallbacks
   private githubToken: string
   private engine: WorkflowEngine
+  private planningModeBtn: HTMLButtonElement | null = null
+  private _planningMode = false
 
   constructor(
     app: App,
@@ -89,6 +93,35 @@ export class WorkflowExecutor {
   }
 
   /**
+   * Get planning mode state.
+   */
+  get planningMode(): boolean {
+    return this._planningMode
+  }
+
+  /**
+   * Set planning mode state and update UI.
+   */
+  setPlanningMode(enabled: boolean): void {
+    this._planningMode = enabled
+    this.updatePlanningModeButton()
+  }
+
+  /**
+   * Update the planning mode button appearance.
+   */
+  private updatePlanningModeButton(): void {
+    if (!this.planningModeBtn) return
+    if (this._planningMode) {
+      this.planningModeBtn.addClass('active')
+      this.planningModeBtn.setText('Planning Mode')
+    } else {
+      this.planningModeBtn.removeClass('active')
+      this.planningModeBtn.setText('Planning Mode')
+    }
+  }
+
+  /**
    * Render workflow buttons into the container.
    */
   renderWorkflowButtons(container: HTMLElement, onStartChat: () => void): void {
@@ -100,6 +133,18 @@ export class WorkflowExecutor {
       cls: 'lachesis-workflow-button lachesis-start-chat-button',
     })
     startChatBtn.addEventListener('click', onStartChat)
+
+    // Planning Mode toggle button
+    this.planningModeBtn = container.createEl('button', {
+      text: 'Planning Mode',
+      cls: 'lachesis-workflow-button lachesis-planning-mode-button',
+    })
+    this.updatePlanningModeButton()
+    this.planningModeBtn.addEventListener('click', () => {
+      this._planningMode = !this._planningMode
+      this.updatePlanningModeButton()
+      this.callbacks.onPlanningModeToggle?.(this._planningMode)
+    })
 
     // Git Log button - show recent commits if GitHub repo is configured
     if (snapshot.aiConfig?.github_repo) {

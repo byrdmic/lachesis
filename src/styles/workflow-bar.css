@@ -45,6 +45,29 @@
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
 }
 
+/* Planning Mode toggle button */
+.lachesis-workflow-button.lachesis-planning-mode-button {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  border: 1px dashed var(--background-modifier-border);
+}
+
+.lachesis-workflow-button.lachesis-planning-mode-button:hover {
+  border-color: var(--interactive-accent);
+  border-style: dashed;
+}
+
+.lachesis-workflow-button.lachesis-planning-mode-button.active {
+  background: rgba(var(--interactive-accent-rgb), 0.15);
+  color: var(--interactive-accent);
+  border: 1px solid var(--interactive-accent);
+  border-style: solid;
+}
+
+.lachesis-workflow-button.lachesis-planning-mode-button.active:hover {
+  background: rgba(var(--interactive-accent-rgb), 0.25);
+}
+
 /* Wrapper for workflow button + tooltip */
 .lachesis-workflow-button-wrapper {
   position: relative;

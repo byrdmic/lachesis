@@ -8,7 +8,8 @@ import type { ProjectSnapshot, ExpectedCoreFile } from '../core/project/snapshot
 import { buildProjectSnapshot, formatProjectSnapshotForModel, fetchProjectFileContents, formatFileContentsForModel } from '../core/project/snapshot-builder'
 import { getProvider, isProviderAvailable } from '../ai/providers/factory'
 import type { AIProvider, ConversationMessage } from '../ai/providers/types'
-import { buildSystemPrompt } from '../ai/prompts'
+import { buildSystemPrompt, detectPlanningModeRequest, detectPlanningTrigger, extractMilestoneProposals } from '../ai/prompts'
+import type { ChatMode } from '../ai/prompts/types'
 import { PROJECT_FILES, getWorkflowDefinition } from '../core/workflows/definitions'
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 import { fetchCommits, formatCommitLog } from '../github'
@@ -45,6 +46,7 @@ export class ExistingProjectModal extends Modal {
   private focusedFile: ExpectedCoreFile | null = null // File being filled via "Fill with AI"
   private lastUsedWorkflowName: WorkflowName | null = null // Track workflow for post-diff processing
   private currentChatFilename: string | null = null
+  private planningMode = false // Planning mode for milestone brainstorming
 
   // Components
   private chatSidebar: ChatSidebar | null = null
@@ -147,6 +149,7 @@ export class ExistingProjectModal extends Modal {
         onSnapshotRefresh: () => this.refreshSnapshot(),
         onAddMessage: (role, content) => this.chatInterface?.addMessageToUI(role, content),
         onSetProcessing: (processing, status) => this.setProcessing(processing, status),
+        onPlanningModeToggle: (enabled) => this.handlePlanningModeToggle(enabled),
       },
       this.plugin.settings.githubToken
     )
@@ -341,6 +344,7 @@ export class ExistingProjectModal extends Modal {
       isFirstMessage: true,
       snapshotSummary,
       recentCommits,
+      chatMode: this.getChatMode(),
     })
 
     try {
@@ -360,7 +364,7 @@ export class ExistingProjectModal extends Modal {
           content: result.content,
           timestamp: new Date().toISOString(),
         })
-        await this.chatSidebar?.saveChat(this.messages)
+        await this.chatSidebar?.saveChat(this.messages, this.getChatMode())
         this.chatSidebar?.highlightCurrentChat()
         this.setProcessing(false, 'Your turn')
         this.chatInterface.focusInput()
@@ -399,15 +403,35 @@ export class ExistingProjectModal extends Modal {
       }
       this.messages.push(userMessage)
       this.chatInterface.addMessageToUI('user', message)
-      await this.chatSidebar?.saveChat(this.messages)
+      await this.chatSidebar?.saveChat(this.messages, this.getChatMode())
 
       // Check for keyword and handle
       const handled = await this.workflowExecutor.checkPromoteKeyword(message)
       if (handled) {
         // Save any assistant messages that were added
-        await this.chatSidebar?.saveChat(this.messages)
+        await this.chatSidebar?.saveChat(this.messages, this.getChatMode())
         return
       }
+    }
+
+    // Check for planning mode actions (save to ideas, add to roadmap)
+    if (this.planningMode) {
+      const planningAction = detectPlanningTrigger(message)
+      if (planningAction === 'save_ideas' || planningAction === 'add_roadmap') {
+        // Find the last assistant message with proposals
+        const lastAssistantMsg = [...this.messages].reverse().find((m) => m.role === 'assistant')
+        if (lastAssistantMsg) {
+          await this.handlePlanningAction(planningAction, lastAssistantMsg.content)
+          return
+        }
+      }
+    }
+
+    // Detect if user wants to enter planning mode (natural language triggers)
+    if (!this.planningMode && detectPlanningModeRequest(message)) {
+      this.planningMode = true
+      this.chatInterface.setPlanningMode(true)
+      this.workflowExecutor?.setPlanningMode(true)
     }
 
     // Detect workflow request from user input (if not already set by button click)
@@ -435,7 +459,7 @@ export class ExistingProjectModal extends Modal {
     this.chatInterface.addMessageToUI('user', message)
 
     // Save after user message
-    await this.chatSidebar?.saveChat(this.messages)
+    await this.chatSidebar?.saveChat(this.messages, this.getChatMode())
     this.chatSidebar?.highlightCurrentChat()
 
     // Generate response
@@ -508,6 +532,7 @@ export class ExistingProjectModal extends Modal {
       focusedFile: currentFocusedFile ?? undefined,
       focusedFileContents,
       recentCommits,
+      chatMode: this.getChatMode(),
     })
 
     // Store workflow name for post-diff processing, then clear active workflow
@@ -557,6 +582,11 @@ export class ExistingProjectModal extends Modal {
       if (result.success && result.content) {
         this.chatInterface.finalizeStreamingMessage()
 
+        // Render tool activities on the finalized message (after finalizeStreamingMessage clears the container)
+        if (result.toolActivities && result.toolActivities.length > 0) {
+          this.chatInterface.renderToolActivitiesOnLastMessage(result.toolActivities)
+        }
+
         // Check if this was an init-from-summary workflow - handle specially
         if (this.lastUsedWorkflowName === 'init-from-summary') {
           await this.workflowExecutor?.handleInitFromSummaryResponse(result.content)
@@ -578,7 +608,7 @@ export class ExistingProjectModal extends Modal {
           timestamp: new Date().toISOString(),
           toolActivities: result.toolActivities,
         })
-        await this.chatSidebar?.saveChat(this.messages)
+        await this.chatSidebar?.saveChat(this.messages, this.getChatMode())
         this.chatSidebar?.highlightCurrentChat()
         this.setProcessing(false, 'Your turn')
         this.chatInterface.focusInput()
@@ -625,7 +655,7 @@ export class ExistingProjectModal extends Modal {
           toolActivities: toolActivities,
         })
 
-        await this.chatSidebar?.saveChat(this.messages)
+        await this.chatSidebar?.saveChat(this.messages, this.getChatMode())
         this.chatSidebar?.highlightCurrentChat()
 
         const statusMsg = hasPartialChanges
@@ -661,7 +691,80 @@ export class ExistingProjectModal extends Modal {
     this.activeWorkflow = null
     this.focusedFile = null
     this.lastUsedWorkflowName = null
+    this.planningMode = false
     this.chatInterface?.setViewingLoadedChat(false)
+    this.chatInterface?.setPlanningMode(false)
+    this.workflowExecutor?.setPlanningMode(false)
     this.renderChatPhase()
+  }
+
+  // ============================================================================
+  // Planning Mode Methods
+  // ============================================================================
+
+  /**
+   * Handle planning mode toggle from workflow executor.
+   */
+  private handlePlanningModeToggle(enabled: boolean): void {
+    this.planningMode = enabled
+    this.chatInterface?.setPlanningMode(enabled)
+  }
+
+  /**
+   * Get the current chat mode based on planning state.
+   */
+  private getChatMode(): ChatMode {
+    return this.planningMode ? 'planning' : 'default'
+  }
+
+  /**
+   * Handle planning mode actions (save to ideas, add to roadmap).
+   */
+  private async handlePlanningAction(
+    action: 'save_ideas' | 'add_roadmap',
+    assistantContent: string
+  ): Promise<void> {
+    const proposals = extractMilestoneProposals(assistantContent)
+    if (!proposals) {
+      this.chatInterface?.addMessageToUI(
+        'assistant',
+        "I don't see any milestone proposals to save. Would you like me to generate some first?"
+      )
+      return
+    }
+
+    const targetFile = action === 'save_ideas' ? 'Ideas.md' : 'Roadmap.md'
+    const filePath = `${this.projectPath}/${targetFile}`
+    const file = this.app.vault.getAbstractFileByPath(filePath)
+
+    if (!file) {
+      this.chatInterface?.addMessageToUI(
+        'assistant',
+        `${targetFile} not found. Please ensure the file exists first.`
+      )
+      return
+    }
+
+    try {
+      const currentContent = await this.app.vault.read(file as any)
+      const dateHeader = `### ${new Date().toISOString().split('T')[0]} — Planning Session`
+      const newSection = `\n\n${dateHeader}\n\n${proposals}`
+
+      // Append to the end of the file
+      await this.app.vault.modify(file as any, currentContent + newSection)
+
+      this.chatInterface?.addMessageToUI(
+        'assistant',
+        `Done. I've added the milestone proposals to ${targetFile}.`
+      )
+
+      await this.refreshSnapshot()
+    } catch (err) {
+      console.error(`Failed to save to ${targetFile}:`, err)
+      this.chatInterface?.addMessageToUI(
+        'assistant',
+        `Failed to save to ${targetFile}: ${err instanceof Error ? err.message : 'Unknown error'}`
+      )
+    }
   }
 }

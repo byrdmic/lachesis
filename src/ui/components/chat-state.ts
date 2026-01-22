@@ -27,6 +27,7 @@ export class ChatState {
   private _isProcessing = false
   private _activeWorkflowName: string | null = null
   private _isViewingLoadedChat = false
+  private _planningMode = false
 
   // Streaming text
   get streamingText(): string {
@@ -68,6 +69,15 @@ export class ChatState {
     this._isViewingLoadedChat = viewing
   }
 
+  // Planning mode
+  get planningMode(): boolean {
+    return this._planningMode
+  }
+
+  setPlanningMode(enabled: boolean): void {
+    this._planningMode = enabled
+  }
+
   /**
    * Reset all state to initial values.
    */
@@ -76,5 +86,6 @@ export class ChatState {
     this._isProcessing = false
     this._activeWorkflowName = null
     this._isViewingLoadedChat = false
+    this._planningMode = false
   }
 }
