@@ -424,7 +424,7 @@ export class ChatInterface {
         this.updateToolActivityElement(
           existing.element,
           activity.status,
-          activity.output || '',
+          this.generateBasicSummaryFromOutput(activity),
           existing.startedAt,
         )
         if (existing.timerInterval) {
@@ -510,6 +510,49 @@ export class ChatInterface {
       this.toolActivitiesContainer.remove()
       this.toolActivitiesContainer = null
     }
+  }
+
+  /**
+   * Finalize tool activities by migrating them to the last assistant message.
+   * This creates a persistent log of activities instead of removing them.
+   */
+  finalizeToolActivities(): void {
+    if (!this.toolActivitiesContainer || !this.messagesContainer) return
+
+    // Find last assistant message
+    const messages = this.messagesContainer.querySelectorAll('.lachesis-message.assistant')
+    const lastMessage = messages[messages.length - 1]
+
+    // Stop all timers
+    for (const activity of this.activeToolActivities.values()) {
+      if (activity.timerInterval) {
+        clearInterval(activity.timerInterval)
+      }
+    }
+    this.activeToolActivities.clear()
+
+    // Check if there are any activities to persist
+    const activityList = this.toolActivitiesContainer.querySelector('.lachesis-tool-activities-list')
+    const hasActivities = activityList && activityList.children.length > 0
+
+    if (lastMessage && hasActivities) {
+      // Move container into message (it becomes the persistent log)
+      this.toolActivitiesContainer.addClass('finalized')
+
+      // Update header to show count
+      const header = this.toolActivitiesContainer.querySelector('.lachesis-tool-activities-header')
+      if (header && activityList) {
+        const count = activityList.children.length
+        header.textContent = `${count} tool${count === 1 ? '' : 's'} used`
+      }
+
+      lastMessage.appendChild(this.toolActivitiesContainer)
+    } else {
+      // No activities or no message to attach to - just remove
+      this.toolActivitiesContainer.remove()
+    }
+
+    this.toolActivitiesContainer = null
   }
 
   /**
@@ -599,6 +642,23 @@ export class ChatInterface {
       this.toolActivitiesContainer = this.messagesContainer.createDiv({
         cls: 'lachesis-tool-activities-container',
       })
+
+      // Add collapsible header
+      const header = this.toolActivitiesContainer.createDiv({
+        cls: 'lachesis-tool-activities-header',
+        text: 'Tools',
+      })
+      header.addEventListener('click', () => {
+        if (this.toolActivitiesContainer) {
+          const isCollapsed = this.toolActivitiesContainer.hasClass('collapsed')
+          this.toolActivitiesContainer.toggleClass('collapsed', !isCollapsed)
+        }
+      })
+
+      // Activity list
+      this.toolActivitiesContainer.createDiv({
+        cls: 'lachesis-tool-activities-list',
+      })
     }
   }
 
@@ -608,10 +668,12 @@ export class ChatInterface {
     description: string,
     status: 'running' | 'completed' | 'failed',
   ): HTMLElement {
-    const container = this.toolActivitiesContainer || this.messagesContainer
+    // Find the list container within the activities container
+    const listContainer = this.toolActivitiesContainer?.querySelector('.lachesis-tool-activities-list')
+    const container = listContainer || this.toolActivitiesContainer || this.messagesContainer
     if (!container) throw new Error('No container for tool activity')
 
-    const activityEl = container.createDiv({
+    const activityEl = (container as HTMLElement).createDiv({
       cls: `lachesis-tool-activity ${status}`,
       attr: { 'data-activity-id': id },
     })
@@ -765,6 +827,32 @@ export class ChatInterface {
       }
       case 'Grep': {
         const count = activity.output?.split('\n').filter((l) => l.trim()).length ?? 0
+        return `Found ${count} match${count === 1 ? '' : 'es'}`
+      }
+      default:
+        return 'Completed'
+    }
+  }
+
+  /**
+   * Generate a condensed summary from basic ToolActivity (used by backward-compatible showToolActivity).
+   */
+  private generateBasicSummaryFromOutput(activity: ToolActivity): string {
+    if (!activity.output) return 'Completed'
+    const len = activity.output.length
+    switch (activity.toolName) {
+      case 'Read':
+        return `Read ${this.formatNumber(len)} chars`
+      case 'Write':
+        return `Wrote ${this.formatNumber(len)} chars`
+      case 'Edit':
+        return 'Edit applied'
+      case 'Glob': {
+        const count = activity.output.split('\n').filter((l) => l.trim()).length
+        return `Found ${count} file${count === 1 ? '' : 's'}`
+      }
+      case 'Grep': {
+        const count = activity.output.split('\n').filter((l) => l.trim()).length
         return `Found ${count} match${count === 1 ? '' : 'es'}`
       }
       default:

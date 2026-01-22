@@ -538,11 +538,11 @@ export class ExistingProjectModal extends Modal {
           },
           {
             onTextUpdate: (partial) => this.chatInterface?.updateStreamingMessage(partial),
-            onToolActivity: (activity) => this.chatInterface?.showToolActivity(activity),
+            onEnhancedToolActivity: (activity) => this.chatInterface?.showEnhancedToolActivity(activity),
           },
         )
 
-        this.chatInterface?.clearToolActivity()
+        this.chatInterface?.finalizeToolActivities()
       } else {
         // Use regular streamText for workflows
         result = await this.provider.streamText(
@@ -642,7 +642,7 @@ export class ExistingProjectModal extends Modal {
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to generate response'
       this.chatInterface?.finalizeStreamingMessage()
-      this.chatInterface?.clearToolActivity()
+      this.chatInterface?.finalizeToolActivities()
       this.chatInterface?.updateStatus(`Error: ${error}`)
       this.setInputEnabled(true)
     }

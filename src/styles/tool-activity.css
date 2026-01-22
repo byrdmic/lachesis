@@ -8,6 +8,53 @@
   margin: 8px 0;
 }
 
+/* Finalized state - shown in message history */
+.lachesis-tool-activities-container.finalized {
+  margin-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 8px;
+}
+
+/* Collapsible header */
+.lachesis-tool-activities-header {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.lachesis-tool-activities-header::before {
+  content: '▼';
+  font-size: 0.7em;
+  transition: transform 0.2s;
+}
+
+.lachesis-tool-activities-header:hover {
+  color: var(--text-normal);
+}
+
+/* Collapsed state */
+.lachesis-tool-activities-container.collapsed .lachesis-tool-activities-header::before {
+  transform: rotate(-90deg);
+}
+
+.lachesis-tool-activities-container.collapsed .lachesis-tool-activities-list {
+  display: none;
+}
+
+/* Activity list container */
+.lachesis-tool-activities-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* Individual tool activity item */
 .lachesis-tool-activity {
   padding: 8px 12px;

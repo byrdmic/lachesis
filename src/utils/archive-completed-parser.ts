@@ -384,14 +384,10 @@ export function applyArchiveRemoval(
 }
 
 /**
- * Format a task for archiving (preserves full line including slice ref and sub-items)
+ * Format a task for archiving (only the task line, not metadata/sub-items)
  */
 function formatTaskForArchive(task: CompletedTask): string {
-  const lines = [task.fullLine]
-  for (const subItem of task.subItems) {
-    lines.push(subItem)
-  }
-  return lines.join('\n')
+  return task.fullLine
 }
 
 /**
