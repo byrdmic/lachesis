@@ -38,6 +38,7 @@
 @import './init-summary-modal.css';
 @import './batch-diff-modal.css';
 @import './config-editor-modal.css';
+@import './compose-message-modal.css';
 
 /* UI Enhancements */
 @import './workflow-tooltips.css';

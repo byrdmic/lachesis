@@ -19,6 +19,7 @@ import {
   extractPlanWorkSummary,
 } from '../../utils/plan-work-parser'
 import { DiffViewerModal, type DiffAction } from '../diff-viewer-modal'
+import { ComposeMessageModal } from '../compose-message-modal'
 import {
   ChatState,
   type ChatInterfaceCallbacks,
@@ -115,6 +116,16 @@ export class ChatInterface {
       }
     })
 
+    // Expand button to open compose modal
+    const expandButton = inputContainer.createEl('button', {
+      cls: 'lachesis-expand-button',
+      attr: { 'aria-label': 'Expand input' },
+    })
+    expandButton.setText('↗')
+    expandButton.addEventListener('click', () => {
+      this.openComposeModal()
+    })
+
     const sendButton = inputContainer.createEl('button', {
       text: 'Send',
       cls: 'lachesis-send-button',
@@ -161,6 +172,22 @@ export class ChatInterface {
 
     // Notify parent
     this.callbacks.onSubmit(message)
+  }
+
+  /**
+   * Open the compose message modal for multi-line input.
+   */
+  private openComposeModal(): void {
+    const currentText = this.inputEl?.value || ''
+    new ComposeMessageModal(this.app, currentText, (message, confirmed) => {
+      if (confirmed && message.trim()) {
+        // Clear the input field since message is being sent
+        if (this.inputEl) {
+          this.inputEl.value = ''
+        }
+        this.callbacks.onSubmit(message)
+      }
+    }).open()
   }
 
   /**
