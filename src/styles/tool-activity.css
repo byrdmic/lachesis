@@ -109,6 +109,32 @@
   }
 }
 
+/* Pulsing animation for 'starting' phase */
+.lachesis-tool-activity-icon.pulsing {
+  animation: lachesis-pulse 1s ease-in-out infinite;
+}
+
+@keyframes lachesis-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Starting phase - muted appearance */
+.lachesis-tool-activity.running.starting {
+  border-left-color: var(--text-muted);
+}
+
+/* Executing phase - active appearance */
+.lachesis-tool-activity.running.executing {
+  border-left-color: var(--interactive-accent);
+}
+
 /* Main content area */
 .lachesis-tool-activity-content {
   flex: 1;

@@ -497,12 +497,13 @@ export class ChatInterface {
     const existing = this.activeToolActivities.get(activity.id)
 
     if (activity.status === 'running' && !existing) {
-      // Create new activity element
+      // Create new activity element with phase
       const activityEl = this.createToolActivityElement(
         activity.id,
         activity.toolName,
         activity.description,
         'running',
+        activity.phase,
       )
 
       // Track it with timer
@@ -512,14 +513,17 @@ export class ChatInterface {
         startedAt: activity.startedAt,
         timerInterval: this.startTimer(activityEl, activity.startedAt),
       })
+    } else if (existing && activity.status === 'running') {
+      // Handle phase transition (starting → executing)
+      this.updateToolActivityPhase(existing.element, activity.phase)
     } else if (existing && activity.status !== 'running') {
-      // Update existing element
+      // Update existing element - use durationMs for accurate final duration
       const summary = this.generateSummary(activity)
       this.updateToolActivityElement(
         existing.element,
         activity.status,
         summary,
-        existing.startedAt,
+        activity.durationMs ?? (Date.now() - existing.startedAt),
         activity.toolName === 'Edit' ? (activity.input.diff as string | undefined) : undefined,
       )
 
@@ -714,21 +718,26 @@ export class ChatInterface {
     toolName: string,
     description: string,
     status: 'running' | 'completed' | 'failed',
+    phase?: 'starting' | 'executing',
   ): HTMLElement {
     // Find the list container within the activities container
     const listContainer = this.toolActivitiesContainer?.querySelector('.lachesis-tool-activities-list')
     const container = listContainer || this.toolActivitiesContainer || this.messagesContainer
     if (!container) throw new Error('No container for tool activity')
 
+    // Build class list with optional phase
+    const classes = [`lachesis-tool-activity`, status]
+    if (phase) classes.push(phase)
+
     const activityEl = (container as HTMLElement).createDiv({
-      cls: `lachesis-tool-activity ${status}`,
+      cls: classes.join(' '),
       attr: { 'data-activity-id': id },
     })
 
-    // Icon
+    // Icon - use phase-appropriate animation
     const iconEl = activityEl.createSpan({ cls: 'lachesis-tool-activity-icon' })
     if (status === 'running') {
-      iconEl.addClass('spinning')
+      iconEl.addClass(phase === 'starting' ? 'pulsing' : 'spinning')
       iconEl.setText('⚙')
     } else if (status === 'completed') {
       iconEl.setText('✓')
@@ -752,21 +761,46 @@ export class ChatInterface {
     return activityEl
   }
 
+  /**
+   * Update phase of a running tool activity (starting → executing).
+   */
+  private updateToolActivityPhase(element: HTMLElement, phase?: 'starting' | 'executing'): void {
+    // Remove old phase classes
+    element.removeClass('starting')
+    element.removeClass('executing')
+
+    // Add new phase class
+    if (phase) {
+      element.addClass(phase)
+    }
+
+    // Update icon animation
+    const iconEl = element.querySelector('.lachesis-tool-activity-icon')
+    if (iconEl) {
+      iconEl.removeClass('pulsing')
+      iconEl.removeClass('spinning')
+      iconEl.addClass(phase === 'starting' ? 'pulsing' : 'spinning')
+    }
+  }
+
   private updateToolActivityElement(
     element: HTMLElement,
     status: 'completed' | 'failed',
     summary: string,
-    startedAt: number,
+    durationMs: number,
     diffPreview?: string,
   ): void {
-    // Update class
+    // Update class - remove running and phase classes
     element.removeClass('running')
+    element.removeClass('starting')
+    element.removeClass('executing')
     element.addClass(status)
 
-    // Update icon
+    // Update icon - remove all animations
     const iconEl = element.querySelector('.lachesis-tool-activity-icon')
     if (iconEl) {
       iconEl.removeClass('spinning')
+      iconEl.removeClass('pulsing')
       iconEl.textContent = status === 'completed' ? '✓' : '✗'
     }
 
@@ -807,10 +841,10 @@ export class ChatInterface {
       }
     }
 
-    // Update timer with final duration
+    // Update timer with final duration (use durationMs directly, not recalculated)
     const timerEl = element.querySelector('.lachesis-tool-activity-timer')
     if (timerEl) {
-      timerEl.textContent = this.formatDuration(Date.now() - startedAt)
+      timerEl.textContent = this.formatDuration(durationMs)
     }
   }
 

@@ -113,11 +113,12 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentChatRe
             const activityId = generateActivityId()
             const startedAt = Date.now()
 
-            // Create enhanced activity for tracking
+            // Create enhanced activity for tracking (starting phase)
             const activity: EnhancedToolActivity = {
               id: activityId,
               toolName,
               status: 'running',
+              phase: 'starting',
               description: generateToolDescription(toolName, toolInput),
               startedAt,
               input: toolInput,
@@ -125,7 +126,7 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentChatRe
 
             executedTools.push(activity)
 
-            // Notify callbacks that tool is running
+            // Notify callbacks that tool is starting
             callbacks.onToolActivity?.({
               toolName,
               status: 'running',
@@ -133,12 +134,17 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentChatRe
             })
             callbacks.onEnhancedToolActivity?.(activity)
 
+            // Update to executing phase before tool runs
+            activity.phase = 'executing'
+            callbacks.onEnhancedToolActivity?.(activity)
+
             // Execute the tool
             const result = await executeTool(toolName, toolInput, context)
             const completedAt = Date.now()
 
-            // Update activity with result
+            // Update activity with result (clear phase since no longer running)
             activity.status = result.success ? 'completed' : 'failed'
+            activity.phase = undefined
             activity.completedAt = completedAt
             activity.durationMs = completedAt - startedAt
             activity.output = result.success ? result.output : undefined

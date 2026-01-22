@@ -156,6 +156,7 @@ export type EnhancedToolActivity = {
   id: string
   toolName: ToolName
   status: 'running' | 'completed' | 'failed'
+  phase?: 'starting' | 'executing' // Granular phase within 'running' status
   description: string // "Reading Tasks.md", "Editing Overview.md (line 15)"
   startedAt: number
   completedAt?: number
