@@ -12,7 +12,6 @@ import { buildSystemPrompt } from '../ai/prompts'
 import { PROJECT_FILES, getWorkflowDefinition } from '../core/workflows/definitions'
 import type { WorkflowDefinition, WorkflowName } from '../core/workflows/types'
 import type { DiffBlock } from '../utils/diff'
-import { getTrimmedLogContent, getFilteredLogForTitleEntries, getBottomLinesOfLog, type TrimmedLogResult, type FilteredLogResult, type BottomLinesResult } from '../utils/log-parser'
 import type { DiffAction } from './diff-viewer-modal'
 import { fetchCommits, formatCommitLog } from '../github'
 
@@ -161,11 +160,8 @@ export class ExistingProjectModal extends Modal {
       {
         onSubmit: (message) => this.handleUserInput(message),
         onDiffAction: (diffBlock, action) => this.handleDiffAction(diffBlock, action),
-        onViewIdeasGroom: (content) => this.workflowExecutor?.openIdeasGroomModalForHistory(content),
-        onViewSyncCommits: (content) => this.workflowExecutor?.openSyncCommitsModalForHistory(content),
-        onViewArchiveCompleted: (content) => this.workflowExecutor?.openArchiveCompletedModalForHistory(content),
-        onViewHarvestTasks: (content) => this.workflowExecutor?.openHarvestTasksModalForHistory(content),
         onViewEnrichTasks: (content) => this.workflowExecutor?.openEnrichTasksModalForHistory(content),
+        onViewPlanWork: (content) => this.workflowExecutor?.openPlanWorkModalForHistory(content),
         isAutoAcceptEnabled: () => this.plugin.settings.autoAcceptChanges,
         getWorkflowAutoApply: (name) => {
           // Check if workflow is auto-applyable and user has enabled it
@@ -468,9 +464,6 @@ export class ExistingProjectModal extends Modal {
 
     // Fetch file contents if a workflow is active
     let workflowFileContents: string | undefined
-    let logTrimResult: TrimmedLogResult | null = null
-    let logFilterResult: FilteredLogResult | null = null
-    let logBottomResult: BottomLinesResult | null = null
     if (this.activeWorkflow) {
       this.chatInterface.updateStatus(`Fetching files for ${this.activeWorkflow.displayName}...`)
       try {
@@ -479,72 +472,6 @@ export class ExistingProjectModal extends Modal {
           this.projectPath,
           this.activeWorkflow.readFiles,
         )
-
-        // Handle log file processing based on workflow type
-        if (fileContents['Log.md']) {
-          if (this.activeWorkflow.name === 'title-entries') {
-            logFilterResult = getFilteredLogForTitleEntries(fileContents['Log.md'])
-            fileContents['Log.md'] = logFilterResult.content
-            console.log(`Log filtered for title-entries: ${logFilterResult.includedEntryCount} entries need titles, ${logFilterResult.excludedEntryCount} already have titles`)
-          } else if (this.activeWorkflow.name === 'generate-tasks') {
-            logTrimResult = getTrimmedLogContent(fileContents['Log.md'])
-            if (logTrimResult.wasTrimmed) {
-              fileContents['Log.md'] = logTrimResult.content
-              console.log(`Log trimmed: ${logTrimResult.trimSummary}`)
-            }
-          } else if (this.activeWorkflow.name === 'log-refine') {
-            // For log-refine, limit to bottom 300 lines to avoid overwhelming AI
-            logBottomResult = getBottomLinesOfLog(fileContents['Log.md'])
-            if (logBottomResult.wasTrimmed) {
-              fileContents['Log.md'] = logBottomResult.content
-              console.log(`Log trimmed for log-refine: showing ${logBottomResult.includedLineCount} lines, excluded ${logBottomResult.excludedLineCount} earlier lines`)
-            }
-          }
-        }
-
-        // For sync-commits: fetch recent commits and include them in the file contents
-        if (this.activeWorkflow.name === 'sync-commits') {
-          const githubRepo = this.snapshot.aiConfig?.github_repo
-          if (githubRepo) {
-            this.updateStatus('Fetching recent commits...')
-            const result = await fetchCommits(githubRepo, {
-              token: this.plugin.settings.githubToken || undefined,
-              perPage: 50, // Get more commits for better matching
-            })
-
-            if (result.success && result.data.length > 0) {
-              // Store commits for later parsing
-              // CommitLogEntry has: sha, shortSha, message, author, authorEmail, date (Date), url
-              const gitCommits = result.data.map((c) => ({
-                sha: c.sha,
-                message: c.message,
-                date: c.date instanceof Date ? c.date.toISOString() : '',
-                url: c.url,
-              }))
-
-              // Pass commits to WorkflowExecutor for sync-commits response handling
-              this.workflowExecutor?.setRecentGitCommits(gitCommits)
-
-              // Format commits for AI analysis
-              const commitsSection = gitCommits.map((c) => {
-                const date = c.date ? new Date(c.date).toISOString().split('T')[0] : 'unknown'
-                return `COMMIT ${c.sha} (${date}):\n${c.message}`
-              }).join('\n\n---\n\n')
-
-              fileContents['RECENT_COMMITS'] = commitsSection
-              console.log(`Fetched ${gitCommits.length} commits for sync-commits workflow`)
-            } else if (!result.success) {
-              console.warn('Failed to fetch commits:', result.error)
-              this.workflowExecutor?.setRecentGitCommits([])
-            } else {
-              console.warn('No commits found')
-              this.workflowExecutor?.setRecentGitCommits([])
-            }
-          } else {
-            console.warn('No GitHub repo configured for sync-commits workflow')
-            this.workflowExecutor?.setRecentGitCommits([])
-          }
-        }
 
         workflowFileContents = formatFileContentsForModel(fileContents)
       } catch (err) {
@@ -651,31 +578,6 @@ export class ExistingProjectModal extends Modal {
       this.chatInterface.finalizeStreamingMessage()
 
       if (result.success && result.content) {
-        // Check if this was a harvest-tasks workflow - handle specially
-        if (this.lastUsedWorkflowName === 'harvest-tasks') {
-          await this.workflowExecutor?.handleHarvestTasksResponse(result.content)
-        }
-
-        // Check if this was an ideas-groom workflow - handle specially
-        if (this.lastUsedWorkflowName === 'ideas-groom') {
-          await this.workflowExecutor?.handleIdeasGroomResponse(result.content)
-        }
-
-        // Check if this was a sync-commits workflow - handle specially
-        if (this.lastUsedWorkflowName === 'sync-commits') {
-          await this.workflowExecutor?.handleSyncCommitsResponse(result.content)
-        }
-
-        // Check if this was an archive-completed workflow - handle specially
-        if (this.lastUsedWorkflowName === 'archive-completed') {
-          await this.workflowExecutor?.handleArchiveCompletedResponse(result.content)
-        }
-
-        // Check if this was a promote-next-task workflow - handle specially
-        if (this.lastUsedWorkflowName === 'promote-next-task') {
-          await this.workflowExecutor?.handlePromoteNextResponse(result.content)
-        }
-
         // Check if this was an init-from-summary workflow - handle specially
         if (this.lastUsedWorkflowName === 'init-from-summary') {
           await this.workflowExecutor?.handleInitFromSummaryResponse(result.content)
@@ -684,6 +586,11 @@ export class ExistingProjectModal extends Modal {
         // Check if this was an enrich-tasks workflow - handle specially
         if (this.lastUsedWorkflowName === 'enrich-tasks') {
           await this.workflowExecutor?.handleEnrichTasksResponse(result.content)
+        }
+
+        // Check if this was a plan-work workflow - handle specially
+        if (this.lastUsedWorkflowName === 'plan-work') {
+          await this.workflowExecutor?.handlePlanWorkResponse(result.content)
         }
 
         this.messages.push({

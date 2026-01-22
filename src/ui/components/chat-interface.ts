@@ -11,28 +11,16 @@ import {
   type DiffBlock,
 } from '../../utils/diff'
 import {
-  parseIdeasGroomResponse,
-  containsIdeasGroomResponse,
-} from '../../utils/ideas-groom-parser'
-import {
-  containsSyncCommitsResponse,
-  extractSyncCommitsSummary,
-} from '../../utils/sync-commits-parser'
-import {
-  extractArchiveCompletedSummary,
-} from '../../utils/archive-completed-parser'
-import {
-  containsHarvestResponse,
-  extractHarvestTasksSummary,
-} from '../../utils/harvest-tasks-parser'
-import {
   containsEnrichTasksResponse,
   extractEnrichTasksSummary,
 } from '../../utils/enrich-tasks-parser'
+import {
+  containsPlanWorkResponse,
+  extractPlanWorkSummary,
+} from '../../utils/plan-work-parser'
 import { DiffViewerModal, type DiffAction } from '../diff-viewer-modal'
 import {
   ChatState,
-  looksLikeArchiveCompletedResponse,
   type ChatInterfaceCallbacks,
 } from './chat-state'
 
@@ -200,24 +188,14 @@ export class ChatInterface {
     }
 
     // For non-streaming messages, check for special response types
-    // Archive-completed must be checked BEFORE diffs because its response contains diffs we want to skip
-    if (!isStreaming && looksLikeArchiveCompletedResponse(content)) {
-      // Archive completed response - render with a "View Tasks" button (skip diffs)
-      this.renderMessageWithArchiveCompleted(messageEl, content)
-    } else if (!isStreaming && containsDiffBlocks(content)) {
+    if (!isStreaming && containsDiffBlocks(content)) {
       this.renderMessageWithDiffs(messageEl, content)
-    } else if (!isStreaming && containsIdeasGroomResponse(content)) {
-      // Ideas groom response - render with a "View Ideas" button
-      this.renderMessageWithIdeasGroom(messageEl, content)
-    } else if (!isStreaming && containsSyncCommitsResponse(content)) {
-      // Sync commits response - render with a "View Matches" button
-      this.renderMessageWithSyncCommits(messageEl, content)
-    } else if (!isStreaming && containsHarvestResponse(content)) {
-      // Harvest tasks response - render with a "View Tasks" button
-      this.renderMessageWithHarvestTasks(messageEl, content)
     } else if (!isStreaming && containsEnrichTasksResponse(content)) {
       // Enrich tasks response - render with a "View Enrichments" button
       this.renderMessageWithEnrichTasks(messageEl, content)
+    } else if (!isStreaming && containsPlanWorkResponse(content)) {
+      // Plan work response - render with a "View Tasks" button
+      this.renderMessageWithPlanWork(messageEl, content)
     } else {
       // Parse hint tags and render them specially
       const hintMatch = content.match(/\{\{hint\}\}([\s\S]*?)\{\{\/hint\}\}/)
@@ -291,32 +269,18 @@ export class ChatInterface {
       const activeWorkflow = this.state.activeWorkflowName
 
       // Check if content contains special response types
-      // For archive-completed workflow, skip diffs and show button to open modal
-      if (activeWorkflow === 'archive-completed') {
-        // Clear and re-render with archive completed summary (skip diffs entirely)
-        streamingEl.empty()
-        this.renderMessageWithArchiveCompleted(streamingEl, streamingText)
-        this.state.setActiveWorkflow(null) // Clear after use
-      } else if (containsDiffBlocks(streamingText)) {
+      if (containsDiffBlocks(streamingText)) {
         // Clear and re-render with diff blocks
         streamingEl.empty()
         this.renderMessageWithDiffs(streamingEl, streamingText)
-      } else if (containsIdeasGroomResponse(streamingText)) {
-        // Clear and re-render with ideas groom summary
-        streamingEl.empty()
-        this.renderMessageWithIdeasGroom(streamingEl, streamingText)
-      } else if (containsSyncCommitsResponse(streamingText)) {
-        // Clear and re-render with sync commits summary
-        streamingEl.empty()
-        this.renderMessageWithSyncCommits(streamingEl, streamingText)
-      } else if (containsHarvestResponse(streamingText)) {
-        // Clear and re-render with harvest tasks summary
-        streamingEl.empty()
-        this.renderMessageWithHarvestTasks(streamingEl, streamingText)
       } else if (containsEnrichTasksResponse(streamingText)) {
         // Clear and re-render with enrich tasks summary
         streamingEl.empty()
         this.renderMessageWithEnrichTasks(streamingEl, streamingText)
+      } else if (containsPlanWorkResponse(streamingText)) {
+        // Clear and re-render with plan work summary
+        streamingEl.empty()
+        this.renderMessageWithPlanWork(streamingEl, streamingText)
       } else {
         // Re-render with markdown + hint styling
         streamingEl.empty()
@@ -661,137 +625,6 @@ export class ChatInterface {
   }
 
   /**
-   * Render a message that contains ideas-groom JSON response.
-   * Shows a summary with a "View Ideas" button that opens the modal.
-   */
-  private renderMessageWithIdeasGroom(container: HTMLElement, content: string): void {
-    const tasks = parseIdeasGroomResponse(content)
-
-    if (tasks.length === 0) {
-      // Couldn't parse tasks, render as plain text
-      this.renderMarkdown(content, container)
-      return
-    }
-
-    // Render summary message
-    const summaryEl = container.createDiv({ cls: 'lachesis-ideas-groom-summary' })
-
-    const uniqueHeadings = new Set(tasks.map((t) => t.ideaHeading))
-    summaryEl.createEl('p', {
-      text: `Found ${tasks.length} potential task${tasks.length === 1 ? '' : 's'} from ${uniqueHeadings.size} idea${uniqueHeadings.size === 1 ? '' : 's'} in Ideas.md.`,
-    })
-
-    // View Ideas button
-    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-ideas-groom-button-container' })
-    const viewBtn = btnContainer.createEl('button', {
-      text: 'View Ideas',
-      cls: 'lachesis-ideas-groom-view-btn',
-    })
-    viewBtn.addEventListener('click', () => {
-      this.callbacks.onViewIdeasGroom(content)
-    })
-  }
-
-  /**
-   * Render a message that contains sync-commits JSON response.
-   * Shows a summary with a "View Matches" button that opens the modal.
-   */
-  private renderMessageWithSyncCommits(container: HTMLElement, content: string): void {
-    const summary = extractSyncCommitsSummary(content)
-
-    if (!summary) {
-      // Couldn't parse summary, render as plain text
-      this.renderMarkdown(content, container)
-      return
-    }
-
-    // Render summary message
-    const summaryEl = container.createDiv({ cls: 'lachesis-sync-commits-summary' })
-
-    if (summary.matchedCount > 0) {
-      let summaryText = `Found ${summary.matchedCount} commit${summary.matchedCount === 1 ? '' : 's'} matching tasks`
-      if (summary.highCount > 0 || summary.mediumCount > 0 || summary.lowCount > 0) {
-        const parts: string[] = []
-        if (summary.highCount > 0) parts.push(`${summary.highCount} high`)
-        if (summary.mediumCount > 0) parts.push(`${summary.mediumCount} medium`)
-        if (summary.lowCount > 0) parts.push(`${summary.lowCount} low`)
-        summaryText += ` (${parts.join(', ')} confidence)`
-      }
-      summaryText += '.'
-      summaryEl.createEl('p', { text: summaryText })
-    } else {
-      summaryEl.createEl('p', { text: 'No commits matched any unchecked tasks.' })
-    }
-
-    if (summary.unmatchedCount > 0) {
-      summaryEl.createEl('p', {
-        text: `${summary.unmatchedCount} commit${summary.unmatchedCount === 1 ? '' : 's'} did not match any task.`,
-        cls: 'lachesis-sync-commits-note',
-      })
-    }
-
-    // View button
-    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-sync-commits-button-container' })
-    const btnText = summary.matchedCount > 0 ? 'View Matches' : 'View Results'
-    const viewBtn = btnContainer.createEl('button', {
-      text: btnText,
-      cls: 'lachesis-sync-commits-view-btn',
-    })
-    viewBtn.addEventListener('click', () => {
-      this.callbacks.onViewSyncCommits(content)
-    })
-  }
-
-  /**
-   * Render a message that contains harvest-tasks JSON response.
-   * Shows a summary with a "View Tasks" button that opens the modal.
-   */
-  private renderMessageWithHarvestTasks(container: HTMLElement, content: string): void {
-    const summary = extractHarvestTasksSummary(content)
-
-    if (!summary) {
-      // Couldn't parse summary, render as plain text
-      this.renderMarkdown(content, container)
-      return
-    }
-
-    // Render summary message
-    const summaryEl = container.createDiv({ cls: 'lachesis-harvest-tasks-summary' })
-
-    if (summary.totalFound > 0) {
-      let summaryText = `Found ${summary.totalFound} task${summary.totalFound === 1 ? '' : 's'} to harvest`
-      const sources: string[] = []
-      if (summary.fromLog > 0) sources.push(`${summary.fromLog} from Log`)
-      if (summary.fromIdeas > 0) sources.push(`${summary.fromIdeas} from Ideas`)
-      if (summary.fromOther > 0) sources.push(`${summary.fromOther} from other files`)
-      if (sources.length > 0) {
-        summaryText += ` (${sources.join(', ')})`
-      }
-      summaryText += '.'
-      summaryEl.createEl('p', { text: summaryText })
-
-      if (summary.duplicatesSkipped > 0) {
-        summaryEl.createEl('p', {
-          text: `${summary.duplicatesSkipped} duplicate${summary.duplicatesSkipped === 1 ? '' : 's'} skipped.`,
-          cls: 'lachesis-harvest-tasks-note',
-        })
-      }
-    } else {
-      summaryEl.createEl('p', { text: 'No new tasks found to harvest.' })
-    }
-
-    // View button
-    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-harvest-tasks-button-container' })
-    const viewBtn = btnContainer.createEl('button', {
-      text: 'View Tasks',
-      cls: 'lachesis-harvest-tasks-view-btn',
-    })
-    viewBtn.addEventListener('click', () => {
-      this.callbacks.onViewHarvestTasks(content)
-    })
-  }
-
-  /**
    * Render a message for enrich-tasks workflow.
    * Shows a summary with a "View Enrichments" button that opens the modal.
    */
@@ -831,44 +664,44 @@ export class ChatInterface {
   }
 
   /**
-   * Render a message for archive-completed workflow.
+   * Render a message for plan-work workflow.
    * Shows a summary with a "View Tasks" button that opens the modal.
-   * Works with both JSON responses and prose responses with diffs.
    */
-  private renderMessageWithArchiveCompleted(container: HTMLElement, content: string): void {
-    // Try to extract summary from JSON response
-    const summary = extractArchiveCompletedSummary(content)
+  private renderMessageWithPlanWork(container: HTMLElement, content: string): void {
+    const summary = extractPlanWorkSummary(content)
 
     // Render summary message
-    const summaryEl = container.createDiv({ cls: 'lachesis-archive-completed-summary' })
+    const summaryEl = container.createDiv({ cls: 'lachesis-plan-work-summary' })
 
-    if (summary && summary.totalCompleted > 0) {
-      let summaryText = `Found ${summary.totalCompleted} completed task${summary.totalCompleted === 1 ? '' : 's'}`
-      if (summary.sliceCount > 0) {
-        summaryText += ` in ${summary.sliceCount} slice${summary.sliceCount === 1 ? '' : 's'}`
+    if (summary && summary.tasksGenerated > 0) {
+      let summaryText = `Generated ${summary.tasksGenerated} task${summary.tasksGenerated === 1 ? '' : 's'}`
+      if (summary.existingSlicesLinked > 0) {
+        summaryText += ` (${summary.existingSlicesLinked} linked to existing slices)`
       }
-      if (summary.standaloneCount > 0) {
-        summaryText += ` (${summary.standaloneCount} standalone)`
+      if (summary.newSlicesSuggested > 0) {
+        summaryText += `, ${summary.newSlicesSuggested} new slice${summary.newSlicesSuggested === 1 ? '' : 's'} suggested`
       }
       summaryText += '.'
       summaryEl.createEl('p', { text: summaryText })
+
+      if (summary.notes) {
+        summaryEl.createEl('p', {
+          text: summary.notes,
+          cls: 'lachesis-plan-work-note',
+        })
+      }
     } else {
-      // No JSON summary available - show generic message
-      summaryEl.createEl('p', { text: 'Archive completed tasks workflow ready.' })
-      summaryEl.createEl('p', {
-        text: 'Click the button below to review and archive completed tasks.',
-        cls: 'lachesis-archive-completed-note',
-      })
+      summaryEl.createEl('p', { text: 'No tasks generated.' })
     }
 
     // View button
-    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-archive-completed-button-container' })
+    const btnContainer = summaryEl.createDiv({ cls: 'lachesis-plan-work-button-container' })
     const viewBtn = btnContainer.createEl('button', {
-      text: 'View Completed Tasks',
-      cls: 'lachesis-archive-completed-view-btn',
+      text: 'View Tasks',
+      cls: 'lachesis-plan-work-view-btn',
     })
     viewBtn.addEventListener('click', () => {
-      this.callbacks.onViewArchiveCompleted(content)
+      this.callbacks.onViewPlanWork(content)
     })
   }
 }

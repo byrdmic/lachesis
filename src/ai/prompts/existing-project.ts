@@ -3,16 +3,10 @@
 import type { ExistingProjectPromptOptions } from './types'
 import { OVERVIEW_FILL_GUIDANCE, ROADMAP_FILL_GUIDANCE, TASKS_FILL_GUIDANCE } from './guidance'
 import {
-  buildLogRefineSection,
-  buildTasksHarvestSection,
-  buildHarvestTasksSection,
-  buildIdeasGroomSection,
   buildInitFromSummarySection,
-  buildSyncCommitsSection,
-  buildArchiveCompletedSection,
-  buildPromoteNextTaskSection,
   buildDefaultWorkflowSection,
   buildEnrichTasksSection,
+  buildPlanWorkSection,
 } from './workflows'
 
 export function buildExistingProjectPrompt(options: ExistingProjectPromptOptions): string {
@@ -71,24 +65,12 @@ LANGUAGE RULES (STRICT):
   // Build workflow section if a workflow is active
   let workflowSection = ''
   if (activeWorkflow && workflowFileContents) {
-    if (activeWorkflow.name === 'log-refine') {
-      workflowSection = buildLogRefineSection(workflowFileContents, activeWorkflow.intent)
-    } else if (activeWorkflow.name === 'tasks-harvest') {
-      workflowSection = buildTasksHarvestSection(workflowFileContents, activeWorkflow.intent)
-    } else if (activeWorkflow.name === 'harvest-tasks') {
-      workflowSection = buildHarvestTasksSection(workflowFileContents, activeWorkflow.intent)
-    } else if (activeWorkflow.name === 'ideas-groom') {
-      workflowSection = buildIdeasGroomSection(workflowFileContents, activeWorkflow.intent)
+    if (activeWorkflow.name === 'enrich-tasks') {
+      workflowSection = buildEnrichTasksSection(workflowFileContents, activeWorkflow.intent)
+    } else if (activeWorkflow.name === 'plan-work') {
+      workflowSection = buildPlanWorkSection(workflowFileContents, activeWorkflow.intent)
     } else if (activeWorkflow.name === 'init-from-summary') {
       workflowSection = buildInitFromSummarySection(workflowFileContents, activeWorkflow.intent)
-    } else if (activeWorkflow.name === 'sync-commits') {
-      workflowSection = buildSyncCommitsSection(workflowFileContents, activeWorkflow.intent)
-    } else if (activeWorkflow.name === 'archive-completed') {
-      workflowSection = buildArchiveCompletedSection(workflowFileContents, activeWorkflow.intent)
-    } else if (activeWorkflow.name === 'promote-next-task') {
-      workflowSection = buildPromoteNextTaskSection(workflowFileContents, activeWorkflow.intent)
-    } else if (activeWorkflow.name === 'enrich-tasks') {
-      workflowSection = buildEnrichTasksSection(workflowFileContents, activeWorkflow.intent)
     } else {
       workflowSection = buildDefaultWorkflowSection(activeWorkflow, workflowFileContents)
     }

@@ -2,7 +2,6 @@
 // Types, state management, and helper functions for chat interface
 
 import type { DiffBlock } from '../../utils/diff'
-import { containsDiffBlocks } from '../../utils/diff'
 
 // ============================================================================
 // Types
@@ -13,38 +12,14 @@ export type ChatInterfaceCallbacks = {
   onSubmit: (message: string) => void
   /** Called when a diff is accepted or rejected */
   onDiffAction: (diffBlock: DiffBlock, action: 'accepted' | 'rejected') => void
-  /** Called when user clicks "View Ideas" for an ideas groom response */
-  onViewIdeasGroom: (content: string) => void
-  /** Called when user clicks "View Matches" for a sync-commits response */
-  onViewSyncCommits: (content: string) => void
-  /** Called when user clicks "View Tasks" for an archive-completed response */
-  onViewArchiveCompleted: (content: string) => void
-  /** Called when user clicks "View Tasks" for a harvest-tasks response */
-  onViewHarvestTasks: (content: string) => void
   /** Called when user clicks "View Enrichments" for an enrich-tasks response */
   onViewEnrichTasks: (content: string) => void
+  /** Called when user clicks "View Tasks" for a plan-work response */
+  onViewPlanWork: (content: string) => void
   /** Called to check if auto-accept is enabled */
   isAutoAcceptEnabled: () => boolean
   /** Called to check if a specific workflow has auto-apply enabled */
   getWorkflowAutoApply?: (workflowName: string) => boolean
-}
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Detect if content looks like an archive-completed workflow response.
- * Checks for diff blocks targeting Archive.md and Tasks.md with archive-related keywords.
- */
-export function looksLikeArchiveCompletedResponse(content: string): boolean {
-  const lowerContent = content.toLowerCase()
-  const hasArchiveDiff = content.includes('```diff:Archive.md') || content.includes('Archive.md')
-  const hasTasksDiff = content.includes('```diff:Tasks.md') || content.includes('Tasks.md')
-  const hasArchiveKeywords = lowerContent.includes('completed') &&
-    (lowerContent.includes('archive') || lowerContent.includes('## completed work'))
-
-  return hasArchiveDiff && hasTasksDiff && hasArchiveKeywords && containsDiffBlocks(content)
 }
 
 // ============================================================================

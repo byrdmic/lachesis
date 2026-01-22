@@ -10,40 +10,19 @@ import type { WorkflowName, WorkflowDefinition } from '../types'
 // Re-export constants
 export { PROJECT_FILES, ALL_CORE_FILES } from './constants'
 
-// Import all workflow definitions
-import { logRefineWorkflow } from './log-refine'
-import { tasksHarvestWorkflow } from './tasks-harvest'
-import { titleEntriesWorkflow } from './title-entries'
-import { generateTasksWorkflow } from './generate-tasks'
-import { groomTasksWorkflow } from './groom-tasks'
-import { harvestTasksWorkflow } from './harvest-tasks'
-import { ideasGroomWorkflow } from './ideas-groom'
-import { syncCommitsWorkflow } from './sync-commits'
-import { archiveCompletedWorkflow } from './archive-completed'
-import { promoteNextTaskWorkflow } from './promote-next-task'
+// Import active workflow definitions
 import { initFromSummaryWorkflow } from './init-from-summary'
 import { enrichTasksWorkflow } from './enrich-tasks'
+import { planWorkWorkflow } from './plan-work'
 
 // ============================================================================
 // Registry
 // ============================================================================
 
 export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
-  // Combined workflows
-  'log-refine': logRefineWorkflow,
-  'tasks-harvest': tasksHarvestWorkflow,
-
-  // Individual workflows
-  'title-entries': titleEntriesWorkflow,
-  'generate-tasks': generateTasksWorkflow,
-  'groom-tasks': groomTasksWorkflow,
-  'harvest-tasks': harvestTasksWorkflow,
-  'ideas-groom': ideasGroomWorkflow,
-  'sync-commits': syncCommitsWorkflow,
-  'archive-completed': archiveCompletedWorkflow,
-  'promote-next-task': promoteNextTaskWorkflow,
-  'init-from-summary': initFromSummaryWorkflow,
   'enrich-tasks': enrichTasksWorkflow,
+  'plan-work': planWorkWorkflow,
+  'init-from-summary': { ...initFromSummaryWorkflow, hidden: true },
 }
 
 // ============================================================================

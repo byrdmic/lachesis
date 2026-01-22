@@ -12,25 +12,21 @@
  * The core workflow names used in UI and conversation.
  */
 export const WORKFLOW_NAMES = [
-  // Combined workflows
-  'log-refine',
-  'tasks-harvest',
-  // Individual workflows (some hidden from UI)
-  'title-entries',
-  'generate-tasks',
-  'groom-tasks',
-  'harvest-tasks',
-  'ideas-groom',
-  'sync-commits',
-  'archive-completed',
-  'promote-next-task',
-  'init-from-summary',
+  // Active workflows
   'enrich-tasks',
-  // TODO: Re-enable as they're refined
-  // 'synthesize',
-  // 'triage',
-  // 'align-templates',
-  // 'archive-pass',
+  'plan-work',
+  'init-from-summary', // Hidden but available
+  // Deprecated/removed workflows (kept for type compatibility)
+  // 'log-refine',
+  // 'tasks-harvest',
+  // 'title-entries',
+  // 'generate-tasks',
+  // 'groom-tasks',
+  // 'harvest-tasks',
+  // 'ideas-groom',
+  // 'sync-commits',
+  // 'archive-completed',
+  // 'promote-next-task',
 ] as const
 
 export type WorkflowName = (typeof WORKFLOW_NAMES)[number]

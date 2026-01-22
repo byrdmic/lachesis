@@ -75,6 +75,16 @@ import {
   type TaskEnrichment,
   type EnrichTaskSelection,
 } from '../../utils/enrich-tasks-parser'
+import {
+  parsePlanWorkResponse,
+  applyPlannedTasks,
+  applySuggestedSlices,
+  type PlannedTask,
+  type SuggestedSlice,
+  type PlannedTaskSelection,
+  type SuggestedSliceSelection,
+  type PlanWorkSummary,
+} from '../../utils/plan-work-parser'
 import type { DiffBlock } from '../../utils/diff'
 
 // ============================================================================
@@ -180,6 +190,23 @@ export type EnrichTasksParseResult = {
   enrichments: TaskEnrichment[]
 }
 
+/** Result from parsing plan-work response */
+export type PlanWorkParseResult = {
+  success: boolean
+  error?: string
+  tasks: PlannedTask[]
+  slices: SuggestedSlice[]
+  summary: PlanWorkSummary | null
+}
+
+/** Result from applying plan-work selections */
+export type PlanWorkApplyResult = {
+  newTasksContent: string
+  newRoadmapContent: string | null
+  tasksAdded: number
+  slicesAdded: number
+}
+
 // ============================================================================
 // Workflow Engine
 // ============================================================================
@@ -222,6 +249,11 @@ export class WorkflowEngine {
   // State for enrich-tasks workflow
   private pendingEnrichments: TaskEnrichment[] = []
 
+  // State for plan-work workflow
+  private pendingPlannedTasks: PlannedTask[] = []
+  private pendingSuggestedSlices: SuggestedSlice[] = []
+  private pendingPlanWorkSummary: PlanWorkSummary | null = null
+
   // State for combined workflow execution
   private combinedWorkflowState: CombinedWorkflowState | null = null
 
@@ -263,54 +295,22 @@ export class WorkflowEngine {
     const lowerMessage = message.toLowerCase()
 
     // Check for specific workflow keywords first
-    // Title Entries workflow
+    // Plan Work workflow
     if (
-      lowerMessage.includes('title entries') ||
-      lowerMessage.includes('add titles') ||
-      lowerMessage.includes('summarize log') ||
-      lowerMessage.includes('title the log')
+      lowerMessage.includes('plan work') ||
+      lowerMessage.includes('plan tasks') ||
+      lowerMessage.includes('generate tasks')
     ) {
-      return getWorkflowDefinition('title-entries')
+      return getWorkflowDefinition('plan-work')
     }
 
-    // Generate Tasks workflow
+    // Enrich Tasks workflow
     if (
-      lowerMessage.includes('generate tasks') ||
-      lowerMessage.includes('extract tasks') ||
-      lowerMessage.includes('find tasks')
+      lowerMessage.includes('enrich tasks') ||
+      lowerMessage.includes('enrich my tasks') ||
+      lowerMessage.includes('add context to tasks')
     ) {
-      return getWorkflowDefinition('generate-tasks')
-    }
-
-    // Groom Tasks workflow
-    if (
-      lowerMessage.includes('groom tasks') ||
-      lowerMessage.includes('review tasks') ||
-      lowerMessage.includes('review potential tasks') ||
-      lowerMessage.includes('potential tasks') ||
-      lowerMessage.includes('process tasks')
-    ) {
-      return getWorkflowDefinition('groom-tasks')
-    }
-
-    // Harvest Tasks workflow
-    if (
-      lowerMessage.includes('harvest tasks') ||
-      lowerMessage.includes('find new tasks') ||
-      lowerMessage.includes('discover tasks') ||
-      lowerMessage.includes('suggest tasks')
-    ) {
-      return getWorkflowDefinition('harvest-tasks')
-    }
-
-    // Ideas Groom workflow
-    if (
-      lowerMessage.includes('groom ideas') ||
-      lowerMessage.includes('ideas groom') ||
-      lowerMessage.includes('extract tasks from ideas') ||
-      lowerMessage.includes('ideas to tasks')
-    ) {
-      return getWorkflowDefinition('ideas-groom')
+      return getWorkflowDefinition('enrich-tasks')
     }
 
     // Check for common workflow trigger patterns
@@ -364,6 +364,11 @@ export class WorkflowEngine {
 
     // Init-from-summary needs input modal first
     if (workflow.name === 'init-from-summary') {
+      return { type: 'input-modal' }
+    }
+
+    // Plan-work needs input modal first
+    if (workflow.name === 'plan-work') {
       return { type: 'input-modal' }
     }
 
@@ -1233,5 +1238,88 @@ export class WorkflowEngine {
    */
   getPendingEnrichments(): TaskEnrichment[] {
     return this.pendingEnrichments
+  }
+
+  // ============================================================================
+  // Plan Work Workflow
+  // ============================================================================
+
+  /**
+   * Parse AI response for plan work.
+   */
+  parsePlanWork(content: string): PlanWorkParseResult {
+    try {
+      const { tasks, slices, summary } = parsePlanWorkResponse(content)
+      this.pendingPlannedTasks = tasks
+      this.pendingSuggestedSlices = slices
+      this.pendingPlanWorkSummary = summary
+      return { success: true, tasks, slices, summary }
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+        tasks: [],
+        slices: [],
+        summary: null,
+      }
+    }
+  }
+
+  /**
+   * Apply plan work selections and return new content.
+   */
+  applyPlanWorkSelections(
+    tasksContent: string,
+    roadmapContent: string,
+    taskSelections: PlannedTaskSelection[],
+    sliceSelections: SuggestedSliceSelection[]
+  ): PlanWorkApplyResult {
+    // Apply tasks
+    const newTasksContent = applyPlannedTasks(tasksContent, this.pendingPlannedTasks, taskSelections)
+    const tasksAdded = taskSelections.filter((s) => s.selected && s.destination !== 'discard').length
+
+    // Apply slices
+    const selectedSlices = sliceSelections.filter((s) => s.selected)
+    let newRoadmapContent: string | null = null
+    if (selectedSlices.length > 0) {
+      newRoadmapContent = applySuggestedSlices(roadmapContent, this.pendingSuggestedSlices, sliceSelections)
+    }
+
+    return {
+      newTasksContent,
+      newRoadmapContent,
+      tasksAdded,
+      slicesAdded: selectedSlices.length,
+    }
+  }
+
+  /**
+   * Clear plan work state.
+   */
+  clearPlanWorkState(): void {
+    this.pendingPlannedTasks = []
+    this.pendingSuggestedSlices = []
+    this.pendingPlanWorkSummary = null
+  }
+
+  /**
+   * Get pending planned tasks.
+   */
+  getPendingPlannedTasks(): PlannedTask[] {
+    return this.pendingPlannedTasks
+  }
+
+  /**
+   * Get pending suggested slices.
+   */
+  getPendingSuggestedSlices(): SuggestedSlice[] {
+    return this.pendingSuggestedSlices
+  }
+
+  /**
+   * Get pending plan work summary.
+   */
+  getPendingPlanWorkSummary(): PlanWorkSummary | null {
+    return this.pendingPlanWorkSummary
   }
 }
