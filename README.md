@@ -7,9 +7,8 @@ An Obsidian plugin for AI-powered project planning and management. Lachesis help
 - **AI-Powered Project Discovery**: Conversational interface to explore, define, and refine project ideas
 - **Structured Project Scaffolding**: Generates organized markdown files with consistent structure
 - **Multi-Provider Support**: Works with Anthropic (Claude) and OpenAI models
-- **Automated Workflows**: Maintenance workflows for refining log entries, harvesting tasks, and enriching task context
-- **AI-Guided Document Building**: Focused chat sessions to build out Overview, Roadmap, and Tasks documents
-- **GitHub Integration**: Sync git commits to automatically mark tasks as complete
+- **Plan Work Workflow**: Generate enriched, AI-ready tasks from work descriptions with full context
+- **Task Enrichment**: Add rich context (why, considerations, acceptance criteria) to tasks for Claude Code handoff
 - **Persistent Chat History**: Chat logs saved per-project for continuity across sessions
 - **Project Health Assessment**: Automatic detection of missing files, thin documents, and configuration issues
 - **Diff Preview**: Review all AI-proposed changes before applying them
@@ -55,7 +54,7 @@ Open Obsidian Settings > Lachesis to configure:
 
 - **Provider**: Anthropic (Claude) or OpenAI
 - **API Key**: API key for each provider (Anthropic and/or OpenAI)
-- **Model**: Model selection per provider (e.g., claude-sonnet-4 for Anthropic, gpt-4o for OpenAI)
+- **Model**: Model selection per provider (e.g., claude-sonnet-4-5 for Anthropic, gpt-5.2 for OpenAI)
 - **Projects Folder**: Where to create new projects
 - **GitHub Token**: Personal access token for private repos (optional, increases rate limits)
 - **Workflow Auto-Apply**: Enable auto-apply for specific low-risk workflows
@@ -81,40 +80,27 @@ ProjectName/
 
 Lachesis provides automated workflows for common project maintenance tasks. Workflows are accessible via buttons in the project UI or by requesting them in chat.
 
-### Main Workflows
+### Available Workflows
 
 | Workflow | Display Name | Description |
 |----------|--------------|-------------|
-| `log-refine` | Log: Refine | Title entries, extract potential tasks, review and move to Tasks.md |
-| `tasks-harvest` | Tasks: Harvest | Find actionable items across all project files |
+| `plan-work` | Plan Work | Generate enriched tasks from a work description |
 | `enrich-tasks` | Tasks: Enrich | Add rich context to tasks for Claude Code handoff |
-| `init-from-summary` | Initialize from Summary | Batch-fill Overview, Roadmap, and Tasks from a design document |
-
-### Individual Workflows (Hidden from UI, available via chat)
-
-| Workflow | Display Name | Description |
-|----------|--------------|-------------|
-| `sync-commits` | Tasks: Sync Commits | Match git commits to tasks and mark complete |
-| `archive-completed` | Tasks: Archive Completed | Move completed tasks to Archive.md by vertical slice |
-| `promote-next-task` | Tasks: Promote to Current | AI-powered selection of best task to promote |
+| `init-from-summary` | Initialize from Summary | Batch-fill Overview, Roadmap, and Tasks from a design document (hidden, available via chat) |
 
 ### Workflow Details
 
-**Log: Refine** is a combined workflow with three steps:
-1. Add short titles (1-5 words) to log entries that lack them
-2. Extract 0-3 potential tasks from each entry
-3. Open groom modal to Keep, Reject, or Move tasks to Tasks.md
+**Plan Work** generates tasks from a description of work you want to do:
+- Reads all project files to understand context
+- Generates 1-5 tasks with full enrichment inline (why, considerations, acceptance criteria)
+- Links tasks to existing Roadmap slices or suggests creating new ones
+- Tasks are ready for immediate AI handoff (Claude Code, etc.)
 
-**Tasks: Harvest** scans all project files in a single pass:
-- Reads Overview, Roadmap, Tasks, Ideas, and Log
-- Finds implicit TODOs, gaps, and actionable ideas
-- De-duplicates against existing tasks
-- Suggests destination (Current, Later) and Roadmap slice links
-
-**Tasks: Enrich** adds context to tasks for handoff:
-- Gathers context from Overview constraints, Roadmap slices, and Log entries
+**Tasks: Enrich** adds context to existing tasks for handoff:
+- Gathers context from Overview constraints, Roadmap slices, Log entries, and Ideas
 - Adds why the task exists, key considerations, and acceptance criteria
 - Prioritizes tasks in the Current section
+- Skips tasks that already have enrichment blocks
 
 **Initialize from Summary** batch-fills project files:
 - Parses a design summary (from an external AI conversation or planning document)
