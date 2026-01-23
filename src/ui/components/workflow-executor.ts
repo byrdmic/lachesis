@@ -29,6 +29,7 @@ import { BatchDiffViewerModal, type BatchDiffAction } from '../batch-diff-viewer
 import type { InitSummaryFile } from '../../utils/init-summary-parser'
 import type { DiffBlock } from '../../utils/diff'
 import { WorkflowEngine, type WorkflowEngineCallbacks } from './workflow-engine'
+import { generateWorkflowHint, type WorkflowHint } from '../../core/workflows/hints'
 
 // ============================================================================
 // Types
@@ -47,6 +48,8 @@ export type WorkflowExecutorCallbacks = {
   onSetProcessing: (processing: boolean, status: string) => void
   /** Called when planning mode is toggled */
   onPlanningModeToggle?: (enabled: boolean) => void
+  /** Called when a workflow hint should be shown */
+  onShowHint?: (hint: WorkflowHint) => void
 }
 
 // ============================================================================
@@ -740,6 +743,12 @@ export class WorkflowExecutor {
 
     if (accepted > 0) {
       new Notice(`Applied ${accepted} file${accepted === 1 ? '' : 's'}`)
+
+      // Show hint for next workflow
+      const hint = generateWorkflowHint('init-from-summary', { snapshot: this.engine.getSnapshot() }, accepted)
+      if (hint?.shouldShow) {
+        this.callbacks.onShowHint?.(hint)
+      }
     }
 
     await this.callbacks.onSnapshotRefresh()
@@ -852,6 +861,14 @@ export class WorkflowExecutor {
       if (result.tasksAdded > 0) parts.push(`${result.tasksAdded} task${result.tasksAdded !== 1 ? 's' : ''} added`)
       if (result.slicesAdded > 0) parts.push(`${result.slicesAdded} slice${result.slicesAdded !== 1 ? 's' : ''} added`)
       new Notice(parts.join(', '))
+
+      // Show hint for next workflow
+      if (result.tasksAdded > 0) {
+        const hint = generateWorkflowHint('plan-work', { snapshot: this.engine.getSnapshot() }, result.tasksAdded)
+        if (hint?.shouldShow) {
+          this.callbacks.onShowHint?.(hint)
+        }
+      }
 
       this.engine.clearPlanWorkState()
       await this.callbacks.onSnapshotRefresh()

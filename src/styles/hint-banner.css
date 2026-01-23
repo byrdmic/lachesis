@@ -1,0 +1,57 @@
+/* Workflow Hint Banner */
+
+.lachesis-hint-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 24px;
+  background: rgba(var(--interactive-accent-rgb), 0.08);
+  border-bottom: 1px solid rgba(var(--interactive-accent-rgb), 0.2);
+  font-size: 0.85em;
+  animation: lachesis-hint-slide 0.2s ease-out;
+}
+
+@keyframes lachesis-hint-slide {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.lachesis-hint-message {
+  flex: 1;
+  color: var(--text-normal);
+}
+
+.lachesis-hint-action {
+  padding: 4px 12px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.lachesis-hint-action:hover {
+  filter: brightness(1.1);
+}
+
+.lachesis-hint-dismiss {
+  padding: 2px 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1em;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.lachesis-hint-dismiss:hover {
+  opacity: 1;
+}

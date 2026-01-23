@@ -21,6 +21,8 @@ import { IssuesPanel } from './components/issues-panel'
 import { WorkflowExecutor } from './components/workflow-executor'
 import { ChatInterface } from './components/chat-interface'
 import { ModalHeader } from './components/modal-header'
+import { WorkflowHintBanner } from './components/workflow-hint-banner'
+import type { WorkflowHint } from '../core/workflows/hints'
 
 // ============================================================================
 // Types
@@ -56,6 +58,8 @@ export class ExistingProjectModal extends Modal {
   private workflowExecutor: WorkflowExecutor | null = null
   private chatInterface: ChatInterface | null = null
   private modalHeader: ModalHeader | null = null
+  private hintBanner: WorkflowHintBanner | null = null
+  private hintContainer: HTMLElement | null = null
 
   constructor(
     app: App,
@@ -144,6 +148,15 @@ export class ExistingProjectModal extends Modal {
       this.projectStatus ?? undefined
     )
 
+    // Workflow Hint Banner
+    this.hintBanner = new WorkflowHintBanner({
+      onRunWorkflow: (displayName) => {
+        this.hintBanner?.remove()
+        this.workflowExecutor?.triggerWorkflow(displayName)
+      },
+      onDismiss: () => {},
+    })
+
     // Workflow Executor
     this.workflowExecutor = new WorkflowExecutor(
       this.app,
@@ -156,6 +169,7 @@ export class ExistingProjectModal extends Modal {
         onAddMessage: (role, content) => this.chatInterface?.addMessageToUI(role, content),
         onSetProcessing: (processing, status) => this.setProcessing(processing, status),
         onPlanningModeToggle: (enabled) => this.handlePlanningModeToggle(enabled),
+        onShowHint: (hint) => this.showHint(hint),
       },
       this.plugin.settings.githubToken
     )
@@ -250,9 +264,21 @@ export class ExistingProjectModal extends Modal {
       }
     })
 
+    // Hint container (renders hints when triggered)
+    this.hintContainer = mainEl.createDiv({ cls: 'lachesis-hint-container' })
+
     // Render chat interface (messages, input, status)
     const isReady = this.snapshot.readiness.isReady
     this.chatInterface?.render(mainEl, this.messages, this.snapshot.projectName, isReady)
+  }
+
+  /**
+   * Show a workflow hint banner.
+   */
+  private showHint(hint: WorkflowHint): void {
+    if (this.hintContainer && this.hintBanner) {
+      this.hintBanner.render(this.hintContainer, hint)
+    }
   }
 
   private applyLoadedChat(filename: string, messages: ConversationMessage[]): void {
