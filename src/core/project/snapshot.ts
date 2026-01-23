@@ -1,6 +1,8 @@
 // Project snapshot types for existing projects
 // Captures a deterministic view of core files, their metadata, and template fill status.
 
+import type { ProjectStatus } from './status'
+
 export type ExpectedCoreFile =
   | 'Overview.md'
   | 'Roadmap.md'
@@ -79,4 +81,6 @@ export type ProjectSnapshot = {
   aiConfig?: ProjectAIConfig
   /** Recently completed items extracted from Archive.md (last 10) */
   recentlyCompleted?: string[]
+  /** Project status from Roadmap.md and Tasks.md */
+  status?: ProjectStatus
 }

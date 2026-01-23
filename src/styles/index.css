@@ -11,6 +11,7 @@
 @import './header.css';
 @import './sidebar.css';
 @import './workflow-bar.css';
+@import './project-status.css';
 
 /* Chat Interface */
 @import './messages.css';

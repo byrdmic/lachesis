@@ -4,7 +4,7 @@
 import type { App } from 'obsidian'
 import type { ProjectSnapshot } from '../../core/project/snapshot'
 import { HeaderControls, type HeaderControlsCallbacks, type HeaderControlsSettings } from './header-controls'
-import type { IssuesPanel } from './issues-panel'
+import { ProjectStatusIndicator } from './project-status-indicator'
 
 // ============================================================================
 // Types
@@ -28,6 +28,7 @@ export class ModalHeader {
 
   // Sub-components
   private headerControls: HeaderControls
+  private statusIndicator: ProjectStatusIndicator
 
   // DOM Elements
   private containerEl: HTMLElement | null = null
@@ -48,6 +49,9 @@ export class ModalHeader {
 
     // Initialize header controls
     this.headerControls = new HeaderControls(app, projectPath, callbacks, settings)
+
+    // Initialize status indicator
+    this.statusIndicator = new ProjectStatusIndicator()
   }
 
   /**
@@ -56,6 +60,7 @@ export class ModalHeader {
   setSnapshot(snapshot: ProjectSnapshot): void {
     this.snapshot = snapshot
     this.updateStatusBadge()
+    this.statusIndicator.setStatus(snapshot.status ?? null)
   }
 
   /**
@@ -100,6 +105,12 @@ export class ModalHeader {
         }
       })
     }
+
+    // Project status indicator (milestone, tasks, slice)
+    console.log('[ModalHeader] Rendering status indicator, snapshot.status:', this.snapshot.status)
+    const statusContainer = container.createDiv({ cls: 'lachesis-project-status' })
+    this.statusIndicator.setStatus(this.snapshot.status ?? null)
+    this.statusIndicator.render(statusContainer)
 
     // Header controls container
     const controlsContainer = container.createDiv({ cls: 'lachesis-header-controls' })

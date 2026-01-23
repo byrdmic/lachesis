@@ -311,6 +311,10 @@ export async function buildProjectSnapshot(
   // Extract recently completed items from Archive.md
   const recentlyCompleted = extractRecentlyCompleted(archiveContent)
 
+  // Build project status (milestone/task tracking)
+  const status = await buildProjectStatus(vault, projectPath)
+  console.log('[SnapshotBuilder] Built project status:', status)
+
   return {
     projectName,
     projectPath: projectFolderNorm,
@@ -321,6 +325,7 @@ export async function buildProjectSnapshot(
     readiness,
     aiConfig,
     recentlyCompleted,
+    status,
   }
 }
 
