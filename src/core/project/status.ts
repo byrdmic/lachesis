@@ -3,6 +3,25 @@
 
 export type MilestoneStatus = 'planned' | 'active' | 'done' | 'blocked' | 'cut'
 
+/**
+ * Represents the state when a milestone has been completed.
+ * Used to prompt the user to plan the next phase.
+ */
+export type MilestoneTransitionState =
+  | { status: 'none' }
+  | {
+      status: 'milestone_complete'
+      /** The milestone that was just completed */
+      milestone: ParsedMilestone
+      /** Whether there are still incomplete tasks in Current section */
+      hasIncompleteTasks: boolean
+      /** Number of incomplete tasks remaining */
+      incompleteTasks: number
+      /** Next milestone to work on (if any) */
+      nextMilestone: ParsedMilestone | null
+    }
+  | { status: 'all_complete' }
+
 export type ParsedMilestone = {
   /** Milestone identifier (e.g., "M1", "M2") */
   id: string
@@ -38,4 +57,6 @@ export type ProjectStatus = {
   allSlices: ParsedSlice[]
   /** ISO timestamp when this status was computed */
   computedAt: string
+  /** Transition state for milestone completion detection */
+  transitionState: MilestoneTransitionState
 }

@@ -3,11 +3,10 @@
 .lachesis-project-status {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   font-size: 0.75em;
   color: var(--text-muted);
-  margin-left: 16px;
-  flex: 1;
   min-width: 0;
 }
 
@@ -23,7 +22,6 @@
 }
 
 .lachesis-status-text {
-  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

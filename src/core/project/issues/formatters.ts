@@ -15,6 +15,9 @@ export const ISSUE_ICONS: Record<IssueType, string> = {
   thin: '~',
   config: '\u2699', // ⚙
   headings_invalid: '\u2630', // ☰
+  milestone_complete: '\u2713', // ✓
+  milestone_tasks_remain: '\u26A0', // ⚠
+  all_milestones_complete: '\u2605', // ★
 }
 
 /**
@@ -76,6 +79,31 @@ export function formatConfigIssueMessage(configMissing: boolean): string {
     : 'GitHub repository not configured'
 }
 
+/**
+ * Format a "milestone complete" message.
+ */
+export function formatMilestoneCompleteMessage(milestoneId: string, milestoneTitle: string): string {
+  return `${milestoneId} "${milestoneTitle}" complete!`
+}
+
+/**
+ * Format a "milestone tasks remain" message.
+ */
+export function formatMilestoneTasksRemainMessage(
+  milestoneId: string,
+  milestoneTitle: string,
+  taskCount: number
+): string {
+  return `${milestoneId} "${milestoneTitle}" marked done, but ${taskCount} task${taskCount > 1 ? 's' : ''} remain`
+}
+
+/**
+ * Format an "all milestones complete" message.
+ */
+export function formatAllMilestonesCompleteMessage(): string {
+  return 'All milestones complete!'
+}
+
 // ============================================================================
 // Fix Labels
 // ============================================================================
@@ -95,6 +123,12 @@ export function getDefaultFixLabel(type: IssueType): string {
       return 'Configure'
     case 'headings_invalid':
       return 'Add Missing (AI)'
+    case 'milestone_complete':
+      return 'Plan Next Phase'
+    case 'milestone_tasks_remain':
+      return 'Review Tasks'
+    case 'all_milestones_complete':
+      return 'Celebrate!'
     default:
       return 'Fix'
   }

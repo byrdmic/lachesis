@@ -14,7 +14,7 @@ import {
   type SnapshotHealth,
   type ProjectAIConfig,
 } from './snapshot'
-import type { ProjectStatus } from './status'
+import type { ProjectStatus, MilestoneTransitionState, ParsedMilestone } from './status'
 import { evaluateTemplateStatus } from './template-evaluator'
 import { parseRoadmap, findCurrentMilestone, findActiveSlice } from '../../utils/roadmap-parser'
 import { countCurrentSectionTasks } from '../../utils/tasks-counter'
@@ -472,6 +472,70 @@ export function formatProjectSnapshotForModel(snapshot: ProjectSnapshot): string
 }
 
 /**
+ * Find the next planned milestone after the current one.
+ * Returns the first milestone with status='planned' that comes after currentId in the list.
+ */
+function findNextPlannedMilestone(
+  milestones: ParsedMilestone[],
+  currentId: string
+): ParsedMilestone | null {
+  const currentIndex = milestones.findIndex((m) => m.id === currentId)
+  if (currentIndex === -1) return null
+
+  // Look for first 'planned' milestone after current
+  for (let i = currentIndex + 1; i < milestones.length; i++) {
+    if (milestones[i].status === 'planned') {
+      return milestones[i]
+    }
+  }
+  return null
+}
+
+/**
+ * Compute the milestone transition state.
+ * Detects when a milestone is complete and whether tasks remain.
+ */
+function computeTransitionState(
+  milestones: ParsedMilestone[],
+  currentMilestone: ParsedMilestone | null,
+  tasksTotal: number,
+  tasksCompleted: number
+): MilestoneTransitionState {
+  // No current milestone - no transition to detect
+  if (!currentMilestone) {
+    return { status: 'none' }
+  }
+
+  // Current milestone is not done - no transition
+  if (currentMilestone.status !== 'done') {
+    return { status: 'none' }
+  }
+
+  // Current milestone is done - check if all milestones are done
+  const allDone = milestones.every(
+    (m) => m.status === 'done' || m.status === 'cut'
+  )
+
+  if (allDone) {
+    return { status: 'all_complete' }
+  }
+
+  // Find the next planned milestone
+  const nextMilestone = findNextPlannedMilestone(milestones, currentMilestone.id)
+
+  // Calculate incomplete tasks
+  const incompleteTasks = tasksTotal - tasksCompleted
+
+  return {
+    status: 'milestone_complete',
+    milestone: currentMilestone,
+    hasIncompleteTasks: incompleteTasks > 0,
+    incompleteTasks,
+    nextMilestone,
+  }
+}
+
+/**
  * Build project status from Roadmap.md and Tasks.md.
  * Extracts milestone progress, active slice, and task counts.
  */
@@ -534,6 +598,14 @@ export async function buildProjectStatus(
     tasksCompleted = counts.completed
   }
 
+  // Compute milestone transition state
+  const transitionState = computeTransitionState(
+    milestones,
+    currentMilestone,
+    tasksTotal,
+    tasksCompleted
+  )
+
   return {
     currentMilestone,
     activeSlice,
@@ -543,5 +615,6 @@ export async function buildProjectStatus(
     allMilestones: milestones,
     allSlices: slices,
     computedAt,
+    transitionState,
   }
 }

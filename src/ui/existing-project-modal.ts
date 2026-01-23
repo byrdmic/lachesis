@@ -5,7 +5,8 @@ import { App, Modal, Component } from 'obsidian'
 import type LachesisPlugin from '../main'
 import { resolveAbsoluteProjectPath } from '../utils/path'
 import type { ProjectSnapshot, ExpectedCoreFile } from '../core/project/snapshot'
-import { buildProjectSnapshot, formatProjectSnapshotForModel, fetchProjectFileContents, formatFileContentsForModel } from '../core/project/snapshot-builder'
+import { buildProjectSnapshot, buildProjectStatus, formatProjectSnapshotForModel, fetchProjectFileContents, formatFileContentsForModel } from '../core/project/snapshot-builder'
+import type { ProjectStatus } from '../core/project/status'
 import { getProvider, isProviderAvailable } from '../ai/providers/factory'
 import type { AIProvider, ConversationMessage } from '../ai/providers/types'
 import { buildSystemPrompt, detectPlanningModeRequest, detectPlanningTrigger, extractMilestoneProposals } from '../ai/prompts'
@@ -35,6 +36,7 @@ export class ExistingProjectModal extends Modal {
   private plugin: LachesisPlugin
   private projectPath: string
   private snapshot: ProjectSnapshot
+  private projectStatus: ProjectStatus | null = null
   private provider: AIProvider | null = null
   private renderComponent: Component
 
@@ -89,6 +91,9 @@ export class ExistingProjectModal extends Modal {
     // Create provider
     this.provider = getProvider(this.plugin.settings)
 
+    // Build project status for milestone transition detection
+    this.projectStatus = await buildProjectStatus(this.app.vault, this.projectPath)
+
     // Initialize components
     await this.initializeComponents()
 
@@ -135,7 +140,8 @@ export class ExistingProjectModal extends Modal {
         onStartAIChat: (message, focusedFile) => this.startAIChat(message, focusedFile),
         onSnapshotRefresh: () => this.refreshSnapshot(),
       },
-      this.modalEl
+      this.modalEl,
+      this.projectStatus ?? undefined
     )
 
     // Workflow Executor
@@ -184,7 +190,8 @@ export class ExistingProjectModal extends Modal {
           this.issuesPanel?.toggleDropdown(badgeEl)
         },
       },
-      { autoAcceptChanges: this.plugin.settings.autoAcceptChanges }
+      { autoAcceptChanges: this.plugin.settings.autoAcceptChanges },
+      this.projectStatus ?? undefined
     )
   }
 
@@ -295,9 +302,12 @@ export class ExistingProjectModal extends Modal {
 
   private async refreshSnapshot(): Promise<ProjectSnapshot> {
     this.snapshot = await buildProjectSnapshot(this.app.vault, this.projectPath)
+    this.projectStatus = await buildProjectStatus(this.app.vault, this.projectPath)
     this.issuesPanel?.setSnapshot(this.snapshot)
+    this.issuesPanel?.setProjectStatus(this.projectStatus)
     this.workflowExecutor?.setSnapshot(this.snapshot)
     this.modalHeader?.setSnapshot(this.snapshot)
+    this.modalHeader?.setProjectStatus(this.projectStatus)
     return this.snapshot
   }
 

@@ -11,6 +11,9 @@ export type IssueType =
   | 'thin'
   | 'config'
   | 'headings_invalid'
+  | 'milestone_complete'
+  | 'milestone_tasks_remain'
+  | 'all_milestones_complete'
 
 /**
  * Files that can have issues (core files + config).

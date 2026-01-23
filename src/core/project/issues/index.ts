@@ -18,6 +18,9 @@ export {
   formatMissingHeadingsMessage,
   formatMissingHeadingsList,
   formatConfigIssueMessage,
+  formatMilestoneCompleteMessage,
+  formatMilestoneTasksRemainMessage,
+  formatAllMilestonesCompleteMessage,
   getDefaultFixLabel,
   formatIssuesHeader,
   getIssueTypeClass,
@@ -29,4 +32,5 @@ export {
   checkOverviewHeadings,
   checkRoadmapHeadings,
   buildIssuesFromSnapshot,
+  buildMilestoneTransitionIssues,
 } from './validators'

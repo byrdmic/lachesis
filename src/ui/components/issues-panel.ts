@@ -6,6 +6,7 @@ import * as path from 'path'
 import type { App, TFile } from 'obsidian'
 import { Notice } from 'obsidian'
 import type { ProjectSnapshot, ExpectedCoreFile } from '../../core/project/snapshot'
+import type { ProjectStatus, ParsedMilestone } from '../../core/project/status'
 import { TEMPLATES, type TemplateName } from '../../scaffolder/templates'
 import { processTemplateForFile } from '../../scaffolder/scaffolder'
 import {
@@ -19,6 +20,7 @@ import {
   ISSUE_ICONS,
   formatIssuesHeader,
   buildIssuesFromSnapshot,
+  buildMilestoneTransitionIssues,
 } from '../../core/project/issues'
 
 // Re-export types for backward compatibility
@@ -32,6 +34,7 @@ export class IssuesPanel {
   private app: App
   private projectPath: string
   private snapshot: ProjectSnapshot
+  private projectStatus: ProjectStatus | null = null
   private callbacks: IssuesPanelCallbacks
   private modalEl: HTMLElement
 
@@ -44,11 +47,13 @@ export class IssuesPanel {
     projectPath: string,
     snapshot: ProjectSnapshot,
     callbacks: IssuesPanelCallbacks,
-    modalEl: HTMLElement
+    modalEl: HTMLElement,
+    projectStatus?: ProjectStatus
   ) {
     this.app = app
     this.projectPath = projectPath
     this.snapshot = snapshot
+    this.projectStatus = projectStatus ?? null
     this.callbacks = callbacks
     this.modalEl = modalEl
   }
@@ -58,6 +63,13 @@ export class IssuesPanel {
    */
   setSnapshot(snapshot: ProjectSnapshot): void {
     this.snapshot = snapshot
+  }
+
+  /**
+   * Update the project status reference.
+   */
+  setProjectStatus(status: ProjectStatus): void {
+    this.projectStatus = status
   }
 
   /**
@@ -83,7 +95,22 @@ export class IssuesPanel {
    */
   buildIssuesList(): ProjectIssue[] {
     const basePath = (this.app.vault.adapter as any).getBasePath() as string
-    return buildIssuesFromSnapshot(this.snapshot, basePath, this.createFixActionFactory())
+    const fixFactory = this.createFixActionFactory()
+
+    // Build standard issues from snapshot
+    const issues = buildIssuesFromSnapshot(this.snapshot, basePath, fixFactory)
+
+    // Add milestone transition issues if we have project status
+    if (this.projectStatus) {
+      const milestoneIssues = buildMilestoneTransitionIssues(
+        this.projectStatus.transitionState,
+        fixFactory
+      )
+      // Prepend milestone issues so they appear at the top
+      issues.unshift(...milestoneIssues)
+    }
+
+    return issues
   }
 
   /**
@@ -252,6 +279,12 @@ export class IssuesPanel {
         this.addMissingHeadingsWithAI(fileName, missingHeadings),
       createHeadingsReformatFix: (fileName) => () =>
         fileName === 'Overview.md' ? this.fixInvalidHeadings() : this.fixRoadmapInvalidHeadings(),
+      createPlanNextMilestoneFix: (nextMilestone) => () =>
+        this.startPlanNextMilestone(nextMilestone),
+      createReviewTasksFix: (incompleteTasks) => () =>
+        this.openReviewTasksChat(incompleteTasks),
+      createCelebrateFix: () => () =>
+        this.celebrateAllComplete(),
     }
   }
 
@@ -460,5 +493,52 @@ export class IssuesPanel {
     } catch (err) {
       new Notice(`Failed to create config: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
+  }
+
+  // ============================================================================
+  // Milestone Transition Fix Actions
+  // ============================================================================
+
+  /**
+   * Start a chat to plan the next milestone.
+   */
+  private async startPlanNextMilestone(nextMilestone: ParsedMilestone | null): Promise<void> {
+    this.closeDropdown()
+
+    if (nextMilestone) {
+      this.callbacks.onStartAIChat(
+        `I've completed the current milestone and I'm ready to plan the next phase: ${nextMilestone.id} "${nextMilestone.title}". Help me break this down into actionable tasks and vertical slices.`,
+        'Roadmap.md'
+      )
+    } else {
+      this.callbacks.onStartAIChat(
+        `I've completed the current milestone and there are no more planned milestones. Help me think about what's next for this project - should we define new milestones, or is this project wrapping up?`,
+        'Roadmap.md'
+      )
+    }
+  }
+
+  /**
+   * Start a chat to review remaining tasks when milestone is marked done.
+   */
+  private async openReviewTasksChat(incompleteTasks: number): Promise<void> {
+    this.closeDropdown()
+
+    this.callbacks.onStartAIChat(
+      `The current milestone is marked as done, but there are still ${incompleteTasks} incomplete task${incompleteTasks > 1 ? 's' : ''} in the Current section. Help me review these tasks - should they be moved to the next milestone, archived, or completed first?`,
+      'Tasks.md'
+    )
+  }
+
+  /**
+   * Handle the celebration when all milestones are complete.
+   */
+  private async celebrateAllComplete(): Promise<void> {
+    this.closeDropdown()
+
+    this.callbacks.onStartAIChat(
+      `All milestones are complete! Let's celebrate this achievement and reflect on what we've accomplished. Can you help me summarize what was built and suggest any next steps - perhaps documenting lessons learned or archiving the project?`,
+      'Archive.md'
+    )
   }
 }

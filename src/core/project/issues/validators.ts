@@ -4,6 +4,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import type { ProjectIssue, IssueFile } from './types'
 import type { ProjectSnapshot, ExpectedCoreFile } from '../snapshot'
+import type { MilestoneTransitionState, ParsedMilestone } from '../status'
 import {
   validateOverviewHeadings,
   validateRoadmapHeadings,
@@ -15,6 +16,9 @@ import {
   formatTemplateOnlyMessage,
   formatThinContentMessage,
   formatConfigIssueMessage,
+  formatMilestoneCompleteMessage,
+  formatMilestoneTasksRemainMessage,
+  formatAllMilestonesCompleteMessage,
 } from './formatters'
 
 // ============================================================================
@@ -32,6 +36,12 @@ export type FixActionFactory = {
   createConfigFix: () => () => Promise<void>
   createHeadingsAIFix: (fileName: ExpectedCoreFile, missingHeadings: string[]) => () => Promise<void>
   createHeadingsReformatFix: (fileName: 'Overview.md' | 'Roadmap.md') => () => Promise<void>
+  /** Create fix action for planning the next milestone */
+  createPlanNextMilestoneFix: (nextMilestone: ParsedMilestone | null) => () => Promise<void>
+  /** Create fix action for reviewing remaining tasks when milestone is marked done */
+  createReviewTasksFix: (incompleteTasks: number) => () => Promise<void>
+  /** Create fix action for celebrating all milestones complete */
+  createCelebrateFix: () => () => Promise<void>
 }
 
 // ============================================================================
@@ -196,6 +206,67 @@ export function buildIssuesFromSnapshot(
         issues.push(headingIssue)
       }
     }
+  }
+
+  return issues
+}
+
+// ============================================================================
+// Milestone Transition Issues
+// ============================================================================
+
+/**
+ * Build issues from milestone transition state.
+ * Returns issues for milestone completion, tasks remaining, or all complete states.
+ */
+export function buildMilestoneTransitionIssues(
+  transitionState: MilestoneTransitionState,
+  fixFactory: FixActionFactory
+): ProjectIssue[] {
+  const issues: ProjectIssue[] = []
+
+  if (transitionState.status === 'none') {
+    return issues
+  }
+
+  if (transitionState.status === 'all_complete') {
+    issues.push({
+      file: 'Roadmap.md',
+      type: 'all_milestones_complete',
+      message: formatAllMilestonesCompleteMessage(),
+      fixLabel: 'Celebrate!',
+      fixAction: fixFactory.createCelebrateFix(),
+    })
+    return issues
+  }
+
+  // status === 'milestone_complete'
+  const { milestone, hasIncompleteTasks, incompleteTasks, nextMilestone } = transitionState
+
+  if (hasIncompleteTasks) {
+    // Milestone done but tasks remain - warning state
+    issues.push({
+      file: 'Roadmap.md',
+      type: 'milestone_tasks_remain',
+      message: formatMilestoneTasksRemainMessage(milestone.id, milestone.title, incompleteTasks),
+      details: `${incompleteTasks} task${incompleteTasks > 1 ? 's' : ''} in Current section`,
+      fixLabel: 'Review Tasks',
+      fixAction: fixFactory.createReviewTasksFix(incompleteTasks),
+      secondaryFixLabel: 'Plan Anyway',
+      secondaryFixAction: fixFactory.createPlanNextMilestoneFix(nextMilestone),
+    })
+  } else {
+    // Milestone done and all tasks complete - celebration state
+    issues.push({
+      file: 'Roadmap.md',
+      type: 'milestone_complete',
+      message: formatMilestoneCompleteMessage(milestone.id, milestone.title),
+      details: nextMilestone
+        ? `Ready to start ${nextMilestone.id}: "${nextMilestone.title}"`
+        : 'No more planned milestones',
+      fixLabel: 'Plan Next Phase',
+      fixAction: fixFactory.createPlanNextMilestoneFix(nextMilestone),
+    })
   }
 
   return issues

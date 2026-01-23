@@ -9,9 +9,10 @@
   background: rgba(var(--background-secondary-rgb), 0.6);
   backdrop-filter: blur(8px);
   z-index: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
+  gap: 16px;
 }
 
 .lachesis-header h2,
@@ -65,6 +66,24 @@
   transform: scale(1.02);
 }
 
+/* Milestone complete - celebratory purple */
+.lachesis-status-badge.milestone-complete {
+  background: var(--color-purple);
+  color: var(--text-on-accent);
+}
+
+/* Review needed - warning yellow/orange */
+.lachesis-status-badge.review-needed {
+  background: var(--color-yellow);
+  color: var(--text-normal);
+}
+
+/* All milestones complete - celebratory gold/star */
+.lachesis-status-badge.all-complete {
+  background: linear-gradient(135deg, var(--color-yellow), var(--color-orange));
+  color: var(--text-normal);
+}
+
 /* Header controls */
 .lachesis-header-left {
   display: flex;
@@ -73,7 +92,6 @@
 }
 
 .lachesis-header-controls {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 16px;
