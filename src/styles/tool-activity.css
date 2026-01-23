@@ -73,6 +73,16 @@
 .lachesis-tool-activity.running {
   border-left-color: var(--interactive-accent);
   background: var(--background-secondary);
+  animation: lachesis-row-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes lachesis-row-pulse {
+  0%, 100% {
+    background-color: var(--background-secondary);
+  }
+  50% {
+    background-color: var(--background-modifier-hover);
+  }
 }
 
 .lachesis-tool-activity.completed {
@@ -157,6 +167,13 @@
 .lachesis-tool-activity-summary {
   font-size: 0.9em;
   color: var(--text-muted);
+}
+
+/* Status text (shown while running) */
+.lachesis-tool-activity-status-text {
+  font-size: 0.85em;
+  color: var(--text-faint);
+  font-style: italic;
 }
 
 /* Timer display */

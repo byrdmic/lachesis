@@ -752,6 +752,14 @@ export class ChatInterface {
       cls: 'lachesis-tool-activity-description',
     })
 
+    // Status text for running activities
+    if (status === 'running') {
+      contentEl.createDiv({
+        text: phase === 'starting' ? 'Starting...' : 'Working...',
+        cls: 'lachesis-tool-activity-status-text',
+      })
+    }
+
     // Timer
     activityEl.createDiv({
       text: '0.0s',
@@ -781,6 +789,12 @@ export class ChatInterface {
       iconEl.removeClass('spinning')
       iconEl.addClass(phase === 'starting' ? 'pulsing' : 'spinning')
     }
+
+    // Update status text
+    const statusTextEl = element.querySelector('.lachesis-tool-activity-status-text')
+    if (statusTextEl) {
+      statusTextEl.textContent = phase === 'starting' ? 'Starting...' : 'Working...'
+    }
   }
 
   private updateToolActivityElement(
@@ -802,6 +816,12 @@ export class ChatInterface {
       iconEl.removeClass('spinning')
       iconEl.removeClass('pulsing')
       iconEl.textContent = status === 'completed' ? '✓' : '✗'
+    }
+
+    // Remove status text (no longer running)
+    const statusTextEl = element.querySelector('.lachesis-tool-activity-status-text')
+    if (statusTextEl) {
+      statusTextEl.remove()
     }
 
     // Add summary
@@ -849,8 +869,9 @@ export class ChatInterface {
   }
 
   private startTimer(element: HTMLElement, startedAt: number): ReturnType<typeof setInterval> {
-    const timerEl = element.querySelector('.lachesis-tool-activity-timer')
+    // Query the timer element inside the interval callback to handle DOM attachment race conditions
     return setInterval(() => {
+      const timerEl = element.querySelector('.lachesis-tool-activity-timer')
       if (timerEl) {
         timerEl.textContent = this.formatDuration(Date.now() - startedAt)
       }
