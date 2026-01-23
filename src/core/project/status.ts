@@ -10,6 +10,15 @@ export type MilestoneStatus = 'planned' | 'active' | 'done' | 'blocked' | 'cut'
 export type MilestoneTransitionState =
   | { status: 'none' }
   | {
+      status: 'tasks_complete'
+      /** The milestone whose tasks are all complete */
+      milestone: ParsedMilestone
+      /** Whether there's another planned milestone after this one */
+      hasNextMilestone: boolean
+      /** Next milestone to work on (if any) */
+      nextMilestone: ParsedMilestone | null
+    }
+  | {
       status: 'milestone_complete'
       /** The milestone that was just completed */
       milestone: ParsedMilestone

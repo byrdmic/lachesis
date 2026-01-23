@@ -110,6 +110,14 @@ export class ModalHeader {
         }
       }
 
+      if (transition.status === 'tasks_complete') {
+        return {
+          text: 'Tasks Complete',
+          classes: ['tasks-complete', 'clickable'],
+          clickable: true,
+        }
+      }
+
       if (transition.status === 'milestone_complete') {
         if (transition.hasIncompleteTasks) {
           return {
@@ -199,6 +207,7 @@ export class ModalHeader {
       'ready',
       'needs-work',
       'clickable',
+      'tasks-complete',
       'milestone-complete',
       'review-needed',
       'all-complete'

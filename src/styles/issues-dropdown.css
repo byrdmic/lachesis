@@ -85,6 +85,15 @@
   color: var(--background-primary);
 }
 
+.lachesis-issue-tasks_complete .lachesis-issue-icon {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.lachesis-issue-tasks_complete {
+  border-left: 3px solid var(--interactive-accent);
+}
+
 .lachesis-issue-content {
   flex: 1;
   min-width: 0;

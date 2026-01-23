@@ -84,6 +84,12 @@
   color: var(--text-normal);
 }
 
+/* Tasks complete - accent color to draw attention */
+.lachesis-status-badge.tasks-complete {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
 /* Header controls */
 .lachesis-header-left {
   display: flex;

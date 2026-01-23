@@ -279,6 +279,8 @@ export class IssuesPanel {
         this.addMissingHeadingsWithAI(fileName, missingHeadings),
       createHeadingsReformatFix: (fileName) => () =>
         fileName === 'Overview.md' ? this.fixInvalidHeadings() : this.fixRoadmapInvalidHeadings(),
+      createMarkMilestoneDoneFix: (milestone) => () =>
+        this.markMilestoneDone(milestone),
       createPlanNextMilestoneFix: (nextMilestone) => () =>
         this.startPlanNextMilestone(nextMilestone),
       createReviewTasksFix: (incompleteTasks) => () =>
@@ -498,6 +500,20 @@ export class IssuesPanel {
   // ============================================================================
   // Milestone Transition Fix Actions
   // ============================================================================
+
+  /**
+   * Mark a milestone as done when all tasks are complete.
+   */
+  private async markMilestoneDone(milestone: ParsedMilestone): Promise<void> {
+    this.closeDropdown()
+    this.callbacks.onStartAIChat(
+      `I've completed all tasks for ${milestone.id} "${milestone.title}". Please help me:
+1. Update Roadmap.md to mark this milestone as done (change status: active → status: done)
+2. Review if there's anything to archive or document
+3. Suggest what to focus on next`,
+      'Roadmap.md'
+    )
+  }
 
   /**
    * Start a chat to plan the next milestone.

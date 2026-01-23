@@ -506,6 +506,17 @@ function computeTransitionState(
     return { status: 'none' }
   }
 
+  // Check if all tasks are complete but milestone still active
+  if (currentMilestone.status === 'active' && tasksTotal > 0 && tasksCompleted === tasksTotal) {
+    const nextMilestone = findNextPlannedMilestone(milestones, currentMilestone.id)
+    return {
+      status: 'tasks_complete',
+      milestone: currentMilestone,
+      hasNextMilestone: nextMilestone !== null,
+      nextMilestone,
+    }
+  }
+
   // Current milestone is not done - no transition
   if (currentMilestone.status !== 'done') {
     return { status: 'none' }

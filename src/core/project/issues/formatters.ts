@@ -15,6 +15,7 @@ export const ISSUE_ICONS: Record<IssueType, string> = {
   thin: '~',
   config: '\u2699', // ⚙
   headings_invalid: '\u2630', // ☰
+  tasks_complete: '\u{1F3AF}', // 🎯
   milestone_complete: '\u2713', // ✓
   milestone_tasks_remain: '\u26A0', // ⚠
   all_milestones_complete: '\u2605', // ★
@@ -80,6 +81,13 @@ export function formatConfigIssueMessage(configMissing: boolean): string {
 }
 
 /**
+ * Format a "tasks complete" message.
+ */
+export function formatTasksCompleteMessage(milestoneId: string, milestoneTitle: string): string {
+  return `All tasks complete for ${milestoneId} "${milestoneTitle}"!`
+}
+
+/**
  * Format a "milestone complete" message.
  */
 export function formatMilestoneCompleteMessage(milestoneId: string, milestoneTitle: string): string {
@@ -123,6 +131,8 @@ export function getDefaultFixLabel(type: IssueType): string {
       return 'Configure'
     case 'headings_invalid':
       return 'Add Missing (AI)'
+    case 'tasks_complete':
+      return 'Close Milestone'
     case 'milestone_complete':
       return 'Plan Next Phase'
     case 'milestone_tasks_remain':

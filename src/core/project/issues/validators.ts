@@ -16,6 +16,7 @@ import {
   formatTemplateOnlyMessage,
   formatThinContentMessage,
   formatConfigIssueMessage,
+  formatTasksCompleteMessage,
   formatMilestoneCompleteMessage,
   formatMilestoneTasksRemainMessage,
   formatAllMilestonesCompleteMessage,
@@ -36,6 +37,8 @@ export type FixActionFactory = {
   createConfigFix: () => () => Promise<void>
   createHeadingsAIFix: (fileName: ExpectedCoreFile, missingHeadings: string[]) => () => Promise<void>
   createHeadingsReformatFix: (fileName: 'Overview.md' | 'Roadmap.md') => () => Promise<void>
+  /** Create fix action for closing a milestone when all tasks are complete */
+  createMarkMilestoneDoneFix: (milestone: ParsedMilestone) => () => Promise<void>
   /** Create fix action for planning the next milestone */
   createPlanNextMilestoneFix: (nextMilestone: ParsedMilestone | null) => () => Promise<void>
   /** Create fix action for reviewing remaining tasks when milestone is marked done */
@@ -236,6 +239,24 @@ export function buildMilestoneTransitionIssues(
       message: formatAllMilestonesCompleteMessage(),
       fixLabel: 'Celebrate!',
       fixAction: fixFactory.createCelebrateFix(),
+    })
+    return issues
+  }
+
+  // status === 'tasks_complete' - all tasks done but milestone still active
+  if (transitionState.status === 'tasks_complete') {
+    const { milestone, nextMilestone } = transitionState
+    issues.push({
+      file: 'Roadmap.md',
+      type: 'tasks_complete',
+      message: formatTasksCompleteMessage(milestone.id, milestone.title),
+      details: nextMilestone
+        ? `Ready to close and move to ${nextMilestone.id}: "${nextMilestone.title}"`
+        : 'No more planned milestones — consider wrapping up or planning new ones',
+      fixLabel: 'Close Milestone',
+      fixAction: fixFactory.createMarkMilestoneDoneFix(milestone),
+      secondaryFixLabel: 'Plan Next Steps',
+      secondaryFixAction: fixFactory.createPlanNextMilestoneFix(nextMilestone),
     })
     return issues
   }

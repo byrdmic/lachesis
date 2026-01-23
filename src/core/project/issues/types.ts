@@ -11,6 +11,7 @@ export type IssueType =
   | 'thin'
   | 'config'
   | 'headings_invalid'
+  | 'tasks_complete'
   | 'milestone_complete'
   | 'milestone_tasks_remain'
   | 'all_milestones_complete'
