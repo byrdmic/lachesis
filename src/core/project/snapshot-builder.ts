@@ -14,7 +14,10 @@ import {
   type SnapshotHealth,
   type ProjectAIConfig,
 } from './snapshot'
+import type { ProjectStatus } from './status'
 import { evaluateTemplateStatus } from './template-evaluator'
+import { parseRoadmap, findCurrentMilestone, findActiveSlice } from '../../utils/roadmap-parser'
+import { countCurrentSectionTasks } from '../../utils/tasks-counter'
 
 function extractFrontmatter(content: string): Record<string, unknown> {
   const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
@@ -461,4 +464,79 @@ export function formatProjectSnapshotForModel(snapshot: ProjectSnapshot): string
   }
 
   return lines.join('\n')
+}
+
+/**
+ * Build project status from Roadmap.md and Tasks.md.
+ * Extracts milestone progress, active slice, and task counts.
+ */
+export async function buildProjectStatus(
+  vault: Vault,
+  projectPath: string,
+): Promise<ProjectStatus> {
+  const projectFolderNorm = projectPath.replace(/\\/g, '/').replace(/\/+$/, '')
+  const computedAt = new Date().toISOString()
+
+  // Get the absolute base path from the vault adapter
+  const basePath = (vault.adapter as any).getBasePath() as string
+  const absoluteProjectPath = path.join(basePath, projectFolderNorm)
+
+  // Read Roadmap.md
+  let roadmapContent: string | null = null
+  const roadmapPath = path.join(absoluteProjectPath, 'Roadmap.md')
+  try {
+    if (fs.existsSync(roadmapPath)) {
+      roadmapContent = fs.readFileSync(roadmapPath, 'utf-8')
+    }
+  } catch {
+    // File doesn't exist or can't be read
+  }
+
+  // Read Tasks.md
+  let tasksContent: string | null = null
+  const tasksPath = path.join(absoluteProjectPath, 'Tasks.md')
+  try {
+    if (fs.existsSync(tasksPath)) {
+      tasksContent = fs.readFileSync(tasksPath, 'utf-8')
+    }
+  } catch {
+    // File doesn't exist or can't be read
+  }
+
+  // Parse roadmap
+  let milestones: ReturnType<typeof parseRoadmap>['milestones'] = []
+  let slices: ReturnType<typeof parseRoadmap>['slices'] = []
+  let currentFocusMilestoneId: string | null = null
+
+  if (roadmapContent) {
+    const parsed = parseRoadmap(roadmapContent)
+    milestones = parsed.milestones
+    slices = parsed.slices
+    currentFocusMilestoneId = parsed.currentFocusMilestoneId
+  }
+
+  // Find current milestone and active slice
+  const currentMilestone = findCurrentMilestone(milestones, currentFocusMilestoneId)
+  const activeSlice = findActiveSlice(slices, currentMilestone)
+
+  // Count tasks
+  let tasksTotal = 0
+  let tasksCompleted = 0
+
+  if (tasksContent) {
+    const counts = countCurrentSectionTasks(tasksContent)
+    tasksTotal = counts.total
+    tasksCompleted = counts.completed
+  }
+
+  return {
+    currentMilestone,
+    activeSlice,
+    tasksCompleted,
+    tasksTotal,
+    milestoneStatus: currentMilestone?.status ?? null,
+    allMilestones: milestones,
+    allSlices: slices,
+    computedAt,
+  }
 }
