@@ -762,7 +762,7 @@ export class ChatInterface {
 
     // Timer
     activityEl.createDiv({
-      text: '0.0s',
+      text: '0s',
       cls: 'lachesis-tool-activity-timer',
     })
 
@@ -879,14 +879,12 @@ export class ChatInterface {
   }
 
   private formatDuration(ms: number): string {
-    if (ms < 1000) {
-      return `${(ms / 1000).toFixed(1)}s`
+    const totalSeconds = Math.floor(ms / 1000)
+    if (totalSeconds < 60) {
+      return `${totalSeconds}s`
     }
-    if (ms < 60000) {
-      return `${(ms / 1000).toFixed(1)}s`
-    }
-    const minutes = Math.floor(ms / 60000)
-    const seconds = ((ms % 60000) / 1000).toFixed(0)
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = totalSeconds % 60
     return `${minutes}m ${seconds}s`
   }
 
