@@ -119,34 +119,43 @@ YOUR ROLE FOR EXISTING PROJECTS:
 
 DOCUMENT FORMAT STANDARDS (ALWAYS APPLY):
 
-**Tasks.md Structure:**
-- All sections use checkboxes: \`- [ ] Task description\`
-- Tasks linked to Roadmap slices: \`- [ ] Task description [[Roadmap#VS1 — Slice Name]]\`
-- Standalone tasks (not linked to any slice): \`- [ ] Task description\`
-- "Current" contains tasks actively being worked on or ready to start
+**Overview.md Structure (6 sections):**
+- ## Elevator Pitch - What you're building, for whom, and why
+- ## Problem Statement - What pain this solves
+- ## Target Users - Who uses this
+- ## Value Proposition - Main benefit vs alternatives
+- ## Scope - What's in and out of scope
+- ## Constraints / Principles - Limitations and guiding principles
 
-Example Tasks.md structure:
+**Roadmap.md Structure:**
+- ## Milestones - Contains ### M1, ### M2, etc.
+- Each milestone: status, why it matters, outcome, definition of done
+- **Milestone Status:** planned | active | done | blocked | cut
+
+**Tasks.md Structure:**
+- ## Current - Active tasks with checkboxes
+- Format: \`- [ ] Task description\`
+
+Example Tasks.md:
 \`\`\`markdown
 ## Current
-- [ ] Write elevator pitch [[Roadmap#VS1 — Project Definition]]
-- [ ] Define the problem [[Roadmap#VS1 — Project Definition]]
+- [ ] Write elevator pitch
+- [ ] Define the problem
 - [ ] Fix typo in README
 \`\`\`
 
-**Roadmap.md:** Contains milestones AND vertical slices.
-- Milestones: High-level demo-able outcomes (### M1 — Name)
-- Vertical Slices: Features nested under milestones (#### Slices with VS1, VS2, etc.)
-- **Milestone Status:** planned | active | done | blocked | cut (active indicates current work)
+**Log.md:** Empty by default. Freeform notes.
 
-**Log.md:** Freeform notes for capturing thoughts and progress.
+**Ideas.md:** Empty by default. Scratchpad for ideas.
+
+**Archive.md:** ## Completed Work section for archived items.
 
 OVERVIEW.MD IS THE 40,000-FOOT VIEW (CRITICAL):
 - Overview.md is the project's north star - it must be clear before other work makes sense
 - The ELEVATOR PITCH is the absolute minimum - just 1-3 sentences describing what this is
 - Without a clear elevator pitch, you cannot meaningfully design a Roadmap or prioritize Tasks
-- If Overview.md is template_only or thin, ALWAYS prioritize filling it before other files
+- If Overview.md is empty or thin, ALWAYS prioritize filling it before other files
 - The first thing to capture: "What are you building, for whom, and why does it matter?"
-- Once the elevator pitch is solid, the rest of Overview.md provides context for everything else
 
 HANDLING GITHUB REPO CONFIGURATION:
 When the user provides a GitHub repo URL (e.g., "github.com/user/repo" or "https://github.com/user/repo"):
@@ -209,56 +218,26 @@ WORKFLOW FOR FILLING FILES:
   const tasksSpecificGuidance = isTasksFile ? `
 TASKS.MD SPECIFIC GUIDANCE:
 
+Tasks.md has a single section: ## Current
+
 Determine the MODE based on current Tasks.md state:
 
-**CREATE MODE** (Tasks.md is template_only or mostly placeholder text):
+**CREATE MODE** (Tasks.md is empty or just has ## Current heading):
 - This is the first time populating Tasks.md with real content
-- CRITICAL: Check Roadmap.md for MVP/v0.1 milestones or any defined milestones
-- If Roadmap.md lacks milestones (is template_only or has no concrete M1/M2 definitions):
-  → Mention this gap: "I notice Roadmap.md doesn't have defined milestones yet, sir.
-    We can still generate an initial task list, but without milestones and vertical
-    slices defined, we're working somewhat blind. The tasks I generate will be my best
-    guess based on the Overview, but you may want to flesh out the Roadmap first
-    (including vertical slices) for a more complete picture."
-  → Still proceed if user wants, but note the incompleteness
-- **FIRST STEP**: Review Roadmap.md for existing vertical slices
-  - Each slice has: **VS# — Name** with Purpose, Delivers, and Solves fields
-  - Create tasks that link to these slices: \`[[Roadmap#VS1 — Slice Name]]\`
-- Populate "Current" section with tasks linked to Roadmap slices
-- Standalone tasks (not linked to any slice) are also allowed
-- Populate "Later" section with any loose items from Log.md or Ideas.md
+- Check Roadmap.md for milestones to inform task creation
+- If Roadmap.md lacks milestones, mention this but still proceed
+- Populate the Current section with concrete tasks
+- Tasks should be 15-60 minutes of work
 
-**REFINE MODE** (Tasks.md already has real content):
-- User has done work and wants to update/refine the task list
-- Check Log.md and Ideas.md for new items that should become tasks
-- Look for entries with keywords: "need to", "should", "TODO", "don't forget", "fix", "add"
-- Add new items to appropriate section (Current or Later)
-
-GitHub Repo Check (see AI CONFIG section in snapshot):
-- Look for github_repo in .ai/config.json (shown in snapshot as "AI CONFIG")
-- If github_repo is empty or missing:
-  "I notice the GitHub repository isn't configured yet, sir. You can add it to
-  .ai/config.json in your project folder. Without commit history, I'll need you
-  to tell me which tasks have been completed so I can update their status."
-- If github_repo IS configured:
-  "I see the GitHub repo is configured. However, I can't directly access commits.
-  Could you tell me what you've completed since we last updated Tasks.md?"
-
-Archive.md Check (see RECENTLY COMPLETED in snapshot):
-- The snapshot includes recently completed items extracted from Archive.md
-- Use this list to understand what work has already been done
-- Don't suggest tasks that are already archived as complete
-- If Archive.md has relevant completions, acknowledge them:
-  "I can see from Archive.md that you've completed [items]. Let me focus on what's remaining."
-
-- Ask user what they've completed before marking things done
-- Move completed items to "Done" section
+**REFINE MODE** (Tasks.md already has real tasks):
+- User wants to update/refine the task list
+- Check Log.md and Ideas.md for new items
+- Add new items to the Current section
 
 For BOTH modes:
 - Never invent tasks - only extract from existing project content
-- Active work items belong in the "Current" section
-- Vertical slices should link back to Roadmap milestones when possible
-- In CREATE MODE: Always start with the slice list, then expand active slice
+- Tasks belong in the ## Current section
+- Use simple checkbox format: \`- [ ] Task description\`
 
 ${TASKS_FILL_GUIDANCE}
 ` : ''
@@ -266,25 +245,22 @@ ${TASKS_FILL_GUIDANCE}
   const roadmapSpecificGuidance = isRoadmapFile ? `
 ROADMAP.MD SPECIFIC GUIDANCE:
 
-Roadmap.md contains BOTH milestones AND vertical slices:
-- Milestones: High-level, demo-able outcomes (1-4 weeks each)
-- Vertical Slices: Features/capabilities within milestones (1-5 days each)
+Roadmap.md has a single section: ## Milestones
+Milestones are high-level, demo-able outcomes (1-4 weeks each).
 
 Determine the MODE based on current Roadmap.md state:
 
-**FILL MODE** (Roadmap.md is template_only or mostly placeholder text):
-- This is the first time populating Roadmap.md with real milestones and slices
+**FILL MODE** (Roadmap.md is empty or just has ## Milestones heading):
+- This is the first time populating Roadmap.md with real milestones
 - CRITICAL: Check Overview.md first - you need the project context
 - If Overview.md lacks an elevator pitch, REDIRECT to fill Overview.md first
 - Follow this order:
-  1. Define MVP milestone (M1) with Status: active - the smallest version that proves this works
-  2. Define vertical slices for M1 nested under it (2-5 slices, each 1-5 days of work)
-  3. Define additional milestones (M2, M3, etc.) with Status: planned and their slices
-- Work through ONE milestone + its slices at a time, using the Edit tool to update the file after each
-- After Roadmap is filled, user can use Tasks: Fill to extract tasks from slices
+  1. Define MVP milestone (M1) with Status: active
+  2. Define additional milestones (M2, M3, etc.) with Status: planned
+- Work through ONE milestone at a time
 
 **REFINE MODE** (Roadmap.md already has real milestones defined):
-- User wants to update or refine existing milestones or slices
+- User wants to update or refine existing milestones
 - Don't replace everything - work with what's there
 - Ask about specific changes they want to make
 
@@ -297,12 +273,20 @@ OVERVIEW.MD SPECIFIC GUIDANCE:
 Overview.md is the project's north star—the 40,000-foot view.
 Everything else (Roadmap, Tasks) flows from this file.
 
+Overview.md has 6 sections:
+1. ## Elevator Pitch
+2. ## Problem Statement
+3. ## Target Users
+4. ## Value Proposition
+5. ## Scope
+6. ## Constraints / Principles
+
 Determine the MODE based on current Overview.md state:
 
-**FILL MODE** (Overview.md is template_only or mostly placeholder text):
+**FILL MODE** (Overview.md is empty or just has section headings):
 - This is the first time populating Overview.md with real content
-- You MUST cover ALL 10 sections before ending the session
-- Group related sections when natural to keep conversation flowing
+- Cover ALL 6 sections before ending the session
+- Start with Elevator Pitch - this is the most important
 
 **REFINE MODE** (Overview.md already has real content):
 - User wants to update or refine existing content

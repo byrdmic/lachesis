@@ -24,7 +24,7 @@ export const initFromSummaryWorkflow: WorkflowDefinition = {
   rules: [
     // Input handling
     'User will paste a design summary - it may be markdown, prose, or mixed format',
-    'Extract: elevator pitch, problem statement, users, scope, constraints, milestones, slices, tasks',
+    'Extract: elevator pitch, problem statement, users, scope, constraints, milestones, tasks',
 
     // Output format
     'Generate unified diffs for ALL THREE files in a single response',
@@ -32,30 +32,22 @@ export const initFromSummaryWorkflow: WorkflowDefinition = {
     'Order: Overview.md first, then Roadmap.md, then Tasks.md',
     'Include sufficient context lines in diffs for accurate application',
 
-    // Question policy (CRITICAL)
+    // Question policy
     'Only ask clarifying questions for GENUINE gaps or conflicts',
-    'Genuine gaps: missing elevator pitch, no MVP defined, conflicting scope statements, no target users',
-    'Do NOT ask about: formatting preferences, section ordering, obvious inferences, minor details',
-    'If summary is complete enough to fill files, generate diffs immediately without questions',
-    'When asking questions, be specific about what information is missing',
+    'If summary is complete enough to fill files, generate diffs immediately',
 
-    // Content mapping - Overview.md
-    'Overview.md: elevator pitch (1-3 sentences), problem statement, target users, value proposition, scope (in/out), constraints',
-    'Elevator pitch captures: what + who + why in concise form',
+    // Content mapping - Overview.md (simplified 6 sections)
+    'Overview.md: Elevator Pitch, Problem Statement, Target Users, Value Proposition, Scope, Constraints/Principles',
 
-    // Content mapping - Roadmap.md
-    'Roadmap.md: milestones (M1 = MVP first), with vertical slices nested under each milestone',
+    // Content mapping - Roadmap.md (simplified)
+    'Roadmap.md: Just ## Milestones section with ### M1, ### M2, etc.',
     'Milestones must be vertical (demo-able), not horizontal (layers/components)',
     'Each milestone: status, why it matters, outcome, definition of done',
-    'Vertical slices: nested under each milestone as #### Slices section, 1-5 days work, demo-able',
-    'Each slice needs: **VS# — Name** with Purpose (why it exists), Delivers (what user gets), Solves (what problem it fixes)',
-    'Set first milestone Status to active to indicate current work',
+    'Set first milestone Status to active',
 
-    // Content mapping - Tasks.md
-    'Tasks.md: extract tasks from slices, link using [[Roadmap#VS1 — Slice Name]]',
-    'Tasks should be 15-60 minutes, concrete, with clear acceptance criteria',
-    'Standalone tasks (no slice link) are valid for misc/one-off items',
-    'Place tasks in Current section',
+    // Content mapping - Tasks.md (simplified)
+    'Tasks.md: Just ## Current section with checkbox tasks',
+    'Tasks should be 15-60 minutes, concrete',
     'Do NOT invent tasks - only extract from provided summary content',
   ],
   usesAI: true,

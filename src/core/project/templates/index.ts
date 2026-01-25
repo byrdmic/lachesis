@@ -15,7 +15,6 @@ export {
 // Overview rules
 export {
   OVERVIEW_EXPECTED_HEADINGS,
-  OVERVIEW_PLACEHOLDERS,
   OVERVIEW_DEFINITION,
   validateOverviewHeadings,
   fixOverviewHeadings,
@@ -24,7 +23,6 @@ export {
 // Roadmap rules
 export {
   ROADMAP_EXPECTED_HEADINGS,
-  ROADMAP_PLACEHOLDERS,
   ROADMAP_DEFINITION,
   validateRoadmapHeadings,
   fixRoadmapHeadings,

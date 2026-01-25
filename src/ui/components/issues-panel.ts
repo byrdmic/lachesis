@@ -7,8 +7,8 @@ import type { App, TFile } from 'obsidian'
 import { Notice } from 'obsidian'
 import type { ProjectSnapshot, ExpectedCoreFile } from '../../core/project/snapshot'
 import type { ProjectStatus, ParsedMilestone } from '../../core/project/status'
-import { TEMPLATES, type TemplateName } from '../../scaffolder/templates'
-import { processTemplateForFile } from '../../scaffolder/scaffolder'
+import type { TemplateName } from '../../scaffolder/templates'
+import { getTemplateForFile } from '../../scaffolder/scaffolder'
 import {
   fixOverviewHeadings,
   fixRoadmapHeadings,
@@ -315,15 +315,8 @@ export class IssuesPanel {
   private async fixMissingFile(fileName: ExpectedCoreFile): Promise<void> {
     try {
       const templateName = this.getTemplateName(fileName)
-      const template = TEMPLATES[templateName]
+      const content = getTemplateForFile(templateName)
       const filePath = `${this.projectPath}/${fileName}`
-
-      // Process template with basic data
-      const projectSlug = this.snapshot.projectName.toLowerCase().replace(/\s+/g, '-')
-      const content = processTemplateForFile(template, {
-        projectName: this.snapshot.projectName,
-        projectSlug,
-      })
 
       await this.app.vault.create(filePath, content)
       new Notice(`Created ${fileName}`)

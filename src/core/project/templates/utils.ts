@@ -5,17 +5,9 @@
 // ============================================================================
 
 /**
- * Common placeholder patterns used across all templates.
+ * Common placeholder patterns - kept minimal since templates are simplified.
  */
-export const COMMON_PLACEHOLDERS = [
-  '<Project Name>',
-  '<YYYYMMDD-shortslug>',
-  '<...>',
-  '<Bullets>',
-  '<Idea>',
-  '<Task>',
-  '<url or obsidian link>',
-]
+export const COMMON_PLACEHOLDERS: string[] = []
 
 // ============================================================================
 // Content Processing
