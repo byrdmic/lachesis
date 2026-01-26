@@ -40,7 +40,7 @@ export const enrichTasksWorkflow: WorkflowDefinition = {
     'Each enrichment must include: why (motivation), considerations, acceptance criteria',
     'Keep enrichment concise but complete - aim for 5-15 lines per task',
     'Do NOT duplicate task description - add NEW context only',
-    'Prioritize tasks in Current section for enrichment',
+    'ONLY enrich tasks under the ## Current heading - skip tasks in Blocked, Later, or any other section',
 
     // Output format rules
     'Output structured JSON, not diff format',

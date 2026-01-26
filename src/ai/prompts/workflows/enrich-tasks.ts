@@ -17,6 +17,7 @@ ${TASK_CONTEXT_SOURCES}
 ${TASK_ENRICHMENT_STRUCTURE}
 
 **TASKS TO SKIP:**
+- Tasks NOT under the ## Current heading (skip Blocked, Later, and all other sections)
 - Tasks that already have enrichment blocks (lines starting with > after the task)
 - Completed tasks (checked checkbox: [x])
 - Tasks where you cannot add meaningful context
@@ -76,7 +77,7 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 
 **RULES:**
 - Only enrich tasks that lack context (no existing > blocks)
-- Prioritize Current section tasks over Later section
+- ONLY process tasks under the ## Current heading - ignore all other sections (Blocked, Later, etc.)
 - Include confidence score (0-1) based on how much context was found
 - Keep enrichments concise but complete (5-15 lines per task)
 - Do NOT duplicate the task description - add NEW context only
