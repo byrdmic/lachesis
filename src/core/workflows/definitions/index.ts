@@ -22,7 +22,7 @@ import { planWorkWorkflow } from './plan-work'
 export const WORKFLOW_DEFINITIONS: Record<WorkflowName, WorkflowDefinition> = {
   'enrich-tasks': enrichTasksWorkflow,
   'plan-work': planWorkWorkflow,
-  'init-from-summary': { ...initFromSummaryWorkflow, hidden: true },
+  'init-from-summary': initFromSummaryWorkflow,
 }
 
 // ============================================================================
