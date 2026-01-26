@@ -17,6 +17,7 @@ export interface TaskEnrichmentContent {
   considerations: string[]
   acceptance: string[]
   constraints: string[]
+  prompt: string
 }
 
 /**
@@ -56,6 +57,7 @@ export interface EnrichTasksAIResponse {
       considerations: string[]
       acceptance: string[]
       constraints?: string[]
+      prompt: string
     }
     confidenceScore: number
     confidenceNote?: string
@@ -130,6 +132,7 @@ export function parseEnrichTasksResponse(aiResponse: string): TaskEnrichment[] {
         considerations: item.enrichment.considerations || [],
         acceptance: item.enrichment.acceptance || [],
         constraints: item.enrichment.constraints || [],
+        prompt: item.enrichment.prompt || '',
       },
       confidenceScore: item.confidenceScore,
       confidenceNote: item.confidenceNote || null,
@@ -258,6 +261,20 @@ export function formatEnrichmentBlock(enrichment: TaskEnrichment): string {
   // Constraints (optional)
   if (enrichment.enrichment.constraints.length > 0) {
     lines.push(`> **Constraints:** ${enrichment.enrichment.constraints.join('; ')}`)
+  }
+
+  // Prompt (collapsible in markdown)
+  if (enrichment.enrichment.prompt) {
+    lines.push('>')
+    lines.push('> <details><summary><strong>Execution Prompt</strong></summary>')
+    lines.push('>')
+    // Indent each line of the prompt with blockquote marker
+    const promptLines = enrichment.enrichment.prompt.split('\n')
+    for (const promptLine of promptLines) {
+      lines.push(`> ${promptLine}`)
+    }
+    lines.push('>')
+    lines.push('> </details>')
   }
 
   return lines.join('\n')

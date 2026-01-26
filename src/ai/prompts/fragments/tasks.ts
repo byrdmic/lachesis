@@ -100,3 +100,55 @@ When enriching tasks, check these sources:
    - Prior attempts or related tasks?
    - Lessons learned?
 `
+
+export const PROMPT_GENERATION_GUIDANCE = `
+## Execution Prompt Generation
+
+Generate a ready-to-use prompt for each task that another AI (like Claude Code) can execute autonomously.
+
+### Prompt Structure
+
+The prompt MUST follow this exact format:
+
+\`\`\`
+## Task: [Concrete action - verb + object]
+
+### Context
+[1-2 sentences: Why this matters, derived from enrichment.why]
+[Reference to project goals or user value]
+
+### Requirements
+[Explicit, specific instructions derived from task description]
+[Include relevant technical details from enrichment.considerations]
+
+### Acceptance Criteria
+[Observable outcomes from enrichment.acceptance]
+[Each criterion should be verifiable]
+
+### Constraints & Edge Cases
+[From enrichment.constraints if any]
+[Key edge cases from enrichment.considerations]
+\`\`\`
+
+### Best Practices for Prompt Generation
+
+**Be Explicit**
+- Use concrete verbs: "Create", "Add", "Modify", "Remove"
+- Specify exact outcomes: "User sees error message" not "handle errors"
+- Include file paths when known from project context
+
+**Provide Context**
+- Explain motivation (the "why") so the AI can make good judgment calls
+- Reference project constraints that affect implementation
+- Ground instructions in actual project patterns
+
+**Define Observable Success**
+- Every acceptance criterion should be testable
+- Prefer "User can X" or "System shows Y" over "works correctly"
+- Include edge cases worth handling
+
+**Stay Focused**
+- One clear objective per prompt
+- Don't bundle unrelated work
+- If complex, note dependencies explicitly
+`
