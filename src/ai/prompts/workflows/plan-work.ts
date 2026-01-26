@@ -1,5 +1,7 @@
 // Plan Work workflow prompt section
 
+import { TASK_CREATION_GUIDANCE, TASK_ENRICHMENT_STRUCTURE, TASK_CONTEXT_SOURCES } from '../fragments'
+
 export function buildPlanWorkSection(workflowFileContents: string, intent: string): string {
   return `
 ================================================================================
@@ -16,21 +18,11 @@ Your goal is to create self-contained task definitions ready for AI handoff (Cla
 2. **Check Existing Context** - Review Roadmap for relevant milestones, Tasks for overlaps
 3. **Generate Tasks** - Create 1-5 actionable tasks with full enrichment
 
-**CONTEXT SOURCES TO CHECK:**
+${TASK_CONTEXT_SOURCES}
 
-1. **Roadmap.md Milestones** - Look for existing milestones that match the work
-2. **Overview.md Constraints** - Check tech and operational constraints
-3. **Tasks.md** - Check for related existing tasks
-4. **Archive.md** - Check for related completed work
-5. **Log.md** - Check for relevant context and notes
+${TASK_CREATION_GUIDANCE}
 
-**TASK ENRICHMENT STRUCTURE:**
-
-For EACH task, include:
-- **Why:** 1-2 sentences on motivation/value (from project context)
-- **Considerations:** 2-5 bullet points of technical or design considerations
-- **Acceptance:** Observable/testable criteria for "done"
-- **Constraints:** Relevant constraints from Overview.md (if applicable)
+${TASK_ENRICHMENT_STRUCTURE}
 
 **OUTPUT FORMAT (CRITICAL - OUTPUT ONLY JSON):**
 Return ONLY a JSON object with this exact structure (no markdown, no explanation before or after):

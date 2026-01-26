@@ -1,7 +1,8 @@
 // Existing project prompt builder
 
 import type { ExistingProjectPromptOptions } from './types'
-import { OVERVIEW_FILL_GUIDANCE, ROADMAP_FILL_GUIDANCE, TASKS_FILL_GUIDANCE } from './guidance'
+import { OVERVIEW_FILL_GUIDANCE, ROADMAP_FILL_GUIDANCE } from './guidance'
+import { TASK_CREATION_GUIDANCE } from './fragments'
 import {
   buildInitFromSummarySection,
   buildDefaultWorkflowSection,
@@ -239,7 +240,7 @@ For BOTH modes:
 - Tasks belong in the ## Current section
 - Use simple checkbox format: \`- [ ] Task description\`
 
-${TASKS_FILL_GUIDANCE}
+${TASK_CREATION_GUIDANCE}
 ` : ''
 
   const roadmapSpecificGuidance = isRoadmapFile ? `

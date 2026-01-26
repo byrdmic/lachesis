@@ -1,5 +1,7 @@
 // Init from summary workflow - batch fills Overview, Roadmap, Tasks from external summary
 
+import { TASK_CREATION_GUIDANCE } from '../fragments'
+
 export function buildInitFromSummarySection(workflowFileContents: string, intent: string): string {
   return `
 ================================================================================
@@ -80,7 +82,7 @@ Example structure:
 @@ -1,1 +1,20 @@
  ## Milestones
 
-+### M1 — [MVP Milestone Name]
++### M1 - [MVP Milestone Name]
 +**Status:** active
 +**Why it matters:** [Why this is the MVP]
 +**Outcome:** [What users can do after this milestone]
@@ -89,7 +91,7 @@ Example structure:
 +- [Observable criteria 1]
 +- [Observable criteria 2]
 +
-+### M2 — [Next Milestone]
++### M2 - [Next Milestone]
 +**Status:** planned
 +...
 \`\`\`
@@ -121,8 +123,7 @@ Roadmap.md:
 - Set M1 Status to "active", other milestones to "planned"
 
 Tasks.md:
-- Extract tasks from the summary
-- Tasks should be 15-60 minutes, concrete
+${TASK_CREATION_GUIDANCE}
 - Place tasks in the Current section
 - Do NOT invent tasks - only extract from the provided summary
 
