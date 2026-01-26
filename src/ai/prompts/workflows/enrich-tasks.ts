@@ -1,6 +1,6 @@
 // Enrich tasks workflow prompt section
 
-import { TASK_ENRICHMENT_STRUCTURE, TASK_CONTEXT_SOURCES, PROMPT_GENERATION_GUIDANCE } from '../fragments'
+import { TASK_ENRICHMENT_STRUCTURE, TASK_CONTEXT_SOURCES } from '../fragments'
 
 export function buildEnrichTasksSection(workflowFileContents: string, intent: string): string {
   return `
@@ -15,8 +15,6 @@ Each task should become a self-contained work unit that another developer (or AI
 ${TASK_CONTEXT_SOURCES}
 
 ${TASK_ENRICHMENT_STRUCTURE}
-
-${PROMPT_GENERATION_GUIDANCE}
 
 **TASKS TO SKIP:**
 - Tasks that already have enrichment blocks (lines starting with > after the task)
@@ -49,8 +47,7 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
         "constraints": [
           "Must support offline-first per Overview.md",
           "No external auth providers initially"
-        ],
-        "prompt": "## Task: Implement user authentication\\n\\n### Context\\nUsers need secure access to their data. This is a prerequisite for all personalized features in the app.\\n\\n### Requirements\\n- Create authentication module with email/password support\\n- Implement session management with token refresh\\n- Add rate limiting for login attempts\\n\\n### Acceptance Criteria\\n- User can sign up with email/password\\n- User can log in and log out\\n- Sessions persist across browser refresh\\n\\n### Constraints & Edge Cases\\n- Must support offline-first per Overview.md\\n- No external auth providers initially\\n- Handle network failures gracefully"
+        ]
       },
       "confidenceScore": 0.9,
       "confidenceNote": "Rich context from Roadmap slice and Log entry"
@@ -74,7 +71,6 @@ Return ONLY a JSON object with this exact structure (no markdown, no explanation
 - enrichment.considerations: Required. 2-5 bullet points
 - enrichment.acceptance: Required. Observable criteria for "done"
 - enrichment.constraints: Optional. Only include if relevant constraints exist
-- enrichment.prompt: Required. A ready-to-use prompt for Claude Code to execute this task autonomously (follow the format in Prompt Generation section)
 - confidenceScore: Required. 0-1 based on how much context was available
 - confidenceNote: Optional. Brief note on confidence level
 

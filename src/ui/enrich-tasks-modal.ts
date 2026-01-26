@@ -2,7 +2,7 @@
  * Enrich Tasks Modal - Review and apply AI-generated task enrichments
  */
 
-import { App, Modal, Notice } from 'obsidian'
+import { App, Modal } from 'obsidian'
 import type {
   TaskEnrichment,
   EnrichTaskSelection,
@@ -167,29 +167,6 @@ export class EnrichTasksModal extends Modal {
         cls: 'lachesis-enrich-preview-content',
       })
       previewContent.textContent = enrichmentBlock
-
-      // Show prompt section if present
-      if (enrichment.enrichment.prompt) {
-        const promptSection = preview.createDiv({ cls: 'lachesis-enrich-prompt-section' })
-
-        const promptHeader = promptSection.createDiv({ cls: 'lachesis-enrich-prompt-header' })
-        promptHeader.createEl('strong', { text: 'Execution Prompt' })
-
-        const copyBtn = promptHeader.createEl('button', {
-          text: 'Copy Prompt',
-          cls: 'lachesis-btn lachesis-btn-small',
-        })
-        copyBtn.addEventListener('click', async (e) => {
-          e.stopPropagation()
-          await navigator.clipboard.writeText(enrichment.enrichment.prompt)
-          new Notice('Prompt copied to clipboard')
-        })
-
-        const promptContent = promptSection.createEl('pre', {
-          cls: 'lachesis-enrich-prompt-content',
-        })
-        promptContent.textContent = enrichment.enrichment.prompt
-      }
     }
   }
 
