@@ -595,7 +595,8 @@ export class ExistingProjectModal extends Modal {
           this.messages,
           {
             cwd: absolutePath,
-            allowedTools: ['Glob', 'Grep', 'Read', 'Edit', 'Write'],
+            allowedTools: ['Glob', 'Grep', 'Read', 'Edit', 'Write', 'GitLog'],
+            githubToken: this.plugin.settings.githubToken || undefined,
           },
           {
             onTextUpdate: (partial) => this.chatInterface?.updateStreamingMessage(partial),

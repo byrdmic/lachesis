@@ -5,6 +5,7 @@ import { executeWrite } from './write'
 import { executeEdit } from './edit'
 import { executeGlob } from './glob'
 import { executeGrep } from './grep'
+import { executeGitLog } from './git-log'
 import type { ToolName } from './definitions'
 import type { ToolInput, ToolExecutionResult, ToolExecutorContext } from './types'
 
@@ -27,6 +28,8 @@ export async function executeTool(
       return executeGlob(input as { pattern: string }, context)
     case 'Grep':
       return executeGrep(input as { pattern: string; glob?: string }, context)
+    case 'GitLog':
+      return executeGitLog(input as { count?: number; since?: string; until?: string }, context)
     default:
       return {
         success: false,

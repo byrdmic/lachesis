@@ -42,6 +42,7 @@ export type AgentLoopParams = {
   systemPrompt: string
   messages: ConversationMessage[]
   projectPath: string
+  githubToken?: string
   callbacks: AgentChatCallbacks
 }
 
@@ -55,11 +56,12 @@ export type AgentLoopParams = {
  * 4. Tracks all tool activities for visibility and error recovery
  */
 export async function runAgentLoop(params: AgentLoopParams): Promise<AgentChatResult> {
-  const { client, model, systemPrompt, messages, projectPath, callbacks } = params
+  const { client, model, systemPrompt, messages, projectPath, githubToken, callbacks } = params
 
   // Build context for tool execution
   const context: ToolExecutorContext = {
     projectPath,
+    githubToken,
   }
 
   // Convert conversation messages to Anthropic format

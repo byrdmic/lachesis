@@ -137,7 +137,7 @@ export interface AIProvider {
 /**
  * Tool names supported by the agent.
  */
-export type ToolName = 'Read' | 'Write' | 'Edit' | 'Glob' | 'Grep'
+export type ToolName = 'Read' | 'Write' | 'Edit' | 'Glob' | 'Grep' | 'GitLog'
 
 /**
  * Basic tool activity for real-time UI updates during execution.
@@ -187,6 +187,7 @@ export type AgentChatCallbacks = {
 export type AgentChatOptions = {
   cwd: string
   allowedTools?: string[]
+  githubToken?: string
 }
 
 // ============================================================================

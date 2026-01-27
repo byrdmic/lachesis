@@ -2,7 +2,7 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 
-export type ToolName = 'Glob' | 'Grep' | 'Read' | 'Edit' | 'Write'
+export type ToolName = 'Glob' | 'Grep' | 'Read' | 'Edit' | 'Write' | 'GitLog'
 
 export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
@@ -91,6 +91,29 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
         },
       },
       required: ['pattern'],
+    },
+  },
+  {
+    name: 'GitLog',
+    description:
+      "Fetch recent commits from the project's configured GitHub repository. Reads github_repo from .ai/config.json.",
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        count: {
+          type: 'number',
+          description: 'Number of commits to fetch (default: 30, max: 100)',
+        },
+        since: {
+          type: 'string',
+          description: 'Only commits after this date (ISO 8601 format, e.g., "2025-01-01")',
+        },
+        until: {
+          type: 'string',
+          description: 'Only commits before this date (ISO 8601 format)',
+        },
+      },
+      required: [],
     },
   },
 ]

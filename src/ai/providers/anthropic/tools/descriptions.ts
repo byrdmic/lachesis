@@ -46,6 +46,10 @@ export function generateToolDescription(
       }
       return 'Searching files'
     }
+    case 'GitLog': {
+      const count = input.count as number | undefined
+      return `Fetching ${count ?? 30} recent commits`
+    }
     default:
       return `Running ${toolName}`
   }
@@ -96,6 +100,12 @@ export function generateToolSummary(
     case 'Grep': {
       const matchCount = output ? countMatches(output) : 0
       return `Found ${matchCount} match${matchCount === 1 ? '' : 'es'}`
+    }
+    case 'GitLog': {
+      // Extract commit count from output like "Found 30 commits:\n\n..."
+      const match = output?.match(/Found (\d+) commits?/)
+      const commitCount = match ? parseInt(match[1], 10) : 0
+      return `Fetched ${commitCount} commit${commitCount === 1 ? '' : 's'}`
     }
     default:
       return `Completed ${toolName}`

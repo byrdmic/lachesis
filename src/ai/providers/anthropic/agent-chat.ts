@@ -47,6 +47,7 @@ export async function streamAgentChat(
       systemPrompt,
       messages,
       projectPath: options.cwd,
+      githubToken: options.githubToken,
       callbacks,
     })
 

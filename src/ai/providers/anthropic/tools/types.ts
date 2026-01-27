@@ -10,4 +10,5 @@ export type ToolExecutionResult = {
 
 export type ToolExecutorContext = {
   projectPath: string // Absolute path to project directory
+  githubToken?: string // Optional GitHub token for private repos
 }

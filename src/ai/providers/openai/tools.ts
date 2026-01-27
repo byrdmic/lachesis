@@ -41,6 +41,12 @@ const GrepSchema = z.object({
     ),
 })
 
+const GitLogSchema = z.object({
+  count: z.number().optional().describe('Number of commits to fetch (default: 30, max: 100)'),
+  since: z.string().optional().describe('Only commits after this date (ISO 8601 format, e.g., "2025-01-01")'),
+  until: z.string().optional().describe('Only commits before this date (ISO 8601 format)'),
+})
+
 /**
  * Create Vercel AI SDK tools that wrap our existing tool executors.
  */
@@ -106,6 +112,19 @@ export function createTools(context: ToolExecutorContext) {
         const result = await executeTool('Grep', { pattern: params.pattern, glob: params.glob }, context)
         if (!result.success) {
           throw new Error(result.error || 'Failed to grep files')
+        }
+        return result.output
+      },
+    }),
+
+    GitLog: tool({
+      description:
+        "Fetch recent commits from the project's configured GitHub repository. Reads github_repo from .ai/config.json.",
+      inputSchema: GitLogSchema,
+      execute: async (params) => {
+        const result = await executeTool('GitLog', { count: params.count, since: params.since, until: params.until }, context)
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to fetch git log')
         }
         return result.output
       },
