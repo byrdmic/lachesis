@@ -5,6 +5,8 @@
  * Handles parsing AI responses and applying enrichments to Tasks.md.
  */
 
+import { extractJsonFromResponse } from './json-extractor'
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -103,14 +105,8 @@ export function containsEnrichTasksResponse(content: string): boolean {
  */
 export function parseEnrichTasksResponse(aiResponse: string): TaskEnrichment[] {
   try {
-    // Extract JSON from the response (it might be wrapped in markdown code blocks)
-    let jsonStr = aiResponse.trim()
-
-    // Try to extract JSON from code blocks
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim()
-    }
+    // Extract JSON from the response (handles code blocks with nested backticks)
+    const jsonStr = extractJsonFromResponse(aiResponse)
 
     const parsed: EnrichTasksAIResponse = JSON.parse(jsonStr)
 
@@ -146,13 +142,8 @@ export function parseEnrichTasksResponse(aiResponse: string): TaskEnrichment[] {
  */
 export function extractEnrichTasksSummary(content: string): EnrichTasksSummary | null {
   try {
-    let jsonStr = content.trim()
-
-    // Try to extract JSON from code blocks
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim()
-    }
+    // Use the same robust extraction logic
+    const jsonStr = extractJsonFromResponse(content)
 
     const parsed = JSON.parse(jsonStr)
 

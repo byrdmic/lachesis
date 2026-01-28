@@ -5,6 +5,8 @@
  * Handles parsing AI responses and applying tasks/slices to project files.
  */
 
+import { extractJsonFromResponse } from './json-extractor'
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -132,14 +134,8 @@ export function parsePlanWorkResponse(aiResponse: string): {
   summary: PlanWorkSummary | null
 } {
   try {
-    // Extract JSON from the response (it might be wrapped in markdown code blocks)
-    let jsonStr = aiResponse.trim()
-
-    // Try to extract JSON from code blocks
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim()
-    }
+    // Extract JSON from the response (handles code blocks with nested backticks)
+    const jsonStr = extractJsonFromResponse(aiResponse)
 
     const parsed: PlanWorkAIResponse = JSON.parse(jsonStr)
 
@@ -194,13 +190,8 @@ export function parsePlanWorkResponse(aiResponse: string): {
  */
 export function extractPlanWorkSummary(content: string): PlanWorkSummary | null {
   try {
-    let jsonStr = content.trim()
-
-    // Try to extract JSON from code blocks
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim()
-    }
+    // Extract JSON from the response (handles code blocks with nested backticks)
+    const jsonStr = extractJsonFromResponse(content)
 
     const parsed = JSON.parse(jsonStr)
 

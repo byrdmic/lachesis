@@ -6,6 +6,8 @@
  * and applying archive operations to both Tasks.md and Archive.md.
  */
 
+import { extractJsonFromResponse } from './json-extractor'
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -265,11 +267,8 @@ export function containsArchiveCompletedResponse(content: string): boolean {
  */
 export function extractArchiveCompletedSummary(content: string): ArchiveCompletedSummary | null {
   try {
-    let jsonStr = content.trim()
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim()
-    }
+    // Extract JSON from the response (handles code blocks with nested backticks)
+    const jsonStr = extractJsonFromResponse(content)
 
     const parsed = JSON.parse(jsonStr) as ArchiveCompletedAIResponse
 
@@ -296,11 +295,8 @@ export function parseArchiveCompletedResponse(
   localTasks: CompletedTask[],
 ): ParsedArchiveCompletedResult {
   try {
-    let jsonStr = aiResponse.trim()
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim()
-    }
+    // Extract JSON from the response (handles code blocks with nested backticks)
+    const jsonStr = extractJsonFromResponse(aiResponse)
 
     const parsed = JSON.parse(jsonStr) as ArchiveCompletedAIResponse
 

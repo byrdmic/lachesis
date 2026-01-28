@@ -6,6 +6,8 @@
  * and applying the promotion to Tasks.md.
  */
 
+import { extractJsonFromResponse } from './json-extractor'
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -131,11 +133,8 @@ export function containsPromoteNextResponse(content: string): boolean {
  */
 export function extractPromoteNextSummary(content: string): PromoteNextSummary | null {
   try {
-    let jsonStr = content.trim()
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim()
-    }
+    // Extract JSON from the response (handles code blocks with nested backticks)
+    const jsonStr = extractJsonFromResponse(content)
 
     const parsed = JSON.parse(jsonStr) as PromoteNextAIResponse
 
@@ -155,11 +154,8 @@ export function extractPromoteNextSummary(content: string): PromoteNextSummary |
  */
 export function parsePromoteNextResponse(aiResponse: string): PromoteNextAIResponse {
   try {
-    let jsonStr = aiResponse.trim()
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim()
-    }
+    // Extract JSON from the response (handles code blocks with nested backticks)
+    const jsonStr = extractJsonFromResponse(aiResponse)
 
     const parsed = JSON.parse(jsonStr) as PromoteNextAIResponse
     return parsed

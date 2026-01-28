@@ -6,6 +6,8 @@
  * and applying user selections to Tasks.md and Archive.md.
  */
 
+import { extractJsonFromResponse } from './json-extractor'
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -166,13 +168,8 @@ export type SyncCommitsSummary = {
  */
 export function extractSyncCommitsSummary(content: string): SyncCommitsSummary | null {
   try {
-    // Extract JSON from the response (might be wrapped in markdown code blocks)
-    let jsonStr = content.trim()
-
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim()
-    }
+    // Extract JSON from the response (handles code blocks with nested backticks)
+    const jsonStr = extractJsonFromResponse(content)
 
     const parsed = JSON.parse(jsonStr)
 
@@ -203,13 +200,8 @@ export function parseSyncCommitsResponse(
   commits: GitCommit[],
 ): ParsedSyncCommitsResult {
   try {
-    // Extract JSON from the response (might be wrapped in markdown code blocks)
-    let jsonStr = aiResponse.trim()
-
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim()
-    }
+    // Extract JSON from the response (handles code blocks with nested backticks)
+    const jsonStr = extractJsonFromResponse(aiResponse)
 
     const parsed: SyncCommitsAIResponse = JSON.parse(jsonStr)
 

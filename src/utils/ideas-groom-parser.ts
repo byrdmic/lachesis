@@ -5,6 +5,7 @@
  * Handles parsing AI responses and applying user selections to Tasks.md.
  */
 
+import { extractJsonFromResponse } from './json-extractor'
 import {
   type TaskDestination,
   type RoadmapSlice,
@@ -107,14 +108,8 @@ export function containsIdeasGroomResponse(content: string): boolean {
  */
 export function parseIdeasGroomResponse(aiResponse: string): GroomedIdeaTask[] {
   try {
-    // Extract JSON from the response (it might be wrapped in markdown code blocks)
-    let jsonStr = aiResponse.trim()
-
-    // Try to extract JSON from code blocks
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim()
-    }
+    // Extract JSON from the response (handles code blocks with nested backticks)
+    const jsonStr = extractJsonFromResponse(aiResponse)
 
     const parsed: IdeasGroomAIResponse = JSON.parse(jsonStr)
 
