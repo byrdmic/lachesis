@@ -63,7 +63,7 @@ export class OpenAIProvider implements AIProvider {
   async testConnection(): Promise<ConnectionResult> {
     try {
       const openai = this.getClient()
-      const model = openai(this.model)
+      const model = openai.chat(this.model)
 
       await aiGenerateText({
         model,
@@ -88,7 +88,7 @@ export class OpenAIProvider implements AIProvider {
   ): Promise<TextResult> {
     try {
       const openai = this.getClient()
-      const model = openai(this.model)
+      const model = openai.chat(this.model)
 
       // Handle empty messages case
       const effectiveMessages: CoreMessage[] =
@@ -138,7 +138,7 @@ export class OpenAIProvider implements AIProvider {
   ): Promise<TextResult> {
     try {
       const openai = this.getClient()
-      const model = openai(this.model)
+      const model = openai.chat(this.model)
 
       const { text } = await aiGenerateText({
         model,
@@ -168,7 +168,7 @@ export class OpenAIProvider implements AIProvider {
   ): Promise<StructuredResult<T>> {
     try {
       const openai = this.getClient()
-      const model = openai(this.model)
+      const model = openai.chat(this.model)
 
       const { object } = await generateObject({
         model,
@@ -200,7 +200,7 @@ export class OpenAIProvider implements AIProvider {
   ): Promise<TextResult> {
     try {
       const openai = this.getClient()
-      const model = openai(this.model)
+      const model = openai.chat(this.model)
 
       // Create tool executor context
       const context: ToolExecutorContext = { projectPath: options.cwd }
